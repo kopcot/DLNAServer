@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DLNAServer.Database.Entities
@@ -8,6 +9,7 @@ namespace DLNAServer.Database.Entities
     [Table(nameof(DlnaDbContext.MediaVideoEntities))] // needed as in DlnaDbContext is in plural 
     public sealed class MediaVideoEntity : BaseEntity
     {
+        [MaxLength(4096, ErrorMessage = $"File full path cannot exceed 4096 characters. Property {nameof(FilePhysicalFullPath)}")]
         public string FilePhysicalFullPath { get; set; }
         /// <summary>
         /// Duration
@@ -28,6 +30,7 @@ namespace DLNAServer.Database.Entities
         /// <summary>
         /// Screen ratio
         /// </summary>
+        [MaxLength(128, ErrorMessage = $"Ratio cannot exceed 128 characters. Property {nameof(Ratio)}")]
         public string? Ratio { get; set; }
         /// <summary>
         /// Video bitrate
@@ -36,6 +39,7 @@ namespace DLNAServer.Database.Entities
         /// <summary>
         /// Pixel Format
         /// </summary>
+        [MaxLength(128, ErrorMessage = $"Pixel format cannot exceed 128 characters. Property {nameof(PixelFormat)}")]
         public string? PixelFormat { get; set; }
         /// <summary>
         /// Rotation angle
@@ -44,6 +48,7 @@ namespace DLNAServer.Database.Entities
         /// <summary>
         /// Video codec
         /// </summary>
+        [MaxLength(128, ErrorMessage = $"Codec cannot exceed 128 characters. Property {nameof(Codec)}")]
         public string? Codec { get; set; }
     }
 #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.

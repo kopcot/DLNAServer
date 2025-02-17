@@ -88,7 +88,7 @@ namespace DLNAServer.FileServer
         private async Task ShowGeneralInfo(IServiceScope scope)
         {
             var serverConfig = scope.ServiceProvider.GetRequiredService<ServerConfig>();
-            _logger.LogInformation($"Dlna server name: {serverConfig.DlnaServerFriendlyName}");
+            _logger.LogInformation($"Dlna server name: {serverConfig.ServerFriendlyName}");
             _logger.LogInformation($"Source folders: {string.Join(";", serverConfig.SourceFolders)}");
             _logger.LogInformation($"Extensions: {string.Join(";", serverConfig.MediaFileExtensions.Select(e => (e.Key, e.Value.Key.ToMimeString(), e.Value.Value)).ToArray())}");
 
@@ -115,7 +115,7 @@ namespace DLNAServer.FileServer
                 isDbOk = false;
             }
 
-            if (!isDbOk || serverConfig.AlwaysRecreateDatabaseAtStart)
+            if (!isDbOk || serverConfig.ServerAlwaysRecreateDatabaseAtStart)
             {
                 _ = await dbContext.Database.EnsureDeletedAsync(cancellationToken); // Delete existing database
                 _ = await dbContext.Database.EnsureCreatedAsync(cancellationToken); // Recreate the database

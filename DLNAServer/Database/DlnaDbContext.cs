@@ -7,9 +7,11 @@ namespace DLNAServer.Database
 {
     public class DlnaDbContext : DbContext, ITerminateAble
     {
-        public DlnaDbContext(DbContextOptions<DlnaDbContext> options)
+        private readonly ILogger<DlnaDbContext> _logger;
+        public DlnaDbContext(DbContextOptions<DlnaDbContext> options, ILogger<DlnaDbContext> logger)
             : base(options)
         {
+            _logger = logger;
         }
         public DbSet<DirectoryEntity> DirectoryEntities { get; set; }
         public DbSet<FileEntity> FileEntities { get; set; }

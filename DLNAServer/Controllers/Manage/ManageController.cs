@@ -216,7 +216,7 @@ namespace DLNAServer.Controllers.Manage
         [HttpGet("error")]
         public async Task<IActionResult> GetErrorMessages()
         {
-            var messages = await LogMessageHandler.GetLastMessagesAsync(_serverConfig.DlnaServerMaxLogMessagesCount);
+            var messages = await LogMessageHandler.GetLastMessagesAsync(_serverConfig.ServerMaxLogMessagesCount);
 
             var errors = messages.Where(static (m) => m.LogLevel == LogLevel.Error).ToArray();
 
@@ -225,7 +225,7 @@ namespace DLNAServer.Controllers.Manage
         [HttpGet("warning")]
         public async Task<IActionResult> GetWarningMessages()
         {
-            var messages = await LogMessageHandler.GetLastMessagesAsync(_serverConfig.DlnaServerMaxLogMessagesCount);
+            var messages = await LogMessageHandler.GetLastMessagesAsync(_serverConfig.ServerMaxLogMessagesCount);
 
             var warnings = messages.Where(static (m) => m.LogLevel == LogLevel.Warning).ToArray();
 

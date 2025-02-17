@@ -66,7 +66,7 @@ namespace DLNAServer.Database.Repositories
                 queryAction: DbSet
                         .OrderEntitiesByDefault(DefaultOrderBy)
                         .IncludeChildEntities(DefaultInclude),
-                cacheKey: GetCacheKey<FileEntity>(nameof(GetAllAsync)),
+                cacheKey: GetCacheKey<FileEntity>(),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -82,7 +82,7 @@ namespace DLNAServer.Database.Repositories
                     : DbSet
                         .OrderEntitiesByDefault(DefaultOrderBy)
                         .IncludeChildEntities(DefaultInclude),
-                cacheKey: GetCacheKey<FileEntity>(nameof(GetAllAsync)),
+                cacheKey: GetCacheKey<FileEntity>(),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -95,7 +95,7 @@ namespace DLNAServer.Database.Repositories
                     .IncludeChildEntities(DefaultInclude)
                     .Skip(skip)
                     .Take(take),
-                cacheKey: GetCacheKey<FileEntity>(nameof(GetAllAsync), [skip.ToString(), take.ToString()]),
+                cacheKey: GetCacheKey<FileEntity>([skip.ToString(), take.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -109,7 +109,7 @@ namespace DLNAServer.Database.Repositories
                     .IncludeChildEntities(DefaultInclude)
                     .Where(fe => exclude.All(ef => !fe.LC_FilePhysicalFullPath.Contains(ef)))
                     .Take(takeNumber),
-                cacheKey: GetCacheKey<FileEntity>(nameof(GetAllByAddedToDbAsync), [takeNumber.ToString()]),
+                cacheKey: GetCacheKey<FileEntity>([takeNumber.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -123,7 +123,7 @@ namespace DLNAServer.Database.Repositories
                     .IncludeChildEntities(DefaultInclude)
                     .Where(fe => expectedDirectory.Any(ed => fe.Directory != null && ed.Equals(fe.Directory.Id))
                         && exclude.All(ef => !fe.LC_FilePhysicalFullPath.Contains(ef))),
-                cacheKey: GetCacheKey<FileEntity>(nameof(GetAllByParentDirectoryIdsAsync), expectedDirectory.Select(ed => ed.ToString())),
+                cacheKey: GetCacheKey<FileEntity>(expectedDirectory.Select(ed => ed.ToString())),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -139,7 +139,7 @@ namespace DLNAServer.Database.Repositories
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .AsNoTracking()
                     .Select(static (f) => f.FilePhysicalFullPath),
-                cacheKey: GetCacheKey<string>(nameof(GetAllFileFullNamesAsync)),
+                cacheKey: GetCacheKey<string>(methodName: nameof(GetAllFileFullNamesAsync)),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -152,7 +152,7 @@ namespace DLNAServer.Database.Repositories
                     .AsNoTracking()
                     .Include(f => f.Directory)
                     .MinAsync(static (f) => f.Directory != null ? f.Directory.Depth : short.MaxValue),
-                cacheKey: GetCacheKey<int>(nameof(GetMinimalDepthAsync)),
+                cacheKey: GetCacheKey<int>(methodName: nameof(GetMinimalDepthAsync)),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -166,7 +166,7 @@ namespace DLNAServer.Database.Repositories
                     .AsNoTracking()
                     .Include(f => f.Directory)
                     .Where(f => f.Directory != null && f.Directory.Depth == depth),
-                cacheKey: GetCacheKey<FileEntity>(nameof(GetAllByDirectoryDepthAsync), [depth.ToString()]),
+                cacheKey: GetCacheKey<FileEntity>([depth.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -181,7 +181,7 @@ namespace DLNAServer.Database.Repositories
                     .Where(f => f.Directory != null && f.Directory.Depth == depth)
                     .Skip(skip)
                     .Take(take),
-                cacheKey: GetCacheKey<FileEntity>(nameof(GetAllByDirectoryDepthAsync), [depth.ToString(), skip.ToString(), take.ToString()]),
+                cacheKey: GetCacheKey<FileEntity>([depth.ToString(), skip.ToString(), take.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -194,7 +194,7 @@ namespace DLNAServer.Database.Repositories
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
                     .Where(f => f.LC_FilePhysicalFullPath.Equals(pathFullName)),
-                cacheKey: GetCacheKey<FileEntity>(nameof(GetAllByPathFullNameAsync), [pathFullName]),
+                cacheKey: GetCacheKey<FileEntity>([pathFullName]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );

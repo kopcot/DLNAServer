@@ -41,8 +41,12 @@ namespace DLNAServer.Database.Repositories
         }
         public async Task<bool> DeleteAllAsync()
         {
-            DbSet.RemoveRange(DbSet);
-            _ = await DbContext.SaveChangesAsync();
+            using (var transaction = DbContext.Database.BeginTransaction())
+            {
+                DbSet.RemoveRange(DbSet);
+                _ = await DbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+            };
             return true;
         }
         public async Task<bool> DeleteAsync(T entity)
@@ -63,15 +67,23 @@ namespace DLNAServer.Database.Repositories
         }
         public async Task<bool> DeleteRangeAsync(IEnumerable<T> entities)
         {
-            DbSet.RemoveRange(entities);
-            _ = await DbContext.SaveChangesAsync();
+            using (var transaction = DbContext.Database.BeginTransaction())
+            {
+                DbSet.RemoveRange(entities);
+                _ = await DbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+            };
             return true;
         }
         public async Task<bool> DeleteRangeByGuidsAsync(IEnumerable<Guid> guids)
         {
-            var entities = await GetAllByIdsAsync(guids, false);
-            DbSet.RemoveRange(entities);
-            _ = await DbContext.SaveChangesAsync();
+            using (var transaction = DbContext.Database.BeginTransaction())
+            {
+                var entities = await GetAllByIdsAsync(guids, false);
+                DbSet.RemoveRange(entities);
+                _ = await DbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+            };
             return true;
         }
         public async Task<bool> DeleteRangeByGuidsAsync(IEnumerable<string> guids)
@@ -99,7 +111,7 @@ namespace DLNAServer.Database.Repositories
                         : DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
                             .IncludeChildEntities(DefaultInclude),
-                cacheKey: GetCacheKey<T>(nameof(GetAllAsync)),
+                cacheKey: GetCacheKey<T>(),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -121,7 +133,7 @@ namespace DLNAServer.Database.Repositories
                             .IncludeChildEntities(DefaultInclude)
                             .Skip(skip)
                             .Take(take),
-                cacheKey: GetCacheKey<T>(nameof(GetAllAsync), [asNoTracking.ToString(), skip.ToString(), take.ToString()]),
+                cacheKey: GetCacheKey<T>(additionalArgs: [asNoTracking.ToString(), skip.ToString(), take.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -130,7 +142,7 @@ namespace DLNAServer.Database.Repositories
         {
             return await GetSingleWithCacheAsync<long>(
                 queryAction: DbSet.LongCountAsync(),
-                cacheKey: GetCacheKey<T>(nameof(GetCountAsync)),
+                cacheKey: GetCacheKey<T>(),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -143,7 +155,7 @@ namespace DLNAServer.Database.Repositories
                         .OrderEntitiesByDefault(DefaultOrderBy)
                         .IncludeChildEntities(DefaultInclude)
                         .Where(e => guids.Contains(e.Id)),
-                cacheKey: GetCacheKey<T>(nameof(GetAllByIdsAsync), guids.Select(g => g.ToString())),
+                cacheKey: GetCacheKey<T>(guids.Select(g => g.ToString())),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -162,7 +174,7 @@ namespace DLNAServer.Database.Repositories
                             .OrderEntitiesByDefault(DefaultOrderBy)
                             .IncludeChildEntities(DefaultInclude)
                             .FirstOrDefaultAsync(e => e.Id == guid),
-                cacheKey: GetCacheKey<T>(nameof(GetByIdAsync), [asNoTracking.ToString(), guid.ToString()]),
+                cacheKey: GetCacheKey<T>([asNoTracking.ToString(), guid.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -182,8 +194,12 @@ namespace DLNAServer.Database.Repositories
         }
         public async Task<bool> AddRangeAsync(IEnumerable<T> entities)
         {
-            await DbSet.AddRangeAsync(entities);
-            _ = await DbContext.SaveChangesAsync();
+            using (var transaction = DbContext.Database.BeginTransaction())
+            {
+                await DbSet.AddRangeAsync(entities);
+                _ = await DbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+            };
             return true;
         }
         public async Task<bool> UpdateAsync(T entity)
@@ -193,8 +209,12 @@ namespace DLNAServer.Database.Repositories
         }
         public async Task<bool> UpdateRangeAsync(IEnumerable<T> entities)
         {
-            DbSet.UpdateRange(entities);
-            _ = await DbContext.SaveChangesAsync();
+            using (var transaction = DbContext.Database.BeginTransaction())
+            {
+                DbSet.UpdateRange(entities);
+                _ = await DbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+            };
             return true;
         }
         public async Task<bool> UpsertAsync(T entity)
@@ -208,17 +228,21 @@ namespace DLNAServer.Database.Repositories
             var notExist = entities.Where(e => !existingById.Any(ex => ex.Id.Equals(e.Id))).ToArray();
             var exist = entities.Where(e => existingById.Any(ex => ex.Id.Equals(e.Id))).ToArray();
 
-            if (exist.Length > 0)
+            using (var transaction = DbContext.Database.BeginTransaction())
             {
-                DbSet.UpdateRange(exist);
-            }
+                if (exist.Length > 0)
+                {
+                    DbSet.UpdateRange(exist);
+                }
 
-            if (notExist.Length > 0)
-            {
-                DbSet.AddRange(notExist);
-            }
+                if (notExist.Length > 0)
+                {
+                    DbSet.AddRange(notExist);
+                }
 
-            _ = await DbContext.SaveChangesAsync();
+                _ = await DbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+            };
 
             existingById = [];
             notExist = [];
@@ -301,7 +325,7 @@ namespace DLNAServer.Database.Repositories
             }
         }
 
-        protected string GetCacheKey<TResult>(string methodName, IEnumerable<string>? additionalArgs = null)
+        protected string GetCacheKey<TResult>(IEnumerable<string>? additionalArgs = null, [System.Runtime.CompilerServices.CallerMemberName] string methodName = "")
         {
             if (additionalArgs == null || !additionalArgs.Any())
             {

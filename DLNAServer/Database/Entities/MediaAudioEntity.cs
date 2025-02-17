@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DLNAServer.Database.Entities
@@ -8,6 +9,7 @@ namespace DLNAServer.Database.Entities
     [Table(nameof(DlnaDbContext.MediaAudioEntities))] // needed as in DlnaDbContext is in plural 
     public class MediaAudioEntity : BaseEntity
     {
+        [MaxLength(4096, ErrorMessage = $"File full path cannot exceed 4096 characters. Property {nameof(FilePhysicalFullPath)}")]
         public string FilePhysicalFullPath { get; set; }
         /// <summary>
         /// Duration
@@ -16,6 +18,7 @@ namespace DLNAServer.Database.Entities
         /// <summary>
         /// Audio codec
         /// </summary>
+        [MaxLength(128, ErrorMessage = $"Codec cannot exceed 128 characters. Property {nameof(Codec)}")]
         public string? Codec { get; set; }
         /// <summary>
         /// Bitrate
@@ -32,6 +35,7 @@ namespace DLNAServer.Database.Entities
         /// <summary>
         /// Language
         /// </summary>
+        [MaxLength(128, ErrorMessage = $"Language cannot exceed 128 characters. Property {nameof(Language)}")]
         public string? Language { get; set; }
     }
 #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.

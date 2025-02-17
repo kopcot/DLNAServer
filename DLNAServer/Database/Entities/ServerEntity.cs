@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DLNAServer.Database.Entities
 {
@@ -6,6 +7,7 @@ namespace DLNAServer.Database.Entities
     [Table(nameof(DlnaDbContext.ServerEntities))] // needed as in DlnaDbContext is in plural
     public sealed class ServerEntity : BaseEntity
     {
+        [MaxLength(128, ErrorMessage = $"Machine name cannot exceed 128 characters. Property {nameof(MachineName)}")]
         public string MachineName { get; set; }
         public DateTime LasAccess { get; set; }
     }

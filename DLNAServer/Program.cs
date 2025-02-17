@@ -77,7 +77,7 @@ namespace DLNAServer
             //    _ = builder.Services.AddSingleton<ServerConfig>((serviceProvider) => ServerConfig.Instance);
             //    _ = builder.WebHost.ConfigureKestrel(options: opt =>
             //    {
-            //        opt.ListenAnyIP((int)ServerConfig.Instance.DlnaServerPort);
+            //        opt.ListenAnyIP((int)ServerConfig.Instance.ServerPort);
             //    });
             //}
             //else
@@ -92,7 +92,7 @@ namespace DLNAServer
                     _ = builder.WebHost.UseKestrel(options: opt =>
                     {
                         opt.ListenAnyIP(
-                            port: (int)ServerConfig.Instance.DlnaServerPort,
+                            port: (int)ServerConfig.Instance.ServerPort,
                             configure: cfg =>
                             {
                                 // already set as default

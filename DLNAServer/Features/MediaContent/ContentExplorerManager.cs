@@ -49,8 +49,18 @@ namespace DLNAServer.Features.MediaContent
             await RefreshFoundFilesAsync(inputFiles, true);
 
             var filesInDb = await FileRepository.GetAllAsync(useCachedResult: false);
-            _ = await CheckFilesExistingAsync(filesInDb);
-            _logger.LogInformation($"Refreshed files");
+            foreach (var filesInDbChunk in filesInDb.Chunk(200))
+            {
+                _ = await CheckFilesExistingAsync(filesInDbChunk);
+            }
+
+            var directoriesInDb = await DirectoryRepository.GetAllAsync(useCachedResult: false);
+            foreach (var directoriesInDbChunk in directoriesInDb.Chunk(200))
+            {
+                _ = await CheckDirectoriesExistingAsync(directoriesInDbChunk);
+            }
+
+            _logger.LogInformation($"Refreshed {directoriesInDb.Count()} directories and {filesInDb.Count()} files.");
         }
         public async Task TerminateAsync()
         {
@@ -393,6 +403,15 @@ namespace DLNAServer.Features.MediaContent
                 }
                 if (notExistingDirectories.Count > 0)
                 {
+                    var notExistingSubdirectories = await DirectoryRepository
+                        .GetAllStartingByPathFullNamesAsync(
+                            pathFullNames: notExistingDirectories.Select(static (ned) => ned.DirectoryFullPath),
+                            useCachedResult: false);
+                    if (notExistingSubdirectories.Any())
+                    {
+                        notExistingDirectories.AddRange(notExistingSubdirectories);
+                    }
+
                     var removeFiles = await FileRepository
                         .GetAllByParentDirectoryIdsAsync(notExistingDirectories.Select(static (ned) => ned.Id), [], useCachedResult: false);
                     if (removeFiles.Any())
@@ -460,7 +479,7 @@ namespace DLNAServer.Features.MediaContent
             }
             var addAdditionalEntitiesTime = DateTime.Now;
 
-            uint totalMatches = _serverConfig.IgnoreRequestedCountAttributeFromRequest
+            uint totalMatches = _serverConfig.ServerIgnoreRequestedCountAttributeFromRequest
                 ? (uint)(fileEntities.Count() + directoryEntities.Count())
                 : FilterEntities(startingIndex, requestedCount, ref fileEntities, ref directoryEntities);
             var filterEntitiesTime = DateTime.Now;

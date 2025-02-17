@@ -1,6 +1,7 @@
 ﻿using DLNAServer.Helpers.Attributes;
 using DLNAServer.Types.DLNA;
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DLNAServer.Database.Entities
@@ -13,31 +14,41 @@ namespace DLNAServer.Database.Entities
     public class FileEntity : BaseEntity
     {
         // File
+        [MaxLength(4096, ErrorMessage = $"File name cannot exceed 4096 characters. Property {nameof(FileName)}")]
         public string FileName { get; set; }
         [Lowercase(nameof(FileName))]
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
+        [MaxLength(4096, ErrorMessage = $"File name cannot exceed 4096 characters. Property {nameof(LC_FileName)}")]
         public string LC_FileName { get; set; }
+        [MaxLength(4096, ErrorMessage = $"Folder full path cannot exceed 4096 characters. Property {nameof(Folder)}")]
         public string? Folder { get; set; }
         [Lowercase(nameof(Folder))]
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
+        [MaxLength(4096, ErrorMessage = $"Folder full path cannot exceed 4096 characters. Property {nameof(LC_Folder)}")]
         public string? LC_Folder { get; set; }
         [ForeignKey(nameof(Directory))]
         public Guid? DirectoryId { get; set; }
         public virtual DirectoryEntity? Directory { get; set; }
         public DlnaMime FileDlnaMime { get; set; }
+        [MaxLength(128, ErrorMessage = $"Dlna Profile Name cannot exceed 128 characters. Property {nameof(FileDlnaProfileName)}")]
         public string? FileDlnaProfileName { get; set; }
+        [MaxLength(4096, ErrorMessage = $"File full path cannot exceed 4096 characters. Property {nameof(FilePhysicalFullPath)}")]
         public string FilePhysicalFullPath { get; set; }
         [Lowercase(nameof(FilePhysicalFullPath))]
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
+        [MaxLength(4096, ErrorMessage = $"File full path cannot exceed 4096 characters. Property {nameof(LC_FilePhysicalFullPath)}")]
         public string LC_FilePhysicalFullPath { get; set; }
+        [MaxLength(32, ErrorMessage = $"File extension cannot exceed 32 characters. Property {nameof(FileExtension)}")]
         public string FileExtension { get; set; }
         public long FileSizeInBytes { get; set; }
         public DateTime FileCreateDate { get; set; }
         public DateTime FileModifiedDate { get; set; }
         public bool FileUnableToCache { get; set; }
+        [MaxLength(4096, ErrorMessage = $"Title cannot exceed 4096 characters. Property {nameof(Title)}")]
         public string Title { get; set; }
         [Lowercase(nameof(Title))]
         [DatabaseGenerated(DatabaseGeneratedOption.Computed)]
+        [MaxLength(4096, ErrorMessage = $"Title cannot exceed 4096 characters. Property {nameof(LC_Title)}")]
         public string LC_Title { get; set; }
         public Guid[]? SubtitlesFileIds { get; set; }
         public DlnaItemClass UpnpClass { get; set; }

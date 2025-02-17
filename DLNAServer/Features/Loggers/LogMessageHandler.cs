@@ -19,7 +19,7 @@ namespace DLNAServer.Features.Loggers
         public void AddLogMessage(LogEntry logEntry)
         {
             _logQueue!.Enqueue(logEntry);
-            while (_logQueue.LongCount() > _serverConfig.DlnaServerMaxLogMessagesCount)
+            while (_logQueue.LongCount() > _serverConfig.ServerMaxLogMessagesCount)
             {
                 _ = _logQueue.TryDequeue(out _);
             }

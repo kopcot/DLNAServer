@@ -24,7 +24,7 @@ namespace DLNAServer.Database.Repositories
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude),
-                cacheKey: GetCacheKey<DirectoryEntity>(nameof(GetAllAsync)),
+                cacheKey: GetCacheKey<DirectoryEntity>(),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -38,7 +38,7 @@ namespace DLNAServer.Database.Repositories
                     .IncludeChildEntities(DefaultInclude)
                     .Where(d => expectedDirectory.Any(ed => d.ParentDirectory != null && ed.Equals(d.ParentDirectory.Id)))
                     .Where(fe => exclude.All(ef => !fe.LC_DirectoryFullPath.Contains(ef))),
-                cacheKey: GetCacheKey<DirectoryEntity>(nameof(GetAllParentsByDirectoriesIdAsync), expectedDirectory.Select(e => e.ToString())),
+                cacheKey: GetCacheKey<DirectoryEntity>(expectedDirectory.Select(e => e.ToString())),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -54,7 +54,7 @@ namespace DLNAServer.Database.Repositories
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .AsNoTracking()
                     .Select(static (d) => d.DirectoryFullPath),
-                cacheKey: GetCacheKey<string>(nameof(GetAllDirectoryFullNamesAsync)),
+                cacheKey: GetCacheKey<string>(),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -66,7 +66,7 @@ namespace DLNAServer.Database.Repositories
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
                     .Where(d => d.Depth == depth),
-                cacheKey: GetCacheKey<DirectoryEntity>(nameof(GetAllByDirectoryDepthAsync), [depth.ToString()]),
+                cacheKey: GetCacheKey<DirectoryEntity>([depth.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -79,7 +79,7 @@ namespace DLNAServer.Database.Repositories
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
                     .Where(d => d.Depth == depth),
-                cacheKey: GetCacheKey<DirectoryEntity>(nameof(GetAllByDirectoryDepthAsync), [depth.ToString(), skip.ToString(), take.ToString()]),
+                cacheKey: GetCacheKey<DirectoryEntity>([depth.ToString(), skip.ToString(), take.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -93,7 +93,7 @@ namespace DLNAServer.Database.Repositories
                     .IncludeChildEntities(DefaultInclude)
                     .Where(d => d.LC_DirectoryFullPath == pathFullName
                         || d.LC_DirectoryFullPath.StartsWith(pathFullName + Path.DirectorySeparatorChar)),
-                cacheKey: GetCacheKey<DirectoryEntity>(nameof(GetAllStartingByPathFullNameAsync), [pathFullName]),
+                cacheKey: GetCacheKey<DirectoryEntity>([pathFullName]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -107,7 +107,7 @@ namespace DLNAServer.Database.Repositories
                     .IncludeChildEntities(DefaultInclude)
                     .Where(d => pathFullNames.Any(p => d.LC_DirectoryFullPath == p
                         || d.LC_DirectoryFullPath.StartsWith(p + Path.DirectorySeparatorChar))),
-                cacheKey: GetCacheKey<DirectoryEntity>(nameof(GetAllStartingByPathFullNamesAsync), pathFullNames),
+                cacheKey: GetCacheKey<DirectoryEntity>(pathFullNames),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -126,7 +126,7 @@ namespace DLNAServer.Database.Repositories
                         .OrderEntitiesByDefault(DefaultOrderBy)
                         .IncludeChildEntities(DefaultInclude)
                         .Where(d => pathFullNames.Contains(d.LC_DirectoryFullPath)),
-                cacheKey: GetCacheKey<DirectoryEntity>(nameof(GetAllByPathFullNamesAsync), pathFullNames),
+                cacheKey: GetCacheKey<DirectoryEntity>(pathFullNames),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );

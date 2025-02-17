@@ -36,13 +36,13 @@ namespace DLNAServer.Types.UPNP
                     "uuid:" + uuid
                 }.Select(t => new UPNPDevice(
                     _address: address,
-                    _port: _serverConfig.DlnaServerPort,
-                    _descriptor: new Uri($"http://{address}:{_serverConfig.DlnaServerPort}/media/description.xml?uuid={uuid}"),
+                    _port: _serverConfig.ServerPort,
+                    _descriptor: new Uri($"http://{address}:{_serverConfig.ServerPort}/media/description.xml?uuid={uuid}"),
                     _uuid: uuid,
                     _type: t
                 )).ToList();
 
-                _ = Devices.TryAdd(new IPEndPoint(address, (int)_serverConfig.DlnaServerPort), types);
+                _ = Devices.TryAdd(new IPEndPoint(address, (int)_serverConfig.ServerPort), types);
             }
             AllUPNPDevicesArray = Devices.SelectMany(static (x) => x.Value).ToArray();
             await Task.CompletedTask;

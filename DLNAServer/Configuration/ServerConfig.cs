@@ -36,12 +36,14 @@ namespace DLNAServer.Configuration
         public bool InstanceNotLoadedFromFile { get; set; } = false;
         #endregion 
         // General 
-        public uint DlnaServerPort { get; set; } = 26851;
-        public string DlnaServerFriendlyName { get; set; } = $"ZEN DLNA Server ({Environment.MachineName})";
-        public string DlnaServerModelName { get; set; } = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? $"0.0.0.0 (-9999)";
-        public uint DlnaServerMaxLogMessagesCount { get; set; } = (uint)short.MaxValue;
-        public bool AlwaysRecreateDatabaseAtStart { get; set; } = false;
-        public bool IgnoreRequestedCountAttributeFromRequest { get; set; } = false;
+        public uint ServerPort { get; set; } = 26851;
+        public string ServerFriendlyName { get; set; } = $"ZEN DLNA Server ({Environment.MachineName})";
+        public string ServerModelName { get; set; } = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? $"0.0.0.0 (-9999)";
+        public uint ServerMaxLogMessagesCount { get; set; } = (uint)short.MaxValue;
+        public bool ServerAlwaysRecreateDatabaseAtStart { get; set; } = false;
+        public long ServerDatabaseMemoryMapLimitInMBytes { get; set; } = 0;
+        public long ServerDatabaseCacheLimitInMBytes { get; set; } = 0;
+        public bool ServerIgnoreRequestedCountAttributeFromRequest { get; set; } = false;
         // FileServer
         public bool UseMemoryCacheForStreamingFile { get; set; } = true;
         public bool GenerateMetadataForLocalMovies { get; set; } = true;

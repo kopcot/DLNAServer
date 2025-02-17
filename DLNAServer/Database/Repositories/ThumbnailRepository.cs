@@ -26,7 +26,7 @@ namespace DLNAServer.Database.Repositories
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
                     .FirstOrDefaultAsync(t => t.Id == guid),
-                cacheKey: GetCacheKey<ThumbnailEntity>(nameof(GetByIdAsync), [guid.ToString()]),
+                cacheKey: GetCacheKey<ThumbnailEntity>([guid.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -44,7 +44,7 @@ namespace DLNAServer.Database.Repositories
                             .OrderEntitiesByDefault(DefaultOrderBy)
                             .IncludeChildEntities(DefaultInclude)
                             .FirstOrDefaultAsync(t => t.Id == guid),
-                cacheKey: GetCacheKey<ThumbnailEntity>(nameof(GetByIdAsync), [asNoTracking.ToString(), guid.ToString()]),
+                cacheKey: GetCacheKey<ThumbnailEntity>([asNoTracking.ToString(), guid.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -65,7 +65,7 @@ namespace DLNAServer.Database.Repositories
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
                     .Where(t => t.LC_ThumbnailFilePhysicalFullPath != null && t.LC_ThumbnailFilePhysicalFullPath.Equals(pathFullName)),
-                cacheKey: GetCacheKey<ThumbnailEntity>(nameof(GetAllByPathFullNameAsync), [pathFullName]),
+                cacheKey: GetCacheKey<ThumbnailEntity>([pathFullName]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );

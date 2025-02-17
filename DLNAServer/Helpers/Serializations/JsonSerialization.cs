@@ -1,4 +1,5 @@
-﻿using DLNAServer.Helpers.Serializations.Converters;
+﻿using DLNAServer.Helpers.Files;
+using DLNAServer.Helpers.Serializations.Converters;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -56,17 +57,9 @@ namespace DLNAServer.Helpers.Serializations
             try
             {
                 FileInfo fileInfo = new(fileFullPath);
-                if (!fileInfo.Directory!.Exists)
-                {
-                    fileInfo.Directory.Create();
-                    if (OperatingSystem.IsLinux())
-                    {
-                        fileInfo.Directory.UnixFileMode =
-                            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
-                            UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
-                            UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
-                    }
-                }
+
+                FileHelper.CreateDirectoryIfNoExists(fileInfo.Directory);
+
                 using (FileStream fileStream = new(fileFullPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
                 {
                     JsonSerializer.Serialize(fileStream, config, jsonSerializerOptions);

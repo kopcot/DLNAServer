@@ -40,10 +40,10 @@ namespace DLNAServer.Controllers.Media
 		<dlna:X_DLNADOC>DMS-1.50</dlna:X_DLNADOC>
 		<dlna:X_DLNADOC>M-DMS-1.50</dlna:X_DLNADOC>
 		<deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
-		<friendlyName>{_serverConfig.DlnaServerFriendlyName}</friendlyName>
+		<friendlyName>{_serverConfig.ServerFriendlyName}</friendlyName>
 		<manufacturer>{_serverConfig.DlnaServerManufacturerName}</manufacturer>
 		<manufacturerURL>{_serverConfig.DlnaServerManufacturerUrl}</manufacturerURL>
-		<modelName>{_serverConfig.DlnaServerModelName}</modelName>
+		<modelName>{_serverConfig.ServerModelName}</modelName>
 		<UDN>uuid:{uuid}</UDN> 
 		<modelURL/>
 		<modelDescription/>
