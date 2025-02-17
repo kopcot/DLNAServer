@@ -361,3 +361,11 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/DLNAServer/Resources/executables/ffmpeg.exe
+/DLNAServer/Resources/executables/ffprobe.exe
+/DLNAServer/Resources/executables/version.json
+*.json
+*.sqlite
+/DLNAServer/Dlna.sqlite-shm
+/DLNAServer/Dlna.sqlite-wal
+/DLNAServer/Resources/images/icons/.@__thumb
