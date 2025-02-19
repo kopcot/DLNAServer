@@ -47,7 +47,8 @@ namespace DLNAServer.Features.MediaProcessors
         {
             try
             {
-                if (!fileEntities.Any())
+                if (!_serverConfig.GenerateMetadataForLocalImages
+                    || !fileEntities.Any())
                 {
                     return;
                 }

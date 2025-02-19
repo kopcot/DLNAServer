@@ -155,22 +155,25 @@ namespace DLNAServer.Database
 
         private void ChangeTrackerModify()
         {
-            foreach (var entry in ChangeTracker.Entries<BaseEntity>())
-            {
-                switch (entry.State)
+            _ = Parallel.ForEach(
+                ChangeTracker.Entries<BaseEntity>(),
+                parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 },
+                (entry) =>
                 {
-                    case EntityState.Added:
-                        entry.Entity.CreatedInDB = DateTime.Now;
-                        break;
-                    case EntityState.Modified:
-                        entry.Entity.ModifiedInDB = DateTime.Now;
-                        break;
-                        //case EntityState.Deleted:
-                        //    break;
-                        //case EntityState.Unchanged:
-                        //    break;
-                }
-            }
+                    switch (entry.State)
+                    {
+                        case EntityState.Added:
+                            entry.Entity.CreatedInDB = DateTime.Now;
+                            break;
+                        case EntityState.Modified:
+                            entry.Entity.ModifiedInDB = DateTime.Now;
+                            break;
+                            //case EntityState.Deleted:
+                            //    break;
+                            //case EntityState.Unchanged:
+                            //    break;
+                    }
+                });
         }
         #endregion
     }

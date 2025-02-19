@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace DLNAServer.Helpers.Files
 {
@@ -6,8 +7,9 @@ namespace DLNAServer.Helpers.Files
     {
         public static async Task<byte[]?> ReadFileAsync<T>(string filePath, ILogger<T> _logger, long maxSizeOfFile = long.MaxValue)
         {
-            var pool = ArrayPool<byte>.Create();
-            var buffer = pool.Rent(1_024_000);
+            var pool = ArrayPool<byte>.Shared;
+            var buffer = pool.Rent(1_024 * 1_024);
+            byte[]? cachedData;
 
             try
             {
@@ -17,7 +19,7 @@ namespace DLNAServer.Helpers.Files
                     return null;
                 }
 
-                await using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                await using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: buffer.Length, FileOptions.SequentialScan);
                 {
                     _logger.LogDebug($"{DateTime.Now} - Check file size.");
                     if (fileStream.Length > (long)int.MaxValue ||
@@ -29,20 +31,22 @@ namespace DLNAServer.Helpers.Files
                     }
 
                     var fileSize = (int)fileStream.Length;
-                    byte[] cachedData = GC.AllocateArray<byte>(fileSize, pinned: false);
+                    cachedData = GC.AllocateUninitializedArray<byte>(fileSize, pinned: false); 
 
                     int bytesRead;
                     int offset = 0;
 
                     _logger.LogDebug($"{DateTime.Now} - Start file reading from disk.");
-                    while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+                    while ((bytesRead = await fileStream.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false)) > 0)
                     {
                         if (fileSize < offset + bytesRead)
                         {
                             return null;
                         }
 
-                        Array.Copy(buffer, 0, cachedData, offset, bytesRead);
+                        Unsafe.CopyBlockUnaligned(ref cachedData[offset], ref buffer[0], (uint)bytesRead);
+                        //buffer.AsSpan(0, bytesRead).CopyTo(cachedData.AsSpan(offset));
+                        //Array.Copy(buffer, 0, cachedData, offset, bytesRead);
                         offset += bytesRead; // Move the offset forward
                     }
                     _logger.LogDebug($"{DateTime.Now} - File read for cache - {filePath} ");
@@ -58,6 +62,7 @@ namespace DLNAServer.Helpers.Files
             }
             finally
             {
+                cachedData = null;
                 pool.Return(buffer, true);
             }
         }

@@ -45,7 +45,6 @@ namespace DLNAServer.Configuration
         public long ServerDatabaseCacheLimitInMBytes { get; set; } = 0;
         public bool ServerIgnoreRequestedCountAttributeFromRequest { get; set; } = false;
         // FileServer
-        public bool UseMemoryCacheForStreamingFile { get; set; } = true;
         public bool GenerateMetadataForLocalMovies { get; set; } = true;
         public bool GenerateMetadataForLocalAudio { get; set; } = true;
         public bool GenerateMetadataForLocalImages { get; set; } = true;
@@ -53,14 +52,15 @@ namespace DLNAServer.Configuration
         public bool StoreThumbnailsForLocalMoviesInDatabase { get; set; } = true;
         public bool GenerateThumbnailsForLocalImages { get; set; } = true;
         public bool StoreThumbnailsForLocalImagesInDatabase { get; set; } = true;
+        public bool GenerateMetadataAndThumbnailsAfterAdding { get; set; } = true;
         public uint MaxWidthForThumbnails { get; set; } = 480;
         public uint MaxHeightForThumbnails { get; set; } = 360;
         public ushort QualityForThumbnails { get; set; } = 50;
         public DlnaMime DefaultDlnaMimeForVideoThumbnails { get; set; } = DlnaMime.ImageJpeg;
         public DlnaMime DefaultDlnaMimeForImageThumbnails { get; set; } = DlnaMime.ImageJpeg;
+        public bool UseMemoryCacheForStreamingFile { get; set; } = true;
         public ushort MaxUseMemoryCacheInMBytes { get; set; } = 10_240;
         public ushort MaxSizeOfFileForUseMemoryCacheInMBytes { get; set; } = 1_024;
-        public bool GenerateMetadataAndThumbnailsAfterAdding { get; set; } = true;
         public uint StoreFileInMemoryCacheAfterLoadInMinute { get; set; } = 10;
         public uint CountOfFilesByLastAddedToDb { get; set; } = 30;
         public Dictionary<string, KeyValuePair<DlnaMime, string?>> MediaFileExtensions { get; set; } = new Dictionary<string, KeyValuePair<DlnaMime, string?>>()

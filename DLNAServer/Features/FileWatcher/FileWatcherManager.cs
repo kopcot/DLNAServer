@@ -89,7 +89,7 @@ namespace DLNAServer.Features.FileWatcher
                     _logger.LogDebug($"{DateTime.Now} - File event '{eventAction.ToString().ToLower()}' started adding to database, exists already in database {fileEntities == null}/{!fileEntities?.Any()}, file full path = {fileFullPath}");
 
                     var dlnaMime = GetConfiguredDlnaMimeFromFileExtension(fileInfo.Extension);
-                    var inputFile = new Dictionary<DlnaMime, IEnumerable<string>> { { dlnaMime, new string[] { fileFullPath } } };
+                    var inputFile = new Dictionary<DlnaMime, IEnumerable<string>> { { dlnaMime, [fileFullPath] } };
 
                     await contentExplorerManager.RefreshFoundFilesAsync(inputFile, true);
                 }
@@ -142,7 +142,7 @@ namespace DLNAServer.Features.FileWatcher
                 if (!existingOldFiles.Any())
                 {
                     var dlnaMime = GetConfiguredDlnaMimeFromFileExtension(fileInfo.Extension);
-                    var inputFile = new Dictionary<DlnaMime, IEnumerable<string>> { { dlnaMime, new string[] { newFileFullPath } } };
+                    var inputFile = new Dictionary<DlnaMime, IEnumerable<string>> { { dlnaMime, [newFileFullPath] } };
 
                     var contentExplorerManager = scope.ServiceProvider.GetRequiredService<IContentExplorerManager>();
                     await contentExplorerManager.RefreshFoundFilesAsync(inputFile, true);

@@ -50,7 +50,8 @@ namespace DLNAServer.Features.MediaProcessors
         {
             try
             {
-                if (!fileEntities.Any())
+                if (!_serverConfig.GenerateMetadataForLocalMovies
+                    || !fileEntities.Any())
                 {
                     return;
                 }
@@ -97,7 +98,7 @@ namespace DLNAServer.Features.MediaProcessors
 
         private async Task<(MediaVideoEntity?, MediaAudioEntity?, MediaSubtitleEntity?)> GetVideoFileMetadataAsync(FileEntity fileEntity)
         {
-            if (!_serverConfig.GenerateMetadataForLocalMovies)
+            if (fileEntity == null)
             {
                 return (null, null, null);
             }

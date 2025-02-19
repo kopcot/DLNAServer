@@ -48,7 +48,8 @@ namespace DLNAServer.Features.MediaProcessors
         {
             try
             {
-                if (!fileEntities.Any())
+                if (!_serverConfig.GenerateMetadataForLocalAudio
+                    || !fileEntities.Any())
                 {
                     return;
                 }
@@ -80,7 +81,7 @@ namespace DLNAServer.Features.MediaProcessors
         }
         private async Task<MediaAudioEntity?> GetFileMetadataAsync(FileEntity fileEntity)
         {
-            if (!_serverConfig.GenerateMetadataForLocalAudio)
+            if (fileEntity == null)
             {
                 return null;
             }

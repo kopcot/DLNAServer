@@ -7,6 +7,7 @@ using DLNAServer.Types.DLNA;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Text;
 
 namespace DLNAServer.Features.MediaContent
@@ -121,7 +122,7 @@ namespace DLNAServer.Features.MediaContent
         {
             try
             {
-                await semaphoreRefreshFoundFiles.WaitAsync(TimeSpan.FromMinutes(5));
+                _ = await semaphoreRefreshFoundFiles.WaitAsync(TimeSpan.FromMinutes(5));
 
                 List<FileEntity> fileEntities = [];
 
@@ -184,11 +185,11 @@ namespace DLNAServer.Features.MediaContent
                     if (directoryEntities.Any())
                     {
                         StringBuilder sb = new();
-                        sb.AppendLine("Directories: ");
-                        sb.AppendLine(string.Join(Environment.NewLine, directoryEntities.Select(fe => fe.DirectoryFullPath).Take(maxShownCount)));
+                        _ = sb.AppendLine("Directories: ");
+                        _ = sb.AppendLine(string.Join(Environment.NewLine, directoryEntities.Select(fe => fe.DirectoryFullPath).Take(maxShownCount)));
                         if (directoryEntities.Count() > maxShownCount)
                         {
-                            sb.AppendLine("...");
+                            _ = sb.AppendLine("...");
                         }
 
                         _logger.LogInformation(sb.ToString());
@@ -199,11 +200,11 @@ namespace DLNAServer.Features.MediaContent
                     if (fileEntities.Count != 0)
                     {
                         StringBuilder sb = new();
-                        sb.AppendLine("Files: ");
-                        sb.AppendLine(string.Join(Environment.NewLine, fileEntities.Select(fe => fe.FilePhysicalFullPath).Take(maxShownCount)));
+                        _ = sb.AppendLine("Files: ");
+                        _ = sb.AppendLine(string.Join(Environment.NewLine, fileEntities.Select(fe => fe.FilePhysicalFullPath).Take(maxShownCount)));
                         if (fileEntities.Count > maxShownCount)
                         {
-                            sb.AppendLine("...");
+                            _ = sb.AppendLine("...");
                         }
 
                         _logger.LogInformation(sb.ToString());
@@ -219,7 +220,7 @@ namespace DLNAServer.Features.MediaContent
             }
             finally
             {
-                semaphoreRefreshFoundFiles.Release();
+                _ = semaphoreRefreshFoundFiles.Release();
             }
         }
 
@@ -335,23 +336,29 @@ namespace DLNAServer.Features.MediaContent
                     return fileEntities;
                 }
 
-                var notExistingFiles = new List<FileEntity>();
-                var existingFiles = new List<FileEntity>();
-                foreach (var file in fileEntities)
-                {
-                    FileInfo fileInfo = new(file.FilePhysicalFullPath);
-                    if (fileInfo.Exists)
-                    {
-                        existingFiles.Add(file);
-                    }
-                    else
-                    {
-                        _logger.LogInformation($"{DateTime.Now} - File missing {file.FilePhysicalFullPath}");
-                        notExistingFiles.Add(file);
-                    }
-                }
+                var notExistingFiles = new ConcurrentBag<FileEntity>();
+                var existingFiles = new ConcurrentBag<(int order, FileEntity entity)>();
 
-                if (notExistingFiles.Count != 0)
+                _ = Parallel.For(
+                    0,
+                    fileEntities.Count(),
+                    parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 },
+                    (index) =>
+                    {
+                        var file = fileEntities.ElementAt(index);
+                        FileInfo fileInfo = new(file.FilePhysicalFullPath);
+                        if (fileInfo.Exists)
+                        {
+                            existingFiles.Add((index, file));
+                        }
+                        else
+                        {
+                            _logger.LogInformation($"{DateTime.Now} - File missing {file.FilePhysicalFullPath}");
+                            notExistingFiles.Add(file);
+                        }
+                    });
+
+                if (!notExistingFiles.IsEmpty)
                 {
                     await ClearMetadataAsync(notExistingFiles);
                     await ClearThumbnailsAsync(notExistingFiles, true);
@@ -359,7 +366,10 @@ namespace DLNAServer.Features.MediaContent
                     _ = await FileRepository.DeleteRangeAsync(notExistingFiles);
                 }
 
-                return existingFiles;
+                return existingFiles
+                    .OrderBy(static (f) => f.order)
+                    .Select(static (f) => f.entity)
+                    .ToArray();
             }
             catch (Exception ex)
             {
@@ -386,22 +396,29 @@ namespace DLNAServer.Features.MediaContent
                     return directoryEntities;
                 }
 
-                var notExistingDirectories = new List<DirectoryEntity>();
-                var existingDirectories = new List<DirectoryEntity>();
-                foreach (var directory in directoryEntities)
-                {
-                    DirectoryInfo directoryInfo = new(directory.DirectoryFullPath);
-                    if (directoryInfo.Exists)
+                var notExistingDirectories = new ConcurrentBag<DirectoryEntity>();
+                var existingDirectories = new ConcurrentBag<(int order, DirectoryEntity entity)>();
+
+                _ = Parallel.For(
+                    0,
+                    directoryEntities.Count(),
+                    parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 },
+                    (index) =>
                     {
-                        existingDirectories.Add(directory);
-                    }
-                    else
-                    {
-                        _logger.LogInformation($"{DateTime.Now} - Directory missing {directory.DirectoryFullPath}");
-                        notExistingDirectories.Add(directory);
-                    }
-                }
-                if (notExistingDirectories.Count > 0)
+                        var directory = directoryEntities.ElementAt(index);
+                        DirectoryInfo directoryInfo = new(directory.DirectoryFullPath);
+                        if (directoryInfo.Exists)
+                        {
+                            existingDirectories.Add((index, directory));
+                        }
+                        else
+                        {
+                            _logger.LogInformation($"{DateTime.Now} - Directory missing {directory.DirectoryFullPath}");
+                            notExistingDirectories.Add(directory);
+                        }
+                    });
+
+                if (!notExistingDirectories.IsEmpty)
                 {
                     var notExistingSubdirectories = await DirectoryRepository
                         .GetAllStartingByPathFullNamesAsync(
@@ -409,7 +426,10 @@ namespace DLNAServer.Features.MediaContent
                             useCachedResult: false);
                     if (notExistingSubdirectories.Any())
                     {
-                        notExistingDirectories.AddRange(notExistingSubdirectories);
+                        foreach (var item in notExistingSubdirectories)
+                        {
+                            notExistingDirectories.Add(item);
+                        }
                     }
 
                     var removeFiles = await FileRepository
@@ -422,7 +442,10 @@ namespace DLNAServer.Features.MediaContent
                     _ = await DirectoryRepository.DeleteRangeAsync(notExistingDirectories);
                 }
 
-                return existingDirectories;
+                return existingDirectories
+                    .OrderBy(static (f) => f.order)
+                    .Select(static (f) => f.entity)
+                    .ToArray();
             }
             catch (Exception ex)
             {

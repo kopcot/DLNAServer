@@ -165,7 +165,7 @@ namespace DLNAServer.SSDP
             {
                 _logger.LogError(ex, $"Error in SSDPListener: {ex.Message}");
 
-                int delay = 30000 + new Random().Next(30000);
+                int delay = 60000 + new Random().Next(180000);
                 await Task.Delay(delay);
             }
         }
