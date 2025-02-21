@@ -4,7 +4,7 @@ using DLNAServer.Database.Repositories.Interfaces;
 using DLNAServer.Features.MediaProcessors.Interfaces;
 using DLNAServer.Helpers.Files;
 using DLNAServer.Types.DLNA;
-using System.Buffers;
+using System.Threading.Channels;
 using Xabe.FFmpeg;
 
 namespace DLNAServer.Features.MediaProcessors
@@ -29,7 +29,7 @@ namespace DLNAServer.Features.MediaProcessors
         {
             await FFmpegHelper.EnsureFFmpegDownloaded(_logger);
         }
-        public async Task FillEmptyMetadata(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task FillEmptyMetadataAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
         {
             var files = fileEntities
                 .Where(static (fe) =>
@@ -42,9 +42,9 @@ namespace DLNAServer.Features.MediaProcessors
                 return;
             }
 
-            await RefreshMetadata(files, setCheckedForFailed);
+            await RefreshMetadataAsync(files, setCheckedForFailed);
         }
-        public async Task RefreshMetadata(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task RefreshMetadataAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
         {
             try
             {
@@ -56,21 +56,43 @@ namespace DLNAServer.Features.MediaProcessors
 
                 await FFmpegHelper.EnsureFFmpegDownloaded(_logger);
 
-                await Parallel.ForEachAsync(
-                    fileEntities,
-                    parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount },
-                    async (file, cancellationToken) =>
-                    {
-                        var audioMetadata = await GetFileMetadataAsync(file);
-                        file.AudioMetadata = audioMetadata;
-                        if (audioMetadata != null ||
-                           (setCheckedForFailed && audioMetadata == null))
-                        {
-                            file.IsMetadataChecked = true;
+                if (fileEntities.Count() == 1)
+                {
+                    var file = fileEntities.First();
+                    await RefreshSingleFileMetadataAsync(file, setCheckedForFailed);
+                }
+                else
+                {
+                    var fileEntitiesAsync = fileEntities.ToAsyncEnumerable();
+                    var maxDegreeOfParallelism = Math.Min(fileEntities.Count(), (int)_serverConfig.ServerMaxDegreeOfParallelism);
 
-                            _logger.LogInformation($"Set metadata for file: '{file.FilePhysicalFullPath}'");
-                        }
+                    var channel = Channel.CreateBounded<FileEntity>(new BoundedChannelOptions(maxDegreeOfParallelism)
+                    {
+                        FullMode = BoundedChannelFullMode.Wait, // Backpressure handling
+                        SingleWriter = true,
+                        SingleReader = false
                     });
+
+                    var producer = Task.Run(async () =>
+                    {
+                        await foreach (var file in fileEntitiesAsync)
+                        {
+                            await channel.Writer.WriteAsync(file);
+                        }
+                        channel.Writer.Complete(); // Signal completion
+                    });
+
+                    var consumer = Parallel
+                        .ForEachAsync(
+                            channel.Reader.ReadAllAsync(),
+                            parallelOptions: new() { MaxDegreeOfParallelism = maxDegreeOfParallelism },
+                            async (file, cancellationToken) =>
+                            {
+                                await RefreshSingleFileMetadataAsync(file, setCheckedForFailed);
+                            });
+
+                    await Task.WhenAll(producer, consumer);
+                }
 
                 _ = await FileRepository.SaveChangesAsync();
             }
@@ -79,6 +101,20 @@ namespace DLNAServer.Features.MediaProcessors
                 _logger.LogError(ex, ex.Message);
             }
         }
+
+        private async Task RefreshSingleFileMetadataAsync(FileEntity file, bool setCheckedForFailed)
+        {
+            var audioMetadata = await GetFileMetadataAsync(file);
+            file.AudioMetadata = audioMetadata;
+            if (audioMetadata != null ||
+               (setCheckedForFailed && audioMetadata == null))
+            {
+                file.IsMetadataChecked = true;
+
+                _logger.LogInformation($"Set metadata for file: '{file.FilePhysicalFullPath}'");
+            }
+        }
+
         private async Task<MediaAudioEntity?> GetFileMetadataAsync(FileEntity fileEntity)
         {
             if (fileEntity == null)
@@ -136,7 +172,7 @@ namespace DLNAServer.Features.MediaProcessors
                 return null;
             }
         }
-        public async Task FillEmptyThumbnails(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task FillEmptyThumbnailsAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
         {
             var files = fileEntities
                 .Where(static (fe) =>
@@ -149,9 +185,9 @@ namespace DLNAServer.Features.MediaProcessors
                 return;
             }
 
-            await RefreshThumbnails(files, setCheckedForFailed);
+            await RefreshThumbnailsAsync(files, setCheckedForFailed);
         }
-        public async Task RefreshThumbnails(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task RefreshThumbnailsAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
         {
             try
             {
@@ -160,15 +196,48 @@ namespace DLNAServer.Features.MediaProcessors
                     return;
                 }
 
-                await Parallel.ForEachAsync(
-                    fileEntities,
-                    parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount },
-                    async (file, cancellationToken) =>
-                    {
-                        file.IsThumbnailChecked = true;
+                if (fileEntities.Count() == 1)
+                {
+                    var file = fileEntities.First();
+                    file.IsThumbnailChecked = true;
+                }
+                else
+                {
+                    var fileEntitiesAsync = fileEntities.ToAsyncEnumerable();
+                    var maxDegreeOfParallelism = Math.Min(fileEntities.Count(), (int)_serverConfig.ServerMaxDegreeOfParallelism);
 
-                        await Task.CompletedTask;
+                    var channel = Channel.CreateBounded<FileEntity>(new BoundedChannelOptions(maxDegreeOfParallelism)
+                    {
+                        FullMode = BoundedChannelFullMode.Wait, // Backpressure handling
+                        SingleWriter = true,
+                        SingleReader = false
                     });
+
+                    var producer = Task.Run(async () =>
+                    {
+                        await foreach (var file in fileEntitiesAsync)
+                        {
+                            await channel.Writer.WriteAsync(file);
+                        }
+                        channel.Writer.Complete(); // Signal completion
+                    });
+
+                    var consumer = Task.Run(async () =>
+                    {
+
+                        await Parallel.ForEachAsync(
+                            channel.Reader.ReadAllAsync(),
+                            parallelOptions: new() { MaxDegreeOfParallelism = maxDegreeOfParallelism },
+                            async (file, cancellationToken) =>
+                            {
+                                file.IsThumbnailChecked = true;
+
+                                await Task.CompletedTask;
+                            });
+                    });
+
+                    await Task.WhenAll(producer, consumer);
+                }
 
                 _ = await FileRepository.SaveChangesAsync();
             }

@@ -2,7 +2,6 @@
 using DLNAServer.Types.IP.Interfaces;
 using DLNAServer.Types.UPNP;
 using DLNAServer.Types.UPNP.Interfaces;
-using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -18,7 +17,6 @@ namespace DLNAServer.SSDP
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ServerConfig _serverConfig;
         private readonly Dictionary<IPEndPoint, UdpClient> _udpClientSenders = [];
-        private readonly ArrayPool<byte> arrayPool = ArrayPool<byte>.Shared;
         private readonly Encoding decoder = Encoding.UTF8;
         public SSDPListenerService(
             ILogger<SSDPListenerService> logger,
@@ -150,7 +148,7 @@ namespace DLNAServer.SSDP
                 _ = sb.Append($"\r\n");
 
                 // Convert the response to bytes
-                byte[] responseBytes = arrayPool.Rent(decoder.GetByteCount(sb.ToString()));
+                byte[] responseBytes = GC.AllocateUninitializedArray<byte>(decoder.GetByteCount(sb.ToString()), pinned: false);
                 _ = decoder.GetBytes(sb.ToString(), 0, sb.Length, responseBytes, 0);
 
                 // Send SSDP response
@@ -159,7 +157,6 @@ namespace DLNAServer.SSDP
                 _logger.LogDebug($"Sent SSDP response to {remoteEndPoint.Address}:{remoteEndPoint.Port}; {device.Descriptor}");
 
                 _ = sb.Clear();
-                arrayPool.Return(responseBytes);
             }
             catch (Exception ex)
             {

@@ -31,12 +31,12 @@ namespace DLNAServer.Controllers.Media
 
                 string filePath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "images", "icons", fileName);
 
-                (var isCachedSuccessful, var fileMemoryByteWR) = await FileMemoryCache.CacheFileAndReturnAsync(filePath, TimeSpan.FromDays(1), checkExistingInCache: true);
+                (var isCachedSuccessful, var fileMemoryByteMemory) = await FileMemoryCache.CacheFileAndReturnAsync(filePath, TimeSpan.FromDays(1), checkExistingInCache: true);
                 if (isCachedSuccessful
-                    && fileMemoryByteWR != null
-                    && fileMemoryByteWR.TryGetTarget(out var fileMemoryByte) == true)
+                    && fileMemoryByteMemory != null
+                    && fileMemoryByteMemory.HasValue)
                 {
-                    return File(fileMemoryByte!, mimeType, enableRangeProcessing: true);
+                    return File(fileMemoryByteMemory.Value.ToArray(), mimeType, enableRangeProcessing: true);
                 }
 
                 if (!System.IO.File.Exists(filePath))

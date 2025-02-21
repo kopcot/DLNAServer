@@ -6,11 +6,11 @@ namespace DLNAServer.Features.Cache.Interfaces
     public interface IFileMemoryCacheManager : ITerminateAble
     {
         void CacheFileInBackground(FileEntity file, TimeSpan? slidingExpiration);
-        Task<(bool isCachedSuccessful, WeakReference<byte[]>? file)> CacheFileAndReturnAsync(
+        Task<(bool isCachedSuccessful, ReadOnlyMemory<byte>? file)> CacheFileAndReturnAsync(
             string filePath,
             TimeSpan? slidingExpiration,
             bool checkExistingInCache = true);
-        Task<(bool isCached, byte[] file)> GetCheckCachedFileAsync(string filePath);
+        (bool isCached, ReadOnlyMemory<byte> file) GetCheckCachedFile(string filePath);
         void EvictSingleFile(string filePath);
     }
 }

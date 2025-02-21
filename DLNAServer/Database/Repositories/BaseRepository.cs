@@ -4,7 +4,6 @@ using DLNAServer.Helpers.Caching;
 using DLNAServer.Helpers.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using System.Buffers;
 
 namespace DLNAServer.Database.Repositories
 {
@@ -102,7 +101,7 @@ namespace DLNAServer.Database.Repositories
         public async Task<IEnumerable<T>> GetAllAsync(bool useCachedResult) => await GetAllAsync(false, useCachedResult);
         public async Task<IEnumerable<T>> GetAllAsync(bool asNoTracking, bool useCachedResult)
         {
-            return await GetAllWithCacheAsync<T>(
+            var memoryDataResult = await GetAllWithCacheAsync<T>(
                 queryAction: asNoTracking
                         ? DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
@@ -115,12 +114,13 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
 
         public async Task<IEnumerable<T>> GetAllAsync(int skip, int take, bool useCachedResult) => await GetAllAsync(skip, take, false, useCachedResult);
         public async Task<IEnumerable<T>> GetAllAsync(int skip, int take, bool asNoTracking, bool useCachedResult)
         {
-            return await GetAllWithCacheAsync<T>(
+            var memoryDataResult = await GetAllWithCacheAsync<T>(
                 queryAction: asNoTracking
                         ? DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
@@ -137,6 +137,7 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
         public async Task<long> GetCountAsync(bool useCachedResult)
         {
@@ -150,7 +151,7 @@ namespace DLNAServer.Database.Repositories
 
         public async Task<IEnumerable<T>> GetAllByIdsAsync(IEnumerable<Guid> guids, bool useCachedResult)
         {
-            return await GetAllWithCacheAsync<T>(
+            var memoryDataResult = await GetAllWithCacheAsync<T>(
                 queryAction: DbSet
                         .OrderEntitiesByDefault(DefaultOrderBy)
                         .IncludeChildEntities(DefaultInclude)
@@ -159,6 +160,7 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
         public async Task<T?> GetByIdAsync(Guid guid, bool useCachedResult) => await GetByIdAsync(guid, false, useCachedResult);
         public async Task<T?> GetByIdAsync(Guid guid, bool asNoTracking, bool useCachedResult)
@@ -258,7 +260,7 @@ namespace DLNAServer.Database.Repositories
         }
 
         #region Helpers 
-        protected async Task<TResult[]> GetAllWithCacheAsync<TResult>(
+        protected async Task<ReadOnlyMemory<TResult>> GetAllWithCacheAsync<TResult>(
             IQueryable<TResult> queryAction,
             string cacheKey,
             TimeSpan cacheDuration,
@@ -266,23 +268,23 @@ namespace DLNAServer.Database.Repositories
         {
             if (useCachedResult)
             {
-                var result = await MemoryCache.GetOrCreateAsync(
+                var resultAsMemory = await MemoryCache.GetOrCreateAsync(
                     cacheKey,
                     async entry =>
                     {
                         var data = await queryAction.ToArrayAsync();
 
-                        entry.Value = data;
+                        entry.Value = data.AsMemory();
                         entry.SlidingExpiration = cacheDuration;
                         entry.AbsoluteExpirationRelativeToNow = defaultCacheAbsoluteDuration;
                         entry.Size = 1; // size is not important for entities vs physical cached file size
 
                         return data;
-                    }) ?? [];
+                    });
 
                 MemoryCache.StartEvictCachedKey(cacheKey, cacheDuration);
 
-                return result;
+                return resultAsMemory;
             }
             else
             {

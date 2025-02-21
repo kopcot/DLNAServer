@@ -1,4 +1,5 @@
-﻿using DLNAServer.Database.Entities;
+﻿using DLNAServer.Configuration;
+using DLNAServer.Database.Entities;
 using DLNAServer.Database.Entities.Configurations;
 using DLNAServer.Helpers.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -8,10 +9,13 @@ namespace DLNAServer.Database
     public class DlnaDbContext : DbContext, ITerminateAble
     {
         private readonly ILogger<DlnaDbContext> _logger;
-        public DlnaDbContext(DbContextOptions<DlnaDbContext> options, ILogger<DlnaDbContext> logger)
+        private readonly ServerConfig _serverConfig;
+
+        public DlnaDbContext(DbContextOptions<DlnaDbContext> options, ILogger<DlnaDbContext> logger, ServerConfig serverConfig)
             : base(options)
         {
             _logger = logger;
+            _serverConfig = serverConfig;
         }
         public DbSet<DirectoryEntity> DirectoryEntities { get; set; }
         public DbSet<FileEntity> FileEntities { get; set; }
@@ -155,9 +159,11 @@ namespace DLNAServer.Database
 
         private void ChangeTrackerModify()
         {
+            var maxDegreeOfParallelism = Math.Min(ChangeTracker.Entries<BaseEntity>().Count(), (int)_serverConfig.ServerMaxDegreeOfParallelism);
+
             _ = Parallel.ForEach(
                 ChangeTracker.Entries<BaseEntity>(),
-                parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 },
+                parallelOptions: new() { MaxDegreeOfParallelism = maxDegreeOfParallelism },
                 (entry) =>
                 {
                     switch (entry.State)

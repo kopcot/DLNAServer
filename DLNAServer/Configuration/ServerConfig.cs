@@ -34,16 +34,17 @@ namespace DLNAServer.Configuration
         public bool DlnaServerDebugMode { get; set; } = false;
         [JsonIgnore]
         public bool InstanceNotLoadedFromFile { get; set; } = false;
-        #endregion 
+        #endregion
         // General 
         public uint ServerPort { get; set; } = 26851;
         public string ServerFriendlyName { get; set; } = $"ZEN DLNA Server ({Environment.MachineName})";
         public string ServerModelName { get; set; } = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? $"0.0.0.0 (-9999)";
         public uint ServerMaxLogMessagesCount { get; set; } = (uint)short.MaxValue;
         public bool ServerAlwaysRecreateDatabaseAtStart { get; set; } = false;
-        public long ServerDatabaseMemoryMapLimitInMBytes { get; set; } = 0;
-        public long ServerDatabaseCacheLimitInMBytes { get; set; } = 0;
+        public ulong ServerDatabaseMemoryMapLimitInMBytes { get; set; } = 0;
+        public ulong ServerDatabaseCacheLimitInMBytes { get; set; } = 0;
         public bool ServerIgnoreRequestedCountAttributeFromRequest { get; set; } = false;
+        public uint ServerMaxDegreeOfParallelism { get; set; } = (uint)Environment.ProcessorCount;
         // FileServer
         public bool GenerateMetadataForLocalMovies { get; set; } = true;
         public bool GenerateMetadataForLocalAudio { get; set; } = true;
@@ -101,7 +102,7 @@ namespace DLNAServer.Configuration
         /// </summary>
         public string SubFolderForThumbnail { get; set; } = ".@__thumb";
 
-        private static string GenerateServerSignature()
+        private string GenerateServerSignature()
         {
             var os = Environment.OSVersion;
             var platform = os.Platform.ToString();
@@ -126,7 +127,7 @@ namespace DLNAServer.Configuration
             var versionMajor = version?.Major ?? -1;
             var versionMinor = version?.Minor ?? -1;
             var bitVersion = IntPtr.Size * 8;
-            var signature = $"{platform}/{bitVersion}bit/{os.Version.Major}.{os.Version.Minor} UPnP/1.0 DLNADOC/1.5 zen_dlna/{versionMajor}.{versionMinor}";
+            var signature = $"{platform}/{bitVersion}bit/{os.Version.Major}.{os.Version.Minor} UPnP/1.0 DLNADOC/1.5 zen_dlna/{versionMajor}.{versionMinor}/{ServerPort}";
             return signature;
         }
 

@@ -33,12 +33,12 @@ namespace DLNAServer.Controllers
                 return NotFound("File not found");
             }
 
-            (var isCachedSuccessful, var fileMemoryByteWR) = await FileMemoryCacheManager.CacheFileAndReturnAsync(filePath, TimeSpan.FromDays(1), checkExistingInCache: true);
+            (var isCachedSuccessful, var fileMemoryByteMemory) = await FileMemoryCacheManager.CacheFileAndReturnAsync(filePath, TimeSpan.FromDays(1), checkExistingInCache: true);
             if (isCachedSuccessful
-                && fileMemoryByteWR != null
-                && fileMemoryByteWR.TryGetTarget(out var fileMemoryByte) == true)
+                && fileMemoryByteMemory != null
+                && fileMemoryByteMemory.HasValue)
             {
-                return File(fileMemoryByte!, "text/xml; charset=\"utf-8\"");
+                return File(fileMemoryByteMemory.Value.ToArray(), "text/xml; charset=\"utf-8\"");
             }
 
             return PhysicalFile(filePath, "text/xml; charset=\"utf-8\"");

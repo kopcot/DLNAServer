@@ -4,7 +4,7 @@ using DLNAServer.Database.Repositories.Interfaces;
 using DLNAServer.Features.MediaProcessors.Interfaces;
 using DLNAServer.Helpers.Files;
 using DLNAServer.Types.DLNA;
-using System.Buffers;
+using System.Threading.Channels;
 using Xabe.FFmpeg;
 using Xabe.FFmpeg.Exceptions;
 
@@ -31,7 +31,7 @@ namespace DLNAServer.Features.MediaProcessors
             await FFmpegHelper.EnsureFFmpegDownloaded(_logger);
         }
 
-        public async Task FillEmptyMetadata(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task FillEmptyMetadataAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
         {
             var files = fileEntities
                 .Where(static (fe) =>
@@ -44,9 +44,9 @@ namespace DLNAServer.Features.MediaProcessors
                 return;
             }
 
-            await RefreshMetadata(files, setCheckedForFailed);
+            await RefreshMetadataAsync(files, setCheckedForFailed);
         }
-        public async Task RefreshMetadata(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task RefreshMetadataAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
         {
             try
             {
@@ -58,41 +58,76 @@ namespace DLNAServer.Features.MediaProcessors
 
                 await FFmpegHelper.EnsureFFmpegDownloaded(_logger);
 
-                await Parallel.ForEachAsync(
-                    fileEntities,
-                    parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount },
-                    async (file, cancellationToken) =>
+                if (fileEntities.Count() == 1)
+                {
+                    var file = fileEntities.First();
+                    await RefreshSingleFileMetadataAsync(file, setCheckedForFailed);
+                }
+                else
+                {
+                    var fileEntitiesAsync = fileEntities.ToAsyncEnumerable();
+                    var maxDegreeOfParallelism = Math.Min(fileEntities.Count(), (int)_serverConfig.ServerMaxDegreeOfParallelism);
+
+                    var channel = Channel.CreateBounded<FileEntity>(new BoundedChannelOptions(maxDegreeOfParallelism)
                     {
-                        (var videoMetadata, var audioMetadata, var subtitleMetadata) = await GetVideoFileMetadataAsync(file);
-                        if (audioMetadata != null)
-                        {
-                            file.AudioMetadata = audioMetadata;
-                        }
-
-                        if (subtitleMetadata != null)
-                        {
-                            file.SubtitleMetadata = subtitleMetadata;
-                        }
-
-                        if (videoMetadata != null)
-                        {
-                            file.VideoMetadata = videoMetadata;
-                        }
-
-                        if (videoMetadata != null ||
-                           (setCheckedForFailed && videoMetadata == null))
-                        {
-                            file.IsMetadataChecked = true;
-
-                            _logger.LogInformation($"Set metadata for file: '{file.FilePhysicalFullPath}'");
-                        }
+                        FullMode = BoundedChannelFullMode.Wait, // Backpressure handling
+                        SingleWriter = true,
+                        SingleReader = false
                     });
+
+                    var producer = Task.Run(async () =>
+                    {
+                        await foreach (var file in fileEntitiesAsync)
+                        {
+                            await channel.Writer.WriteAsync(file);
+                        }
+                        channel.Writer.Complete(); // Signal completion
+                    });
+
+                    var consumer = Parallel
+                        .ForEachAsync(
+                            channel.Reader.ReadAllAsync(),
+                            parallelOptions: new() { MaxDegreeOfParallelism = maxDegreeOfParallelism },
+                            async (file, cancellationToken) =>
+                            {
+                                await RefreshSingleFileMetadataAsync(file, setCheckedForFailed);
+                            });
+
+                    await Task.WhenAll(producer, consumer);
+                }
 
                 _ = await FileRepository.SaveChangesAsync();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, ex.Message);
+            }
+        }
+
+        private async Task RefreshSingleFileMetadataAsync(FileEntity file, bool setCheckedForFailed)
+        {
+            (var videoMetadata, var audioMetadata, var subtitleMetadata) = await GetVideoFileMetadataAsync(file);
+            if (audioMetadata != null)
+            {
+                file.AudioMetadata = audioMetadata;
+            }
+
+            if (subtitleMetadata != null)
+            {
+                file.SubtitleMetadata = subtitleMetadata;
+            }
+
+            if (videoMetadata != null)
+            {
+                file.VideoMetadata = videoMetadata;
+            }
+
+            if (videoMetadata != null ||
+               (setCheckedForFailed && videoMetadata == null))
+            {
+                file.IsMetadataChecked = true;
+
+                _logger.LogInformation($"Set metadata for file: '{file.FilePhysicalFullPath}'");
             }
         }
 
@@ -211,7 +246,7 @@ namespace DLNAServer.Features.MediaProcessors
                 return null;
             }
         }
-        public async Task FillEmptyThumbnails(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task FillEmptyThumbnailsAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
         {
             var files = fileEntities
                 .Where(static (fe) =>
@@ -224,9 +259,9 @@ namespace DLNAServer.Features.MediaProcessors
                 return;
             }
 
-            await RefreshThumbnails(files, setCheckedForFailed);
+            await RefreshThumbnailsAsync(files, setCheckedForFailed);
         }
-        public async Task RefreshThumbnails(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task RefreshThumbnailsAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
         {
             try
             {
@@ -238,55 +273,43 @@ namespace DLNAServer.Features.MediaProcessors
 
                 await FFmpegHelper.EnsureFFmpegDownloaded(_logger);
 
-                await Parallel.ForEachAsync(
-                    fileEntities,
-                    parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount },
-                    async (file, cancellationToken) =>
+                if (fileEntities.Count() == 1)
+                {
+                    var file = fileEntities.First();
+                    await RefreshSingleFileThumbnailAsync(file, setCheckedForFailed);
+                }
+                else
+                {
+                    var fileEntitiesAsync = fileEntities.ToAsyncEnumerable();
+                    var maxDegreeOfParallelism = Math.Min(fileEntities.Count(), (int)_serverConfig.ServerMaxDegreeOfParallelism);
+
+                    var channel = Channel.CreateBounded<FileEntity>(new BoundedChannelOptions(maxDegreeOfParallelism)
                     {
-                        try
-                        {
-                            (var thumbnailFileFullPath, var thumbnailData, var dlnaMime, var dlnaProfileName) = await CreateThumbnailFromVideoAsync(
-                                fileEntity: file,
-                                dlnaMimeRequested: _serverConfig.DefaultDlnaMimeForVideoThumbnails)
-                                ;
-
-                            if (thumbnailFileFullPath != null
-                                && new FileInfo(thumbnailFileFullPath) is FileInfo thumbnailFileInfo
-                                && thumbnailFileInfo.Exists)
-                            {
-                                file.IsThumbnailChecked = true;
-                                file.Thumbnail = new()
-                                {
-                                    FilePhysicalFullPath = file.FilePhysicalFullPath,
-                                    ThumbnailFileDlnaMime = dlnaMime!.Value,
-                                    ThumbnailFileDlnaProfileName = dlnaProfileName,
-                                    ThumbnailFileExtension = thumbnailFileInfo.Extension,
-                                    ThumbnailFilePhysicalFullPath = thumbnailFileFullPath,
-                                    ThumbnailFileSizeInBytes = thumbnailFileInfo.Length,
-                                    ThumbnailData = _serverConfig.StoreThumbnailsForLocalMoviesInDatabase
-                                        ? new()
-                                        {
-                                            ThumbnailData = thumbnailData,
-                                            ThumbnailFilePhysicalFullPath = thumbnailFileFullPath,
-                                            FilePhysicalFullPath = file.FilePhysicalFullPath
-                                        }
-                                        : null
-                                };
-
-                                _logger.LogInformation($"Set thumbnail for file: '{file.FilePhysicalFullPath}'");
-                            }
-                            else if (setCheckedForFailed)
-                            {
-                                file.IsThumbnailChecked = true;
-
-                                _logger.LogInformation($"Set thumbnail for file: '{file.FilePhysicalFullPath}'");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, ex.Message, [file.FilePhysicalFullPath, file.Thumbnail?.ThumbnailFilePhysicalFullPath]);
-                        }
+                        FullMode = BoundedChannelFullMode.Wait, // Backpressure handling
+                        SingleWriter = true,
+                        SingleReader = false
                     });
+
+                    var producer = Task.Run(async () =>
+                    {
+                        await foreach (var file in fileEntitiesAsync)
+                        {
+                            await channel.Writer.WriteAsync(file);
+                        }
+                        channel.Writer.Complete(); // Signal completion
+                    });
+
+                    var consumer = Parallel
+                        .ForEachAsync(
+                            channel.Reader.ReadAllAsync(),
+                            parallelOptions: new() { MaxDegreeOfParallelism = maxDegreeOfParallelism },
+                            async (file, cancellationToken) =>
+                            {
+                                await RefreshSingleFileThumbnailAsync(file, setCheckedForFailed);
+                            });
+
+                    await Task.WhenAll(producer, consumer);
+                }
 
                 _ = await FileRepository.SaveChangesAsync();
             }
@@ -295,17 +318,65 @@ namespace DLNAServer.Features.MediaProcessors
                 _logger.LogError(ex, ex.Message);
             }
         }
-        private async Task<(string? thumbnailFileFullPath, byte[] thumbnailData, DlnaMime? dlnaMime, string? dlnaProfileName)> CreateThumbnailFromVideoAsync(FileEntity fileEntity, DlnaMime dlnaMimeRequested)
+
+        private async Task RefreshSingleFileThumbnailAsync(FileEntity file, bool setCheckedForFailed)
+        {
+            try
+            {
+                (var thumbnailFileFullPath, var thumbnailData, var dlnaMime, var dlnaProfileName) = await CreateThumbnailFromVideoAsync(
+                    fileEntity: file,
+                    dlnaMimeRequested: _serverConfig.DefaultDlnaMimeForVideoThumbnails)
+                    ;
+
+                if (thumbnailFileFullPath != null
+                    && new FileInfo(thumbnailFileFullPath) is FileInfo thumbnailFileInfo
+                    && thumbnailFileInfo.Exists)
+                {
+                    file.IsThumbnailChecked = true;
+                    file.Thumbnail = new()
+                    {
+                        FilePhysicalFullPath = file.FilePhysicalFullPath,
+                        ThumbnailFileDlnaMime = dlnaMime!.Value,
+                        ThumbnailFileDlnaProfileName = dlnaProfileName,
+                        ThumbnailFileExtension = thumbnailFileInfo.Extension,
+                        ThumbnailFilePhysicalFullPath = thumbnailFileFullPath,
+                        ThumbnailFileSizeInBytes = thumbnailFileInfo.Length,
+                        ThumbnailData = _serverConfig.StoreThumbnailsForLocalMoviesInDatabase
+                            ? new()
+                            {
+                                ThumbnailData = thumbnailData.ToArray(),
+                                ThumbnailFilePhysicalFullPath = thumbnailFileFullPath,
+                                FilePhysicalFullPath = file.FilePhysicalFullPath
+                            }
+                            : null
+                    };
+
+                    _logger.LogInformation($"Set thumbnail for file: '{file.FilePhysicalFullPath}'");
+                }
+                else if (setCheckedForFailed)
+                {
+                    file.IsThumbnailChecked = true;
+
+                    _logger.LogInformation($"Set thumbnail for file: '{file.FilePhysicalFullPath}'");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, ex.Message, [file.FilePhysicalFullPath, file.Thumbnail?.ThumbnailFilePhysicalFullPath]);
+            }
+        }
+
+        private async Task<(string? thumbnailFileFullPath, ReadOnlyMemory<byte> thumbnailData, DlnaMime? dlnaMime, string? dlnaProfileName)> CreateThumbnailFromVideoAsync(FileEntity fileEntity, DlnaMime dlnaMimeRequested)
         {
             if (fileEntity == null)
             {
-                return (null, [], null, null);
+                return (null, ReadOnlyMemory<byte>.Empty, null, null);
             }
 
             FileInfo fileInfo = new(fileEntity.FilePhysicalFullPath);
             if (!fileInfo.Exists || fileInfo.Length == 0)
             {
-                return (null, [], null, null);
+                return (null, ReadOnlyMemory<byte>.Empty, null, null);
             }
 
             try
@@ -313,39 +384,41 @@ namespace DLNAServer.Features.MediaProcessors
                 (var dlnaMime, var fileExtension, var dlnaProfileName) = ConvertDlnaMime(dlnaMimeRequested);
 
                 string outputThumbnailFileFullPath = Path.Combine(fileEntity.Folder!, _serverConfig.SubFolderForThumbnail, fileEntity.FileName + fileExtension);
-                FileInfo thumbnailFile = new(outputThumbnailFileFullPath);
-                var existsBefore = thumbnailFile.Exists;
-                if (!existsBefore)
                 {
-                    FileHelper.CreateDirectoryIfNoExists(thumbnailFile.Directory);
-
-                    using (var cancellationTokenSource_FileInfo = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+                    FileInfo thumbnailFile = new(outputThumbnailFileFullPath);
+                    var existsBefore = thumbnailFile.Exists;
+                    if (!existsBefore)
                     {
-                        IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(fileEntity.FilePhysicalFullPath, cancellationTokenSource_FileInfo.Token);
-                        IVideoStream videoStream = mediaInfo.VideoStreams.FirstOrDefault()
-                                ?? throw new NullReferenceException(message: $"No video stream for file: {fileEntity.FilePhysicalFullPath}");
+                        FileHelper.CreateDirectoryIfNoExists(thumbnailFile.Directory);
 
-                        TimeSpan captureTime = GetCaptureTime(videoStream);
-                        (var newHeight, var newWidth, var scaleFactor) = ThumbnailHelper.CalculateResize(videoStream.Height, videoStream.Width, (int)_serverConfig.MaxHeightForThumbnails, (int)_serverConfig.MaxWidthForThumbnails);
-
-                        IConversion conversion = await CreateThumbnailSnippets.Snapshot(fileEntity.FilePhysicalFullPath, outputThumbnailFileFullPath, captureTime);
-                        conversion = conversion.SetPreset(ConversionPreset.VerySlow)
-                            .AddParameter("-err_detect ignore_err", ParameterPosition.PreInput)
-                            .AddParameter("-loglevel panic", ParameterPosition.PreInput)
-                            .AddParameter($"-vf scale={newWidth}:{newHeight}");
-
-                        using (var cancellationTokenSource_Conversion = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+                        using (var cancellationTokenSource_FileInfo = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
                         {
-                            var conversionResult = await conversion.Start(cancellationTokenSource_Conversion.Token);
+                            IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(fileEntity.FilePhysicalFullPath, cancellationTokenSource_FileInfo.Token);
+                            IVideoStream videoStream = mediaInfo.VideoStreams.FirstOrDefault()
+                                    ?? throw new NullReferenceException(message: $"No video stream for file: {fileEntity.FilePhysicalFullPath}");
 
-                            _logger.LogDebug($"{DateTime.Now} Created thumbnail as {outputThumbnailFileFullPath}, StartTime = {conversionResult.StartTime}, EndTime = {conversionResult.EndTime}, Duration (ms) = {conversionResult.Duration.TotalMilliseconds}");
+                            TimeSpan captureTime = GetCaptureTime(videoStream);
+                            (var newHeight, var newWidth, var scaleFactor) = ThumbnailHelper.CalculateResize(videoStream.Height, videoStream.Width, (int)_serverConfig.MaxHeightForThumbnails, (int)_serverConfig.MaxWidthForThumbnails);
+
+                            IConversion conversion = await CreateThumbnailSnippets.Snapshot(fileEntity.FilePhysicalFullPath, outputThumbnailFileFullPath, captureTime);
+                            conversion = conversion.SetPreset(ConversionPreset.VerySlow)
+                                .AddParameter("-err_detect ignore_err", ParameterPosition.PreInput)
+                                .AddParameter("-loglevel panic", ParameterPosition.PreInput)
+                                .AddParameter($"-vf scale={newWidth}:{newHeight}");
+
+                            using (var cancellationTokenSource_Conversion = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+                            {
+                                var conversionResult = await conversion.Start(cancellationTokenSource_Conversion.Token);
+
+                                _logger.LogDebug($"{DateTime.Now} Created thumbnail as {outputThumbnailFileFullPath}, StartTime = {conversionResult.StartTime}, EndTime = {conversionResult.EndTime}, Duration (ms) = {conversionResult.Duration.TotalMilliseconds}");
+                            };
                         };
-                    };
-                }
+                    }
+                };
 
                 var thumbnailData = _serverConfig.StoreThumbnailsForLocalMoviesInDatabase
-                    ? (await FileHelper.ReadFileAsync(outputThumbnailFileFullPath, _logger) ?? [])
-                    : [];
+                    ? (await FileHelper.ReadFileAsync(outputThumbnailFileFullPath, _logger) ?? ReadOnlyMemory<byte>.Empty)
+                    : ReadOnlyMemory<byte>.Empty;
 
                 return (outputThumbnailFileFullPath, thumbnailData, ConvertToDlnaMime(dlnaMime), dlnaProfileName);
             }
@@ -353,12 +426,12 @@ namespace DLNAServer.Features.MediaProcessors
             {
                 _logger.LogError(ex, ex.Message, [fileEntity.FilePhysicalFullPath]);
                 await Task.Delay(1_000);
-                return (null, [], null, null);
+                return (null, ReadOnlyMemory<byte>.Empty, null, null);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, ex.Message, [fileEntity.FilePhysicalFullPath]);
-                return (null, [], null, null);
+                return (null, ReadOnlyMemory<byte>.Empty, null, null);
             }
         }
         private static TimeSpan GetCaptureTime(IVideoStream videoStream)

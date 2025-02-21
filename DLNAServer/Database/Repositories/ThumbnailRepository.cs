@@ -60,7 +60,7 @@ namespace DLNAServer.Database.Repositories
         public async Task<IEnumerable<ThumbnailEntity>> GetAllByPathFullNameAsync(string pathFullName, bool useCachedResult)
         {
             pathFullName = pathFullName.ToLower();
-            return await GetAllWithCacheAsync<ThumbnailEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync<ThumbnailEntity>(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
@@ -69,6 +69,7 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
     }
 }

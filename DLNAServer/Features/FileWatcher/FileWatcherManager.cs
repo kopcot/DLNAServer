@@ -112,8 +112,8 @@ namespace DLNAServer.Features.FileWatcher
                     {
                         var mediaProcessingService = scope.ServiceProvider.GetRequiredService<IMediaProcessingService>();
 
-                        await mediaProcessingService.FillEmptyMetadata(newFileEntities, false);
-                        await mediaProcessingService.FillEmptyThumbnails(newFileEntities, false);
+                        await mediaProcessingService.FillEmptyMetadataAsync(newFileEntities, false);
+                        await mediaProcessingService.FillEmptyThumbnailsAsync(newFileEntities, false);
                     }
                 }
             }, eventAction, fileFullPath, eventTimestamp);

@@ -20,7 +20,7 @@ namespace DLNAServer.Database.Repositories
         }
         public new async Task<IEnumerable<DirectoryEntity>> GetAllAsync(bool useCachedResult)
         {
-            return await GetAllWithCacheAsync<DirectoryEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync<DirectoryEntity>(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude),
@@ -28,11 +28,12 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
         public async Task<IEnumerable<DirectoryEntity>> GetAllParentsByDirectoriesIdAsync(IEnumerable<Guid> expectedDirectory, IEnumerable<string> excludeFolders, bool useCachedResult)
         {
             var exclude = excludeFolders.Select(ef => ef.ToLower()).ToArray();
-            return await GetAllWithCacheAsync<DirectoryEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync<DirectoryEntity>(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
@@ -42,6 +43,7 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
         public async Task<IEnumerable<DirectoryEntity>> GetAllParentsByDirectoriesIdAsync(IEnumerable<string> expectedDirectory, IEnumerable<string> excludeFolders, bool useCachedResult)
         {
@@ -49,7 +51,7 @@ namespace DLNAServer.Database.Repositories
         }
         public async Task<IEnumerable<string>> GetAllDirectoryFullNamesAsync(bool useCachedResult)
         {
-            return await GetAllWithCacheAsync<string>(
+            var memoryDataResult = await GetAllWithCacheAsync<string>(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .AsNoTracking()
@@ -58,10 +60,11 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
         public async Task<IEnumerable<DirectoryEntity>> GetAllByDirectoryDepthAsync(int depth, bool useCachedResult)
         {
-            return await GetAllWithCacheAsync<DirectoryEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync<DirectoryEntity>(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
@@ -70,11 +73,12 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
 
         }
         public async Task<IEnumerable<DirectoryEntity>> GetAllByDirectoryDepthAsync(int depth, int skip, int take, bool useCachedResult)
         {
-            return await GetAllWithCacheAsync<DirectoryEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync<DirectoryEntity>(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
@@ -83,11 +87,12 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
         public async Task<IEnumerable<DirectoryEntity>> GetAllStartingByPathFullNameAsync(string pathFullName, bool useCachedResult)
         {
             pathFullName = pathFullName.ToLower();
-            return await GetAllWithCacheAsync<DirectoryEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync<DirectoryEntity>(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
@@ -97,11 +102,12 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
         public async Task<IEnumerable<DirectoryEntity>> GetAllStartingByPathFullNamesAsync(IEnumerable<string> pathFullNames, bool useCachedResult)
         {
             pathFullNames = pathFullNames.Select(static (p) => p.ToLower()).ToArray();
-            return await GetAllWithCacheAsync<DirectoryEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync<DirectoryEntity>(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
@@ -111,11 +117,12 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
         public async Task<IEnumerable<DirectoryEntity>> GetAllByPathFullNamesAsync(IEnumerable<string> pathFullNames, bool asNoTracking, bool useCachedResult)
         {
             pathFullNames = pathFullNames.Select(static (p) => p.ToLower()).ToArray();
-            return await GetAllWithCacheAsync<DirectoryEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync<DirectoryEntity>(
                 queryAction: asNoTracking
                     ? DbSet
                         .OrderEntitiesByDefault(DefaultOrderBy)
@@ -130,6 +137,7 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
+            return memoryDataResult.ToArray();
         }
     }
 }

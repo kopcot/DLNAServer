@@ -6,12 +6,10 @@ using DLNAServer.Features.Loggers.Interfaces;
 using DLNAServer.Features.MediaContent.Interfaces;
 using DLNAServer.Features.MediaProcessors.Interfaces;
 using DLNAServer.Features.Subscriptions.Data;
-using DLNAServer.Features.Subscriptions.Interfaces;
 using DLNAServer.Helpers.Diagnostics;
 using DLNAServer.Types.DLNA;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
-using System.Buffers;
 using System.Runtime;
 
 namespace DLNAServer.Controllers.Manage
@@ -32,7 +30,6 @@ namespace DLNAServer.Controllers.Manage
         private readonly Lazy<IMediaProcessingService> _mediaProcessingServiceLazy;
         private readonly Lazy<ILogMessageHandler> _logMessageHandlerLazy;
         private readonly Lazy<IApiBlockerService> _apiBlockerServiceLazy;
-        private readonly Lazy<ISubscriptionService> _subscriptionServiceLazy;
         private readonly Lazy<IMemoryCache> _memoryCacheLazy;
 
         private IFileRepository FileRepository => _fileRepositoryLazy.Value;
@@ -58,7 +55,6 @@ namespace DLNAServer.Controllers.Manage
             Lazy<ILogMessageHandler> logMessageHandlerLazy,
             Lazy<IApiBlockerService> apiBlockerServiceLazy,
             Lazy<IMemoryCache> memoryCacheLazy,
-            Lazy<ISubscriptionService> subscriptionServiceLazy,
             ILogger<ManageController> logger)
         {
             _serverConfig = serverConfig;
@@ -73,7 +69,6 @@ namespace DLNAServer.Controllers.Manage
             _logMessageHandlerLazy = logMessageHandlerLazy;
             _apiBlockerServiceLazy = apiBlockerServiceLazy;
             _memoryCacheLazy = memoryCacheLazy;
-            _subscriptionServiceLazy = subscriptionServiceLazy;
             _logger = logger;
         }
         [HttpGet("configuration")]
@@ -270,15 +265,16 @@ namespace DLNAServer.Controllers.Manage
                     _logger.LogError(ex, ex.Message);
                 }
 
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+
                 return Ok($"Cleared. Actual count: {memoryCache.Count}");
             }
 
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
 
             await Task.CompletedTask;
-            return BadRequest("MemoryCache is not Microsoft.Extensions.Caching.Memory.MemoryCache");
+            return BadRequest($"MemoryCache is not {typeof(MemoryCache).FullName}");
 
         }
         [HttpGet("stop")]
@@ -330,10 +326,6 @@ namespace DLNAServer.Controllers.Manage
             IsGetRecreateAllFilesInfoAsyncActive = true;
             ApiBlockerService.BlockApi(true, $"Recreate all file info");
 
-            var poolFilesId = ArrayPool<Guid>.Create();
-            var filesId = poolFilesId.Rent(1);
-            var poolFiles = ArrayPool<FileEntity>.Create();
-            var files = poolFiles.Rent(1);
 
             try
             {
@@ -341,18 +333,17 @@ namespace DLNAServer.Controllers.Manage
                 {
                     const int maxChunkSize = 100;
 
-                    long fileCountAll = 0;
-                    long chunksCount = 0;
+                    Guid[] filesId;
+                    FileEntity[] files;
 
-                    fileCountAll = await FileRepository.GetCountAsync();
-                    chunksCount = (long)Math.Round((double)fileCountAll / maxChunkSize, 0, MidpointRounding.ToPositiveInfinity);
+                    long fileCountAll = await FileRepository.GetCountAsync();
+                    long chunksCount = (long)Math.Round((double)fileCountAll / maxChunkSize, 0, MidpointRounding.ToPositiveInfinity);
 
                     for (int chunkIndex = 0; chunkIndex < chunksCount; chunkIndex++)
                     {
-                        _logger.LogInformation($"Start refreshing info for chunk {chunkIndex + 1} of {chunksCount}, total files = {fileCountAll}");
+                        _logger.LogInformation($"{DateTime.Now:dd/MM/yyyy HH:mm:ss:fff} - Start refreshing info for chunk {chunkIndex + 1} of {chunksCount}, total files = {fileCountAll}");
 
                         ApiBlockerService.BlockApi(true, $"Recreate all file info. Progress {chunkIndex + 1} from {chunksCount}.");
-
 
                         using (_logger.BeginScope($"{DateTime.Now} Start clearing info"))
                         {
@@ -375,8 +366,8 @@ namespace DLNAServer.Controllers.Manage
 
                             files = (await FileRepository.GetAllByIdsAsync(filesId, useCachedResult: false)).ToArray();
 
-                            await MediaProcessingService.FillEmptyMetadata(files, setCheckedForFailed: false);
-                            await MediaProcessingService.FillEmptyThumbnails(files, setCheckedForFailed: false);
+                            await MediaProcessingService.FillEmptyMetadataAsync(files, setCheckedForFailed: false);
+                            await MediaProcessingService.FillEmptyThumbnailsAsync(files, setCheckedForFailed: false);
 
                             _logger.LogDebug($"Recreate info done for chunk {chunkIndex + 1} of {chunksCount}");
                         }
@@ -388,23 +379,19 @@ namespace DLNAServer.Controllers.Manage
 
                     GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
 
+                    ApiBlockerService.BlockApi(false);
+
                     return Ok("recreated");
                 };
             }
             catch (Exception ex)
             {
-                IsGetRecreateAllFilesInfoAsyncActive = false;
                 ApiBlockerService.BlockApi(false);
                 return BadRequest(ex.Message);
             }
             finally
             {
-                ApiBlockerService.BlockApi(false);
                 IsGetRecreateAllFilesInfoAsyncActive = false;
-                poolFilesId.Return(filesId, true);
-                poolFiles.Return(files, true);
-                poolFilesId = null;
-                poolFiles = null;
             }
         }
         [HttpGet("recreateFilesInfo/{guid}")]
@@ -419,8 +406,8 @@ namespace DLNAServer.Controllers.Manage
             await ContentExplorerManager.ClearMetadataAsync([file]);
             await ContentExplorerManager.ClearThumbnailsAsync([file]);
 
-            await MediaProcessingService.FillEmptyMetadata([file], setCheckedForFailed: false);
-            await MediaProcessingService.FillEmptyThumbnails([file], setCheckedForFailed: false);
+            await MediaProcessingService.FillEmptyMetadataAsync([file], setCheckedForFailed: false);
+            await MediaProcessingService.FillEmptyThumbnailsAsync([file], setCheckedForFailed: false);
 
             file = await FileRepository.GetByIdAsync(guid, false);
 

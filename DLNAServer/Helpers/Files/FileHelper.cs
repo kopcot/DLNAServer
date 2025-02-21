@@ -1,15 +1,12 @@
-﻿using System.Buffers;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
 namespace DLNAServer.Helpers.Files
 {
     public static class FileHelper
     {
-        public static async Task<byte[]?> ReadFileAsync<T>(string filePath, ILogger<T> _logger, long maxSizeOfFile = long.MaxValue)
+        public static async Task<ReadOnlyMemory<byte>?> ReadFileAsync<T>(string filePath, ILogger<T> _logger, long maxSizeOfFile = long.MaxValue)
         {
-            var pool = ArrayPool<byte>.Shared;
-            var buffer = pool.Rent(1_024 * 1_024);
-            byte[]? cachedData;
+            const int bufferSize = 1_024 * 1_024;
 
             try
             {
@@ -19,7 +16,7 @@ namespace DLNAServer.Helpers.Files
                     return null;
                 }
 
-                await using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: buffer.Length, FileOptions.SequentialScan);
+                await using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: bufferSize, FileOptions.SequentialScan))
                 {
                     _logger.LogDebug($"{DateTime.Now} - Check file size.");
                     if (fileStream.Length > (long)int.MaxValue ||
@@ -31,13 +28,14 @@ namespace DLNAServer.Helpers.Files
                     }
 
                     var fileSize = (int)fileStream.Length;
-                    cachedData = GC.AllocateUninitializedArray<byte>(fileSize, pinned: false); 
+                    byte[]? cachedData = GC.AllocateUninitializedArray<byte>(fileSize, pinned: false);
+                    byte[]? buffer = GC.AllocateUninitializedArray<byte>(bufferSize, pinned: false);
 
                     int bytesRead;
                     int offset = 0;
 
                     _logger.LogDebug($"{DateTime.Now} - Start file reading from disk.");
-                    while ((bytesRead = await fileStream.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false)) > 0)
+                    while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
                     {
                         if (fileSize < offset + bytesRead)
                         {
@@ -59,11 +57,6 @@ namespace DLNAServer.Helpers.Files
             {
                 _logger.LogError(ex, ex.Message, [filePath]);
                 return null;
-            }
-            finally
-            {
-                cachedData = null;
-                pool.Return(buffer, true);
             }
         }
         public static void CreateDirectoryIfNoExists(DirectoryInfo? directory)

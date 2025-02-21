@@ -49,7 +49,7 @@ namespace DLNAServer.Controllers.Media
             var connection = HttpContext.Connection;
             _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection.RemoteIpAddress}:{connection.RemotePort} , Local IP Address: {connection.LocalIpAddress}:{connection.LocalPort}");
 
-            return await GetMediaFileAsync(file);
+            return GetMediaFile(file);
         }
         [HttpGet("thumbnail/{thumbnailGuid}")]
         public async Task<IActionResult> GetMediaFileThumbnailAsync([FromRoute] string thumbnailGuid)
@@ -66,7 +66,7 @@ namespace DLNAServer.Controllers.Media
 
             return await GetMediaFileThumbnailAsync(file);
         }
-        private async Task<IActionResult> GetMediaFileAsync(FileEntity file)
+        private IActionResult GetMediaFile(FileEntity file)
         {
             try
             {
@@ -81,11 +81,11 @@ namespace DLNAServer.Controllers.Media
 
                 if (_serverConfig.UseMemoryCacheForStreamingFile && !file.FileUnableToCache)
                 {
-                    (bool isCachedSuccessful, var cachedData) = await FileMemoryCache.GetCheckCachedFileAsync(file.FilePhysicalFullPath);
+                    (bool isCachedSuccessful, var cachedData) = FileMemoryCache.GetCheckCachedFile(file.FilePhysicalFullPath);
                     if (isCachedSuccessful)
                     {
                         _logger.LogInformation($"{DateTime.Now}: Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort}, Serving file from cache = {file.FilePhysicalFullPath}, {file.FileDlnaMime.ToMimeString()} , {(double)file.FileSizeInBytes / (1024 * 1024):0.00}MB");
-                        return File(cachedData, file.FileDlnaMime.ToMimeString(), enableRangeProcessing: true);
+                        return File(cachedData.ToArray(), file.FileDlnaMime.ToMimeString(), enableRangeProcessing: true);
                     }
                     else
                     {
@@ -136,13 +136,13 @@ namespace DLNAServer.Controllers.Media
 
                 if (_serverConfig.UseMemoryCacheForStreamingFile)
                 {
-                    (var isCachedSuccessful, var fileMemoryByteWR) = await FileMemoryCache.CacheFileAndReturnAsync(thumbnail.ThumbnailFilePhysicalFullPath, TimeSpan.FromDays(1));
+                    (var isCachedSuccessful, var fileMemoryByteMemory) = await FileMemoryCache.CacheFileAndReturnAsync(thumbnail.ThumbnailFilePhysicalFullPath, TimeSpan.FromDays(1));
                     if (isCachedSuccessful
-                        && fileMemoryByteWR != null
-                        && fileMemoryByteWR.TryGetTarget(out var fileMemoryByte) == true)
+                        && fileMemoryByteMemory != null
+                        && fileMemoryByteMemory.HasValue)
                     {
                         _logger.LogInformation($"{DateTime.Now}: Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort}, Serving thumbnail file from cache = {thumbnail.ThumbnailFilePhysicalFullPath}, {thumbnail.ThumbnailFileDlnaMime.ToMimeString()} , {(double)thumbnail.ThumbnailFileSizeInBytes / (1024):0.00}kB");
-                        return File(fileMemoryByte!, thumbnail.ThumbnailFileDlnaMime.ToMimeString() ?? string.Empty, enableRangeProcessing: true);
+                        return File(fileMemoryByteMemory.Value.ToArray(), thumbnail.ThumbnailFileDlnaMime.ToMimeString() ?? string.Empty, enableRangeProcessing: true);
                     }
 
                     _logger.LogDebug($"{DateTime.Now}: Unable to cache thumbnail file, serving from disk.");

@@ -5,9 +5,9 @@ namespace DLNAServer.Features.MediaProcessors.Interfaces
 {
     public interface IBaseProcessor : ITerminateAble, IInitializeAble
     {
-        Task RefreshMetadata(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true);
-        Task FillEmptyMetadata(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true);
-        Task RefreshThumbnails(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true);
-        Task FillEmptyThumbnails(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true);
+        Task RefreshMetadataAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true);
+        Task FillEmptyMetadataAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true);
+        Task RefreshThumbnailsAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true);
+        Task FillEmptyThumbnailsAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true);
     }
 }

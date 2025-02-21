@@ -3,7 +3,6 @@ using DLNAServer.Features.MediaContent.Interfaces;
 using DLNAServer.SOAP.Endpoints.Interfaces;
 using DLNAServer.SOAP.Endpoints.Responses.ContentDirectory;
 using DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping;
-using System.Buffers;
 
 namespace DLNAServer.SOAP.Endpoints
 {

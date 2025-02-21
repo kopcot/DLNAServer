@@ -6,7 +6,6 @@ using DLNAServer.Features.MediaProcessors.Interfaces;
 using DLNAServer.Types.DLNA;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using System.Buffers;
 using System.Collections.Concurrent;
 using System.Text;
 
@@ -104,6 +103,7 @@ namespace DLNAServer.Features.MediaContent
             foundFiles = filesInSourceFolders
                 .Where(f => !_serverConfig.ExcludeFolders.Any(skip => f.Contains(skip)))
                 .DistinctBy(static (f) => f)
+                .OrderBy(static (f) => f)
                 .GroupBy(f =>
                 {
                     var extension = _serverConfig.MediaFileExtensions.FirstOrDefault(e => f.EndsWith(e.Key, StringComparison.InvariantCultureIgnoreCase));
@@ -195,7 +195,7 @@ namespace DLNAServer.Features.MediaContent
                         _logger.LogInformation(sb.ToString());
 
                         _ = await DirectoryRepository.AddRangeAsync(directoryEntities);
-                        _ = await DirectoryRepository.GetAllAsync(useCachedResult: false); // to refresh cached value
+                        _ = await DirectoryRepository.GetAllAsync(asNoTracking: true, useCachedResult: false); // to refresh cached value
                     }
                     if (fileEntities.Count != 0)
                     {
@@ -238,7 +238,7 @@ namespace DLNAServer.Features.MediaContent
                 }
                 else
                 {
-                    _logger.LogWarning($"Directory '{directoryEntity.DirectoryFullPath}' is without parent");
+                    _logger.LogDebug($"Directory '{directoryEntity.DirectoryFullPath}' is without parent");
                 }
             }
             foreach (var file in fileEntities)
@@ -339,10 +339,12 @@ namespace DLNAServer.Features.MediaContent
                 var notExistingFiles = new ConcurrentBag<FileEntity>();
                 var existingFiles = new ConcurrentBag<(int order, FileEntity entity)>();
 
+                var maxDegreeOfParallelism = Math.Min(fileEntities.Count(), (int)_serverConfig.ServerMaxDegreeOfParallelism);
+
                 _ = Parallel.For(
                     0,
                     fileEntities.Count(),
-                    parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 },
+                    parallelOptions: new() { MaxDegreeOfParallelism = maxDegreeOfParallelism },
                     (index) =>
                     {
                         var file = fileEntities.ElementAt(index);
@@ -399,10 +401,12 @@ namespace DLNAServer.Features.MediaContent
                 var notExistingDirectories = new ConcurrentBag<DirectoryEntity>();
                 var existingDirectories = new ConcurrentBag<(int order, DirectoryEntity entity)>();
 
+                var maxDegreeOfParallelism = Math.Min(directoryEntities.Count(), (int)_serverConfig.ServerMaxDegreeOfParallelism);
+
                 _ = Parallel.For(
                     0,
                     directoryEntities.Count(),
-                    parallelOptions: new() { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 },
+                    parallelOptions: new() { MaxDegreeOfParallelism = maxDegreeOfParallelism },
                     (index) =>
                     {
                         var directory = directoryEntities.ElementAt(index);
@@ -514,8 +518,8 @@ namespace DLNAServer.Features.MediaContent
             directoryEntities = await CheckDirectoriesExistingAsync(directoryEntities);
             var checkEntitiesTime = DateTime.Now;
 
-            await MediaProcessingService.FillEmptyMetadata(fileEntities, setCheckedForFailed: true);
-            await MediaProcessingService.FillEmptyThumbnails(fileEntities, setCheckedForFailed: true);
+            await MediaProcessingService.FillEmptyMetadataAsync(fileEntities, setCheckedForFailed: true);
+            await MediaProcessingService.FillEmptyThumbnailsAsync(fileEntities, setCheckedForFailed: true);
             var endTime = DateTime.Now;
 
             if (countBeforeCheck != (fileEntities.Count() + directoryEntities.Count()))

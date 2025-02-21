@@ -81,7 +81,7 @@ namespace DLNAServer.Database
             if (_serverConfig.ServerDatabaseMemoryMapLimitInMBytes > 0)
             {
                 long databaseSize = new FileInfo(connection.Database).Length;
-                long mmapSize = Math.Min(databaseSize, _serverConfig.ServerDatabaseMemoryMapLimitInMBytes * 1024 * 1024);
+                long mmapSize = Math.Min(databaseSize, (long)_serverConfig.ServerDatabaseMemoryMapLimitInMBytes * 1024 * 1024);
                 command.CommandText += $"PRAGMA mmap_size={mmapSize}; ";
             }
 
