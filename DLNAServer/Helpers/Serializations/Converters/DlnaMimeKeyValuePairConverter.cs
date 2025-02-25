@@ -28,7 +28,7 @@ namespace DLNAServer.Helpers.Serializations.Converters
         public override void Write(Utf8JsonWriter writer, KeyValuePair<DlnaMime, string?> value, JsonSerializerOptions options)
         {
             writer.WriteStartObject();
-            writer.WriteString(value.Key.ToString(), value.Value);
+            writer.WriteString($"{value.Key}", value.Value);
             writer.WriteEndObject();
         }
     }

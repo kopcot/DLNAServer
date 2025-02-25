@@ -29,7 +29,7 @@ namespace DLNAServer.Controllers.Media
                     mimeType = "application/octet-stream"; // Default MIME type if unknown
                 }
 
-                string filePath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "images", "icons", fileName);
+                string filePath = Path.Combine([Directory.GetCurrentDirectory(), "Resources", "images", "icons", fileName]);
 
                 (var isCachedSuccessful, var fileMemoryByteMemory) = await FileMemoryCache.CacheFileAndReturnAsync(filePath, TimeSpan.FromDays(1), checkExistingInCache: true);
                 if (isCachedSuccessful

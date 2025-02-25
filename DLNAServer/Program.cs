@@ -8,8 +8,6 @@ using DLNAServer.Features.Cache;
 using DLNAServer.Features.Cache.Interfaces;
 using DLNAServer.Features.FileWatcher;
 using DLNAServer.Features.FileWatcher.Interfaces;
-using DLNAServer.Features.Loggers;
-using DLNAServer.Features.Loggers.Interfaces;
 using DLNAServer.Features.MediaContent;
 using DLNAServer.Features.MediaContent.Interfaces;
 using DLNAServer.Features.MediaProcessors;
@@ -29,6 +27,9 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Caching.Memory;
+using Serilog;
+using Serilog.Core;
+using Serilog.Events;
 using SoapCore;
 using System.Runtime;
 using System.Xml;
@@ -84,7 +85,7 @@ namespace DLNAServer
             {
                 builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions() { Args = args });
                 {
-                    _ = builder.Services.AddSingleton<ServerConfig>((serviceProvider) => ServerConfig.Instance);
+                    _ = builder.Services.AddSingleton<ServerConfig>(static (serviceProvider) => ServerConfig.Instance);
 
                     _ = builder.Configuration
                             .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
@@ -96,13 +97,32 @@ namespace DLNAServer
                             configure: cfg =>
                             {
                                 // already set as default
-                                //cfg.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1AndHttp2AndHttp3;
+                                //cfg.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1AndHttp2AndHttp3; 
                             });
                     });
                     _ = builder.Services.AddLogging(logging =>
                     {
                         _ = logging.AddConfiguration(builder.Configuration.GetSection("Logging"));
                         _ = logging.AddSimpleConsole();
+
+                        // Serilog
+                        var logLevels = builder.Configuration.GetSection("Logging:LogLevel").Get<Dictionary<string, string>>() ?? [];
+                        var serilogConfig = new LoggerConfiguration()
+                            .MinimumLevel.ControlledBy(new LoggingLevelSwitch(
+                                builder.Configuration.GetValue("Logging:LogLevel:Default", defaultValue: LogEventLevel.Information)));
+                        foreach (var (category, level) in logLevels)
+                        {
+                            if (Enum.TryParse(level, true, out LogEventLevel logEventLevel))
+                            {
+                                _ = serilogConfig.MinimumLevel.Override(category, logEventLevel);
+                            }
+                        }
+                        _ = serilogConfig.WriteTo.File(
+                                path: "logs/appLog.txt",
+                                rollingInterval: RollingInterval.Day,
+                                retainedFileTimeLimit: TimeSpan.FromDays(7),
+                                outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss:fff} {Level:u3}] [{SourceContext}] {Message}{NewLine}{Exception}");
+                        _ = logging.AddSerilog(serilogConfig.CreateLogger());
 
                         _ = logging.Configure(options =>
                         {
@@ -119,6 +139,7 @@ namespace DLNAServer
             {
                 _ = builder.Logging.SetMinimumLevel(LogLevel.Trace);
             }
+
             _ = builder.Services.AddControllers();
             _ = builder.Services.AddHttpContextAccessor();
             _ = builder.Services.AddResponseCompression(options =>
@@ -139,18 +160,22 @@ namespace DLNAServer
                 });
 
             _ = builder.Services.AddDbContextPool<DlnaDbContext>((serviceProvider, options) =>
+                {
                     options
                         .UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"))
-                        .AddInterceptors(serviceProvider.GetRequiredService<SQLitePragmaInterceptor>())
+                        .AddInterceptors([serviceProvider.GetRequiredService<SQLitePragmaInterceptor>()])
                         .ConfigureWarnings(static (b) => b.Log(
-                            (RelationalEventId.ConnectionCreated, LogLevel.Information),
-                            (RelationalEventId.ConnectionDisposed, LogLevel.Information),
-                            (RelationalEventId.ConnectionOpened, LogLevel.Debug),
-                            (RelationalEventId.ConnectionClosed, LogLevel.Debug),
-                            (RelationalEventId.CommandExecuting, LogLevel.Debug),
-                            (RelationalEventId.CommandExecuted, LogLevel.Debug)))
+                            [
+                                (RelationalEventId.ConnectionCreated, LogLevel.Information),
+                                (RelationalEventId.ConnectionDisposed, LogLevel.Information),
+                                (RelationalEventId.ConnectionOpened, LogLevel.Debug),
+                                (RelationalEventId.ConnectionClosed, LogLevel.Debug),
+                                (RelationalEventId.CommandExecuting, LogLevel.Debug),
+                                (RelationalEventId.CommandExecuted, LogLevel.Debug)
+                            ]))
                         .EnableSensitiveDataLogging(true)
-                    , poolSize: 64);
+                        .LogTo((_) => { }, LogLevel.None);
+                }, poolSize: 64);
             _ = builder.Services.AddSingleton<SQLitePragmaInterceptor>();
             _ = builder.Services.AddScopedLazyService<IFileRepository, FileRepository>();
             _ = builder.Services.AddScopedLazyService<IDirectoryRepository, DirectoryRepository>();
@@ -170,8 +195,6 @@ namespace DLNAServer
                 });
             _ = builder.Services.AddSoapCore<CustomEnvelopeMessage>();
 
-            _ = builder.Services.AddSingletonLazyService<ILoggerProvider, CustomLoggerProvider>();
-            _ = builder.Services.AddSingletonLazyService<ILogMessageHandler, LogMessageHandler>();
             _ = builder.Services.AddSingletonLazyService<IApiBlockerService, ApiBlockerService>();
             _ = builder.Services.AddSingletonLazyService<ISubscriptionService, SubscriptionService>();
             _ = builder.Services.AddSingletonLazyService<IMemoryCache>();
@@ -205,7 +228,7 @@ namespace DLNAServer
                     var serverConfig = sp.GetRequiredService<ServerConfig>();
                     devices.InitializeAsync().Wait();
                     var ips = devices.AllUPNPDevices.GroupBy(static (dev) => dev.Endpoint);
-                    foreach (var ip in ips)
+                    foreach (var ip in ips.ToList())
                     {
                         _ = builder.Services.AddHostedService<SSDPNotifierService>(provider =>
                         new SSDPNotifierService(
@@ -262,7 +285,7 @@ namespace DLNAServer
         private static Action<SoapCoreOptions> SetSoapOptions(string path)
         {
             return (soapCoreOptions) =>
-            {
+            { 
                 soapCoreOptions.StandAloneAttribute = true;
                 soapCoreOptions.Path = path;
                 soapCoreOptions.EncoderOptions =
@@ -296,7 +319,7 @@ namespace DLNAServer
         private static IServiceCollection AddTransientLazyService<TInterface>(this IServiceCollection services)
             where TInterface : class
         {
-            _ = services.AddTransient(static (provider) => new Lazy<TInterface>(() => provider.GetRequiredService<TInterface>()));
+            _ = services.AddTransient(static (provider) => new Lazy<TInterface>(provider.GetRequiredService<TInterface>()));
             return services;
         }
 
@@ -311,7 +334,7 @@ namespace DLNAServer
         private static IServiceCollection AddScopedLazyService<TInterface>(this IServiceCollection services)
             where TInterface : class
         {
-            _ = services.AddScoped(static (provider) => new Lazy<TInterface>(() => provider.GetRequiredService<TInterface>()));
+            _ = services.AddScoped(static (provider) => new Lazy<TInterface>(provider.GetRequiredService<TInterface>()));
             return services;
         }
         private static IServiceCollection AddSingletonLazyService<TInterface, TImplementation>(this IServiceCollection services)
@@ -325,7 +348,7 @@ namespace DLNAServer
         private static IServiceCollection AddSingletonLazyService<TInterface>(this IServiceCollection services)
             where TInterface : class
         {
-            _ = services.AddSingleton(static (provider) => new Lazy<TInterface>(valueFactory: () => provider.GetRequiredService<TInterface>()));
+            _ = services.AddSingleton(static (provider) => new Lazy<TInterface>(provider.GetRequiredService<TInterface>()));
             return services;
         }
     }

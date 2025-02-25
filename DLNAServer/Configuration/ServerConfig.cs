@@ -34,17 +34,29 @@ namespace DLNAServer.Configuration
         public bool DlnaServerDebugMode { get; set; } = false;
         [JsonIgnore]
         public bool InstanceNotLoadedFromFile { get; set; } = false;
+        [JsonIgnore]
+        private string _serverConfigVersion = "v1";
         #endregion
-        // General 
+        // General
+        [JsonRequired]
+        public string ServerConfigVersion { 
+            get => _serverConfigVersion;
+            set 
+            {
+                if (_serverConfigVersion != value)
+                    throw new InvalidDataException("Configuration file is not correct version.");
+                _serverConfigVersion = value;
+            }
+        } 
         public uint ServerPort { get; set; } = 26851;
         public string ServerFriendlyName { get; set; } = $"ZEN DLNA Server ({Environment.MachineName})";
         public string ServerModelName { get; set; } = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? $"0.0.0.0 (-9999)";
-        public uint ServerMaxLogMessagesCount { get; set; } = (uint)short.MaxValue;
         public bool ServerAlwaysRecreateDatabaseAtStart { get; set; } = false;
         public ulong ServerDatabaseMemoryMapLimitInMBytes { get; set; } = 0;
         public ulong ServerDatabaseCacheLimitInMBytes { get; set; } = 0;
         public bool ServerIgnoreRequestedCountAttributeFromRequest { get; set; } = false;
         public uint ServerMaxDegreeOfParallelism { get; set; } = (uint)Environment.ProcessorCount;
+        public uint ServerDelayAfterUnsuccessfulSendSSDPMessageInMin { get; set; } = 10;
         // FileServer
         public bool GenerateMetadataForLocalMovies { get; set; } = true;
         public bool GenerateMetadataForLocalAudio { get; set; } = true;
@@ -60,8 +72,8 @@ namespace DLNAServer.Configuration
         public DlnaMime DefaultDlnaMimeForVideoThumbnails { get; set; } = DlnaMime.ImageJpeg;
         public DlnaMime DefaultDlnaMimeForImageThumbnails { get; set; } = DlnaMime.ImageJpeg;
         public bool UseMemoryCacheForStreamingFile { get; set; } = true;
-        public ushort MaxUseMemoryCacheInMBytes { get; set; } = 10_240;
-        public ushort MaxSizeOfFileForUseMemoryCacheInMBytes { get; set; } = 1_024;
+        public ushort MaxUseMemoryCacheInMBytes { get; set; } = 1_240;
+        public ushort MaxSizeOfFileForUseMemoryCacheInMBytes { get; set; } = 512;
         public uint StoreFileInMemoryCacheAfterLoadInMinute { get; set; } = 10;
         public uint CountOfFilesByLastAddedToDb { get; set; } = 30;
         public Dictionary<string, KeyValuePair<DlnaMime, string?>> MediaFileExtensions { get; set; } = new Dictionary<string, KeyValuePair<DlnaMime, string?>>()
@@ -105,24 +117,22 @@ namespace DLNAServer.Configuration
         private string GenerateServerSignature()
         {
             var os = Environment.OSVersion;
-            var platform = os.Platform.ToString();
-            switch (os.Platform)
-            {
-                case PlatformID.Win32NT:
-                case PlatformID.Win32S:
-                case PlatformID.Win32Windows:
-                case PlatformID.WinCE:
-                    platform = "WIN";
-                    break;
-                case PlatformID.Unix:
-                    platform = "Linux";
-                    break;
-                case PlatformID.Xbox:
-                case PlatformID.MacOSX:
-                case PlatformID.Other:
-                default:
-                    break;
+            string platform = os.Platform switch
+            { 
+                PlatformID.Win32NT or
+                PlatformID.Win32S or
+                PlatformID.Win32Windows or
+                PlatformID.WinCE
+                    => platform = "WIN",
+                PlatformID.Unix 
+                    => platform = "Linux",
+                PlatformID.Xbox or
+                PlatformID.MacOSX or
+                PlatformID.Other or 
+                _ 
+                    => platform = $"{os.Platform}",
             }
+            ;
             var version = Assembly.GetExecutingAssembly().GetName().Version;
             var versionMajor = version?.Major ?? -1;
             var versionMinor = version?.Minor ?? -1;

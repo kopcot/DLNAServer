@@ -93,7 +93,7 @@ namespace DLNAServer.Features.MediaProcessors
                                 await RefreshSingleFileMetadataAsync(file, setCheckedForFailed);
                             });
 
-                    await Task.WhenAll(producer, consumer);
+                    await Task.WhenAll([producer, consumer]);
                 }
 
                 _ = await FileRepository.SaveChangesAsync();
@@ -308,7 +308,7 @@ namespace DLNAServer.Features.MediaProcessors
                                 await RefreshSingleFileThumbnailAsync(file, setCheckedForFailed);
                             });
 
-                    await Task.WhenAll(producer, consumer);
+                    await Task.WhenAll([producer, consumer]);
                 }
 
                 _ = await FileRepository.SaveChangesAsync();
@@ -420,7 +420,7 @@ namespace DLNAServer.Features.MediaProcessors
                     ? (await FileHelper.ReadFileAsync(outputThumbnailFileFullPath, _logger) ?? ReadOnlyMemory<byte>.Empty)
                     : ReadOnlyMemory<byte>.Empty;
 
-                return (outputThumbnailFileFullPath, thumbnailData, ConvertToDlnaMime(dlnaMime), dlnaProfileName);
+                return (outputThumbnailFileFullPath, thumbnailData, dlnaMimeRequested, dlnaProfileName);
             }
             catch (ConversionException ex)
             {
@@ -471,8 +471,7 @@ namespace DLNAServer.Features.MediaProcessors
 
             return (dlnaMime, fileExtension, dlnaProfileName);
         }
-        private static DlnaMime ConvertFromDlnaMime(DlnaMime dlnaMime) => ConvertToDlnaMime(dlnaMime);
-        private static DlnaMime ConvertToDlnaMime(DlnaMime dlnaMime)
+        private static DlnaMime ConvertFromDlnaMime(DlnaMime dlnaMime)
         {
             return dlnaMime switch
             {

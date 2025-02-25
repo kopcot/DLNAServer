@@ -107,7 +107,7 @@ namespace DLNAServer.SSDP
             var headers = message.Split(Environment.NewLine);
             var searchTarget = headers.FirstOrDefault(static (h) => h.StartsWith("ST:"));
             var devicesEndpoint = upnpDevices.GroupBy(static (d) => d.Endpoint);
-            foreach (var devices in devicesEndpoint)
+            foreach (var devices in devicesEndpoint.ToList())
             {
                 if (!_udpClientSenders.TryGetValue(devices.Key, out var udpClient))
                 {
@@ -120,7 +120,7 @@ namespace DLNAServer.SSDP
 
                     _udpClientSenders.Add(devices.Key, udpClient);
                 }
-                foreach (var device in devices)
+                foreach (var device in devices.ToList())
                 {
                     // Check the "ST" (Search Target) header to determine what the client is looking for
                     if (searchTarget != null &&
@@ -158,11 +158,20 @@ namespace DLNAServer.SSDP
 
                 _ = sb.Clear();
             }
+            catch (SocketException ex)
+            {
+                _logger.LogError(ex, $"Error in SSDPListener: {ex.Message}");
+
+                Random random = new();
+                TimeSpan delay = TimeSpan.FromMinutes(_serverConfig.ServerDelayAfterUnsuccessfulSendSSDPMessageInMin).Add(TimeSpan.FromSeconds(random.Next(60)));
+                await Task.Delay(delay);
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error in SSDPListener: {ex.Message}");
 
-                int delay = 60000 + new Random().Next(180000);
+                Random random = new();
+                TimeSpan delay = TimeSpan.FromMinutes(1).Add(TimeSpan.FromSeconds(random.Next(180)));
                 await Task.Delay(delay);
             }
         }

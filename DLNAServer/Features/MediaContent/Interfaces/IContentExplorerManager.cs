@@ -7,7 +7,7 @@ namespace DLNAServer.Features.MediaContent.Interfaces
     public interface IContentExplorerManager : IInitializeAble, ITerminateAble
     {
         Task RefreshFoundFilesAsync(Dictionary<DlnaMime, IEnumerable<string>> inputFiles, bool shouldBeAdded);
-        Task<IEnumerable<DirectoryEntity>> GetNewDirectoryEntities(IEnumerable<string?> folders);
+        Task<List<DirectoryEntity>> GetNewDirectoryEntities(IEnumerable<string?> folders);
         Task<(FileEntity[] fileEntities, DirectoryEntity[] directoryEntities, bool isRootFolder, uint totalMatches)> GetBrowseResultItems(
             string objectID,
             int startingIndex,

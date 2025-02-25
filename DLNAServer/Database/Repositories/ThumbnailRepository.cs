@@ -16,15 +16,14 @@ namespace DLNAServer.Database.Repositories
                 .OrderBy(static (f) => f.LC_ThumbnailFilePhysicalFullPath)
                 .ThenByDescending(static (f) => f.CreatedInDB);
             DefaultInclude = static (entities) => entities
-                .Include(t => t.ThumbnailData)
-                .AsSplitQuery();
+                .Include(t => t.ThumbnailData);
         }
         public new async Task<ThumbnailEntity?> GetByIdAsync(Guid guid, bool useCachedResult)
         {
-            return await GetSingleWithCacheAsync<ThumbnailEntity?>(
+            return await GetSingleWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
-                    .IncludeChildEntities(DefaultInclude)
+                    .IncludeChildEntities(DefaultInclude) 
                     .FirstOrDefaultAsync(t => t.Id == guid),
                 cacheKey: GetCacheKey<ThumbnailEntity>([guid.ToString()]),
                 cacheDuration: defaultCacheDuration,
@@ -33,7 +32,7 @@ namespace DLNAServer.Database.Repositories
         }
         public new async Task<ThumbnailEntity?> GetByIdAsync(Guid guid, bool asNoTracking, bool useCachedResult)
         {
-            return await GetSingleWithCacheAsync<ThumbnailEntity?>(
+            return await GetSingleWithCacheAsync(
                 queryAction: asNoTracking
                         ? DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
@@ -57,10 +56,10 @@ namespace DLNAServer.Database.Repositories
         {
             return Guid.TryParse(guid, out var dbGuid) ? await GetByIdAsync(dbGuid, asNoTracking, useCachedResult) : null;
         }
-        public async Task<IEnumerable<ThumbnailEntity>> GetAllByPathFullNameAsync(string pathFullName, bool useCachedResult)
+        public async Task<ThumbnailEntity[]> GetAllByPathFullNameAsync(string pathFullName, bool useCachedResult)
         {
             pathFullName = pathFullName.ToLower();
-            var memoryDataResult = await GetAllWithCacheAsync<ThumbnailEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)

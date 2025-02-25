@@ -65,7 +65,7 @@ namespace DLNAServer.Features.Cache
             var fileLock = cachingFilesInProgress.GetOrAdd(filePath, new SemaphoreSlim(1, 1));
 
             _logger.LogDebug($"{DateTime.Now} - Started caching file: {filePath}");
-            await fileLock.WaitAsync();
+            await fileLock.WaitAsync(TimeSpan.FromMinutes(30));
 
             try
             {
@@ -141,7 +141,7 @@ namespace DLNAServer.Features.Cache
                             _logger.LogDebug($"{DateTime.Now} - Started file remove from cache: {(key as string)}, reason: {reason}, allocated bytes: {bytesAllocated}");
                         }
 
-                        await postEvictionCallbackInProgress.WaitAsync();
+                        await postEvictionCallbackInProgress.WaitAsync(TimeSpan.FromMinutes(30));
 
                         GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
                         GC.RemoveMemoryPressure(bytesAllocated);

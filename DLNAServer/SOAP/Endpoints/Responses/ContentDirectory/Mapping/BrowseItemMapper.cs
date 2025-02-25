@@ -1,5 +1,6 @@
 ﻿using DLNAServer.Database.Entities;
 using DLNAServer.Types.DLNA;
+using System.Text;
 
 namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
 {
@@ -90,15 +91,17 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
         private static string GetResourceUrl(FileEntity file, string ipEndpoint) => $"http://{ipEndpoint}/fileserver/file/{file.Id}";
         private static string GetResourceProtocolInfo(FileEntity file)
         {
-            return $"http-get:*:" +
-                    $"{file.FileDlnaMime.ToMimeString()}:" +
-                    $"DLNA.ORG_PN={file.FileDlnaProfileName
-                        ?? file.FileExtension.ToUpper().Replace(".", "")};" +
-                    $"DLNA.ORG_OP={ProtocolInfo.FlagsToString(ProtocolInfo.DlnaOrgOperation.TimeSeekSupported)};" +
-                    $"DLNA.ORG_CI={ProtocolInfo.EnumToString(ProtocolInfo.DlnaOrgContentIndex.NoSpecificIndex)};" +
-                    $"DLNA.ORG_FLAGS={(file.UpnpClass.ToDlnaMedia() == DlnaMedia.Image
+            StringBuilder sb = new();
+            sb.Append($"http-get:*:");
+            sb.Append($"{file.FileDlnaMime.ToMimeString()}:");
+            sb.Append($"DLNA.ORG_PN={file.FileDlnaProfileName
+                        ?? file.FileExtension.ToUpper().Replace(".", "")};");
+            sb.Append($"DLNA.ORG_OP={ProtocolInfo.FlagsToString(ProtocolInfo.DlnaOrgOperation.TimeSeekSupported)};");
+            sb.Append($"DLNA.ORG_CI={ProtocolInfo.EnumToString(ProtocolInfo.DlnaOrgContentIndex.NoSpecificIndex)};");
+            sb.Append($"DLNA.ORG_FLAGS={(file.UpnpClass.ToDlnaMedia() == DlnaMedia.Image
                         ? ProtocolInfo.DefaultFlagsInteractive
-                        : ProtocolInfo.DefaultFlagsStreaming)}";
+                        : ProtocolInfo.DefaultFlagsStreaming)}");
+            return sb.ToString();
         }
         private static string? GetResourceThumbnailUrl(FileEntity file, string ipEndpoint)
         {
@@ -119,16 +122,18 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
         }
         private static string GetResourceThumbnailProtocolInfo(FileEntity file)
         {
-            return $"http-get:*:" +
-                $"{file.Thumbnail?.ThumbnailFileDlnaMime.ToMimeString() ?? "*"}:" +
-                $"DLNA.ORG_PN={(file.Thumbnail?.ThumbnailFileDlnaMime != null && file.Thumbnail?.ThumbnailFileDlnaMime != DlnaMime.Undefined ? file.Thumbnail?.ThumbnailFileDlnaProfileName
+            StringBuilder sb = new();
+            sb.Append($"http-get:*:");
+            sb.Append($"{file.Thumbnail?.ThumbnailFileDlnaMime.ToMimeString() ?? "*"}:");
+            sb.Append($"DLNA.ORG_PN={(file.Thumbnail?.ThumbnailFileDlnaMime != null && file.Thumbnail?.ThumbnailFileDlnaMime != DlnaMime.Undefined ? file.Thumbnail?.ThumbnailFileDlnaProfileName
                     : file.FileDlnaMime.ToDlnaMedia() == DlnaMedia.Image ? file.FileDlnaProfileName
                     : file.FileDlnaMime.ToDlnaMedia() == DlnaMedia.Audio ? DlnaMime.ImageJpeg.ToMainProfileNameString()
                     : file.Thumbnail?.ThumbnailFileExtension?.ToUpper().Replace(".", ""))
-                    ?? ""};" +
-                $"DLNA.ORG_OP={ProtocolInfo.FlagsToString(ProtocolInfo.DlnaOrgOperation.None)};" +
-                $"DLNA.ORG_CI={ProtocolInfo.EnumToString(ProtocolInfo.DlnaOrgContentIndex.Thumbnail)};" +
-                $"DLNA.ORG_FLAGS={ProtocolInfo.DefaultFlagsInteractive}";
+                    ?? ""};");
+            sb.Append($"DLNA.ORG_OP={ProtocolInfo.FlagsToString(ProtocolInfo.DlnaOrgOperation.None)};");
+            sb.Append($"DLNA.ORG_CI={ProtocolInfo.EnumToString(ProtocolInfo.DlnaOrgContentIndex.Thumbnail)};");
+            sb.Append($"DLNA.ORG_FLAGS={ProtocolInfo.DefaultFlagsInteractive}");
+            return sb.ToString();
         }
         private static long GetResourceSize(FileEntity file) => file.FileSizeInBytes;
         private static long GetResourceThumbnailSize(FileEntity file) => file.Thumbnail?.ThumbnailFileSizeInBytes ?? 0;

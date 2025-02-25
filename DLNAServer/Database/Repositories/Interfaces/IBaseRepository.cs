@@ -3,19 +3,19 @@
     public interface IBaseRepository<T>
     {
         DlnaDbContext DbContext { get; }
-        Task<bool> AddAsync(T entity);
+        Task<bool> AddAsync(T entity); 
         Task<bool> AddRangeAsync(IEnumerable<T> entities);
         Task<T?> GetByIdAsync(Guid guid, bool useCachedResult = true);
         Task<T?> GetByIdAsync(Guid guid, bool asNoTracking = false, bool useCachedResult = true);
         Task<T?> GetByIdAsync(string guid, bool useCachedResult = true);
         Task<T?> GetByIdAsync(string guid, bool asNoTracking = false, bool useCachedResult = true);
-        Task<IEnumerable<T>> GetAllAsync(bool useCachedResult = true);
-        Task<IEnumerable<T>> GetAllAsync(bool asNoTracking = false, bool useCachedResult = true);
-        Task<IEnumerable<T>> GetAllAsync(int skip, int take, bool useCachedResult = true);
-        Task<IEnumerable<T>> GetAllAsync(int skip, int take, bool asNoTracking = false, bool useCachedResult = true);
-        Task<IEnumerable<T>> GetAllByIdsAsync(IEnumerable<Guid> guids, bool useCachedResult = true);
+        Task<T[]> GetAllAsync(bool useCachedResult = true);
+        Task<T[]> GetAllAsync(bool asNoTracking = false, bool useCachedResult = true);
+        Task<T[]> GetAllAsync(int skip, int take, bool useCachedResult = true);
+        Task<T[]> GetAllAsync(int skip, int take, bool asNoTracking = false, bool useCachedResult = true);
+        Task<T[]> GetAllByIdsAsync(IEnumerable<Guid> guids, bool useCachedResult = true);
         Task<long> GetCountAsync(bool useCachedResult = true);
-        Task<bool> DeleteAllAsync();
+        Task<bool> DeleteAllAsync(); 
         Task<bool> DeleteRangeAsync(IEnumerable<T> entities);
         Task<bool> DeleteByGuidAsync(string guid);
         Task<bool> DeleteAsync(T entity);
@@ -40,10 +40,10 @@
         /// </summary> 
         Task<bool> UpdateAsync(T entity);
         /// <inheritdoc cref="UpdateAsync(T)"/>
-        Task<bool> UpdateRangeAsync(IEnumerable<T> entities);
+        Task<bool> UpdateRangeAsync(T[] entities);
         /// <inheritdoc cref="UpdateAsync(T)"/>
         Task<bool> UpsertAsync(T entity);
         /// <inheritdoc cref="UpdateAsync(T)"/>
-        Task<bool> UpsertRangeAsync(IEnumerable<T> entities);
+        Task<bool> UpsertRangeAsync(T[] entities);
     }
 }

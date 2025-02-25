@@ -88,7 +88,7 @@ namespace DLNAServer.Database.Repositories
         public async Task<bool> DeleteRangeByGuidsAsync(IEnumerable<string> guids)
         {
             List<Guid> guidsParsed = [];
-            foreach (var guid in guids)
+            foreach (var guid in guids.ToList())
             {
                 if (Guid.TryParse(guid, out var dbGuid))
                 {
@@ -98,10 +98,10 @@ namespace DLNAServer.Database.Repositories
 
             return await DeleteRangeByGuidsAsync(guidsParsed);
         }
-        public async Task<IEnumerable<T>> GetAllAsync(bool useCachedResult) => await GetAllAsync(false, useCachedResult);
-        public async Task<IEnumerable<T>> GetAllAsync(bool asNoTracking, bool useCachedResult)
+        public async Task<T[]> GetAllAsync(bool useCachedResult) => await GetAllAsync(false, useCachedResult);
+        public async Task<T[]> GetAllAsync(bool asNoTracking, bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync<T>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: asNoTracking
                         ? DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
@@ -117,10 +117,10 @@ namespace DLNAServer.Database.Repositories
             return memoryDataResult.ToArray();
         }
 
-        public async Task<IEnumerable<T>> GetAllAsync(int skip, int take, bool useCachedResult) => await GetAllAsync(skip, take, false, useCachedResult);
-        public async Task<IEnumerable<T>> GetAllAsync(int skip, int take, bool asNoTracking, bool useCachedResult)
+        public async Task<T[]> GetAllAsync(int skip, int take, bool useCachedResult) => await GetAllAsync(skip, take, false, useCachedResult);
+        public async Task<T[]> GetAllAsync(int skip, int take, bool asNoTracking, bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync<T>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: asNoTracking
                         ? DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
@@ -141,7 +141,7 @@ namespace DLNAServer.Database.Repositories
         }
         public async Task<long> GetCountAsync(bool useCachedResult)
         {
-            return await GetSingleWithCacheAsync<long>(
+            return await GetSingleWithCacheAsync(
                 queryAction: DbSet.LongCountAsync(),
                 cacheKey: GetCacheKey<T>(),
                 cacheDuration: defaultCacheDuration,
@@ -149,14 +149,14 @@ namespace DLNAServer.Database.Repositories
                 );
         }
 
-        public async Task<IEnumerable<T>> GetAllByIdsAsync(IEnumerable<Guid> guids, bool useCachedResult)
+        public async Task<T[]> GetAllByIdsAsync(IEnumerable<Guid> guids, bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync<T>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: DbSet
                         .OrderEntitiesByDefault(DefaultOrderBy)
                         .IncludeChildEntities(DefaultInclude)
                         .Where(e => guids.Contains(e.Id)),
-                cacheKey: GetCacheKey<T>(guids.Select(g => g.ToString())),
+                cacheKey: GetCacheKey<T>(guids.Select(static (g) => g.ToString())),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
@@ -165,7 +165,7 @@ namespace DLNAServer.Database.Repositories
         public async Task<T?> GetByIdAsync(Guid guid, bool useCachedResult) => await GetByIdAsync(guid, false, useCachedResult);
         public async Task<T?> GetByIdAsync(Guid guid, bool asNoTracking, bool useCachedResult)
         {
-            return await GetSingleWithCacheAsync<T?>(
+            return await GetSingleWithCacheAsync(
                 queryAction: asNoTracking
                         ? DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
@@ -209,7 +209,7 @@ namespace DLNAServer.Database.Repositories
             T[] entities = [entity];
             return await UpdateRangeAsync(entities);
         }
-        public async Task<bool> UpdateRangeAsync(IEnumerable<T> entities)
+        public async Task<bool> UpdateRangeAsync(T[] entities)
         {
             using (var transaction = DbContext.Database.BeginTransaction())
             {
@@ -224,8 +224,8 @@ namespace DLNAServer.Database.Repositories
             T[] entities = [entity];
             return await UpsertRangeAsync(entities);
         }
-        public async Task<bool> UpsertRangeAsync(IEnumerable<T> entities)
-        {
+        public async Task<bool> UpsertRangeAsync(T[] entities)
+        { 
             var existingById = (await GetAllByIdsAsync(entities.Select(static (e) => e.Id), false)).ToArray();
             var notExist = entities.Where(e => !existingById.Any(ex => ex.Id.Equals(e.Id))).ToArray();
             var exist = entities.Where(e => existingById.Any(ex => ex.Id.Equals(e.Id))).ToArray();
@@ -250,8 +250,8 @@ namespace DLNAServer.Database.Repositories
             notExist = [];
             exist = [];
 
-            return true;
-        }
+            return true; 
+        }  
         public async Task<bool> IsAnyItemAsync()
         {
             return await DbSet
@@ -274,7 +274,7 @@ namespace DLNAServer.Database.Repositories
                     {
                         var data = await queryAction.ToArrayAsync();
 
-                        entry.Value = data.AsMemory();
+                        entry.Value = data.AsReadOnly();
                         entry.SlidingExpiration = cacheDuration;
                         entry.AbsoluteExpirationRelativeToNow = defaultCacheAbsoluteDuration;
                         entry.Size = 1; // size is not important for entities vs physical cached file size

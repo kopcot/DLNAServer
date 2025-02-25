@@ -49,13 +49,13 @@ namespace DLNAServer.Features.MediaContent
             await RefreshFoundFilesAsync(inputFiles, true);
 
             var filesInDb = await FileRepository.GetAllAsync(useCachedResult: false);
-            foreach (var filesInDbChunk in filesInDb.Chunk(200))
+            foreach (var filesInDbChunk in filesInDb.Chunk(200).ToList())
             {
                 _ = await CheckFilesExistingAsync(filesInDbChunk);
             }
 
             var directoriesInDb = await DirectoryRepository.GetAllAsync(useCachedResult: false);
-            foreach (var directoriesInDbChunk in directoriesInDb.Chunk(200))
+            foreach (var directoriesInDbChunk in directoriesInDb.Chunk(200).ToList())
             {
                 _ = await CheckDirectoriesExistingAsync(directoriesInDbChunk);
             }
@@ -71,7 +71,7 @@ namespace DLNAServer.Features.MediaContent
             Dictionary<DlnaMime, IEnumerable<string>> foundFiles = [];
             List<string> filesInSourceFolders = [];
 
-            foreach (var sourceFolder in sourceFolders)
+            foreach (var sourceFolder in sourceFolders.ToList())
             {
                 var directory = new DirectoryInfo(sourceFolder);
                 if (!directory.Exists)
@@ -81,7 +81,7 @@ namespace DLNAServer.Features.MediaContent
                 }
                 // unable to use search patters from ServerConfig.Extensions,
                 // as for Linux it is different between .jpg, .JPG, .Jpg
-                // 'MatchCasing = MatchCasing.CaseInsensitive' is not helpful 
+                // 'MatchCasing = MatchCasing.CaseInsensitive' is not helpful  
                 var files = directory
                     .EnumerateFiles("*.*", new EnumerationOptions
                     {
@@ -99,13 +99,13 @@ namespace DLNAServer.Features.MediaContent
                 filesInSourceFolders
                     .AddRange(files);
             }
-
+             
             foundFiles = filesInSourceFolders
                 .Where(f => !_serverConfig.ExcludeFolders.Any(skip => f.Contains(skip)))
                 .DistinctBy(static (f) => f)
                 .OrderBy(static (f) => f)
-                .GroupBy(f =>
-                {
+                .GroupBy(f => 
+                { 
                     var extension = _serverConfig.MediaFileExtensions.FirstOrDefault(e => f.EndsWith(e.Key, StringComparison.InvariantCultureIgnoreCase));
                     return extension.Value.Key;
                 })
@@ -113,7 +113,7 @@ namespace DLNAServer.Features.MediaContent
                 .ToDictionary(static (g) => g.Key, static (g) => g.ToArray().AsEnumerable());
 
             return foundFiles;
-        }
+        } 
         private static readonly SemaphoreSlim semaphoreRefreshFoundFiles = new(1, 1);
         /// <param name="inputFiles">Files to check and add to database</param>
         /// <param name="shouldBeAdded"><see langword="true"/> if <paramref name="inputFiles"/> should not exists in the database</param>
@@ -129,11 +129,11 @@ namespace DLNAServer.Features.MediaContent
                 var existingFiles = await FileRepository.GetAllFileFullNamesAsync(useCachedResult: !shouldBeAdded);
                 var existingFilesHash = new HashSet<string>(existingFiles);
 
-                foreach (var mimeGroup in inputFiles)
+                foreach (var mimeGroup in inputFiles.ToList())
                 {
                     var fileExtensionConfiguration = _serverConfig.MediaFileExtensions.Values.FirstOrDefault(e => e.Key == mimeGroup.Key);
 
-                    foreach (var file in mimeGroup.Value)
+                    foreach (var file in mimeGroup.Value.ToList())
                     {
                         //if (existingFiles.Contains(file))
                         if (!existingFilesHash.Add(file)) // Add returns false if already exists in HashSet
@@ -228,7 +228,7 @@ namespace DLNAServer.Features.MediaContent
         {
             var existingDirectoryEntities = await DirectoryRepository.GetAllAsync(useCachedResult: true);
 
-            foreach (var directoryEntity in directoryEntities)
+            foreach (var directoryEntity in directoryEntities.ToList())
             {
                 if (new DirectoryInfo(directoryEntity.DirectoryFullPath).Parent is DirectoryInfo parentDirectory)
                 {
@@ -241,19 +241,19 @@ namespace DLNAServer.Features.MediaContent
                     _logger.LogDebug($"Directory '{directoryEntity.DirectoryFullPath}' is without parent");
                 }
             }
-            foreach (var file in fileEntities)
+            foreach (var file in fileEntities.ToList())
             {
                 file.Directory = directoryEntities.FirstOrDefault(d => d.DirectoryFullPath == file.Folder)
                     ?? existingDirectoryEntities.FirstOrDefault(de => de.DirectoryFullPath == file.Folder)
                     ?? throw new ApplicationException($"Parent directory not found for file '{file.Folder}'");
             }
         }
-        public async Task<IEnumerable<DirectoryEntity>> GetNewDirectoryEntities(IEnumerable<string?> folders)
+        public async Task<List<DirectoryEntity>> GetNewDirectoryEntities(IEnumerable<string?> folders)
         {
             var existingDirectories = await DirectoryRepository.GetAllDirectoryFullNamesAsync(useCachedResult: false);
 
             List<DirectoryEntity> directoryEntities = [];
-            foreach (var folder in folders)
+            foreach (var folder in folders.ToList())
             {
                 DirectoryInfo? directoryInfo = new(folder!);
                 while (directoryInfo != null &&
@@ -430,7 +430,7 @@ namespace DLNAServer.Features.MediaContent
                             useCachedResult: false);
                     if (notExistingSubdirectories.Any())
                     {
-                        foreach (var item in notExistingSubdirectories)
+                        foreach (var item in notExistingSubdirectories.ToList())
                         {
                             notExistingDirectories.Add(item);
                         }
@@ -585,7 +585,7 @@ namespace DLNAServer.Features.MediaContent
 
             FileInfo fileInfo;
 
-            foreach (var file in files)
+            foreach (var file in files.ToList())
             {
                 if (deleteThumbnailFile
                     && !string.IsNullOrEmpty(file.Thumbnail?.ThumbnailFilePhysicalFullPath))
@@ -625,7 +625,7 @@ namespace DLNAServer.Features.MediaContent
         }
         public async Task ClearMetadataAsync(IEnumerable<FileEntity> files)
         {
-            foreach (var file in files)
+            foreach (var file in files.ToList())
             {
                 if (file.AudioMetadata != null)
                 {

@@ -91,7 +91,7 @@ namespace DLNAServer.Features.MediaProcessors
                                 await RefreshSingleFileMetadataAsync(file, setCheckedForFailed);
                             });
 
-                    await Task.WhenAll(producer, consumer);
+                    await Task.WhenAll([producer, consumer]);
                 }
 
                 _ = await FileRepository.SaveChangesAsync();
@@ -236,7 +236,7 @@ namespace DLNAServer.Features.MediaProcessors
                             });
                     });
 
-                    await Task.WhenAll(producer, consumer);
+                    await Task.WhenAll([producer, consumer]);
                 }
 
                 _ = await FileRepository.SaveChangesAsync();

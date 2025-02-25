@@ -1,12 +1,15 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace DLNAServer.Helpers.Files
 {
     public static class FileHelper
     {
+        private static ArrayPool<byte> ArrayPool_Buffer = ArrayPool<byte>.Shared;
         public static async Task<ReadOnlyMemory<byte>?> ReadFileAsync<T>(string filePath, ILogger<T> _logger, long maxSizeOfFile = long.MaxValue)
         {
-            const int bufferSize = 1_024 * 1_024;
+            const int bufferSize = 64 * 1_024; // less as 85,000 bytes in size for not need to use Large Object Heap (LOH) 
+            byte[]? buffer = ArrayPool_Buffer.Rent(bufferSize);
 
             try
             {
@@ -29,13 +32,13 @@ namespace DLNAServer.Helpers.Files
 
                     var fileSize = (int)fileStream.Length;
                     byte[]? cachedData = GC.AllocateUninitializedArray<byte>(fileSize, pinned: false);
-                    byte[]? buffer = GC.AllocateUninitializedArray<byte>(bufferSize, pinned: false);
+                    //byte[]? buffer = GC.AllocateUninitializedArray<byte>(bufferSize, pinned: false);
 
                     int bytesRead;
                     int offset = 0;
 
                     _logger.LogDebug($"{DateTime.Now} - Start file reading from disk.");
-                    while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+                    while ((bytesRead = await fileStream.ReadAsync(buffer, 0, bufferSize).ConfigureAwait(false)) > 0)
                     {
                         if (fileSize < offset + bytesRead)
                         {
@@ -57,6 +60,11 @@ namespace DLNAServer.Helpers.Files
             {
                 _logger.LogError(ex, ex.Message, [filePath]);
                 return null;
+            }
+            finally
+            {
+                ArrayPool_Buffer.Return(buffer);
+                buffer = null;
             }
         }
         public static void CreateDirectoryIfNoExists(DirectoryInfo? directory)

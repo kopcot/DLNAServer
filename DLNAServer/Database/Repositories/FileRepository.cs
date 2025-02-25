@@ -18,8 +18,7 @@ namespace DLNAServer.Database.Repositories
                         .Include(f => f.AudioMetadata)
                         .Include(f => f.VideoMetadata)
                         .Include(f => f.SubtitleMetadata)
-                        .Include(f => f.Thumbnail)
-                        .AsSplitQuery();
+                        .Include(f => f.Thumbnail);
         }
         public new async Task<bool> AddAsync(FileEntity entity)
         {
@@ -60,9 +59,9 @@ namespace DLNAServer.Database.Repositories
 
             return await base.AddRangeAsync(entities);
         }
-        public new async Task<IEnumerable<FileEntity>> GetAllAsync(bool useCachedResult)
+        public new async Task<FileEntity[]> GetAllAsync(bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync<FileEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: DbSet
                         .OrderEntitiesByDefault(DefaultOrderBy)
                         .IncludeChildEntities(DefaultInclude),
@@ -72,9 +71,9 @@ namespace DLNAServer.Database.Repositories
                 );
             return memoryDataResult.ToArray();
         }
-        public new async Task<IEnumerable<FileEntity>> GetAllAsync(bool asNoTracking, bool useCachedResult)
+        public new async Task<FileEntity[]> GetAllAsync(bool asNoTracking, bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync<FileEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: asNoTracking
                     ? DbSet
                         .OrderEntitiesByDefault(DefaultOrderBy)
@@ -89,9 +88,9 @@ namespace DLNAServer.Database.Repositories
                 );
             return memoryDataResult.ToArray();
         }
-        public new async Task<IEnumerable<FileEntity>> GetAllAsync(int skip, int take, bool useCachedResult)
+        public new async Task<FileEntity[]> GetAllAsync(int skip, int take, bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync<FileEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
@@ -103,10 +102,10 @@ namespace DLNAServer.Database.Repositories
                 );
             return memoryDataResult.ToArray();
         }
-        public async Task<IEnumerable<FileEntity>> GetAllByAddedToDbAsync(int takeNumber, IEnumerable<string> excludeFolders, bool useCachedResult)
+        public async Task<FileEntity[]> GetAllByAddedToDbAsync(int takeNumber, IEnumerable<string> excludeFolders, bool useCachedResult)
         {
             var exclude = excludeFolders.Select(ef => ef.ToLower()).ToArray();
-            var memoryDataResult = await GetAllWithCacheAsync<FileEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: DbSet
                     .OrderByDescending(static (f) => f.CreatedInDB)
                     .IncludeChildEntities(DefaultInclude)
@@ -118,28 +117,28 @@ namespace DLNAServer.Database.Repositories
                 );
             return memoryDataResult.ToArray();
         }
-        public async Task<IEnumerable<FileEntity>> GetAllByParentDirectoryIdsAsync(IEnumerable<Guid> expectedDirectory, IEnumerable<string> excludeFolders, bool useCachedResult)
+        public async Task<FileEntity[]> GetAllByParentDirectoryIdsAsync(IEnumerable<Guid> expectedDirectory, IEnumerable<string> excludeFolders, bool useCachedResult)
         {
             var exclude = excludeFolders.Select(ef => ef.ToLower()).ToArray();
-            var memoryDataResult = await GetAllWithCacheAsync<FileEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
                     .Where(fe => expectedDirectory.Any(ed => fe.Directory != null && ed.Equals(fe.Directory.Id))
                         && exclude.All(ef => !fe.LC_FilePhysicalFullPath.Contains(ef))),
-                cacheKey: GetCacheKey<FileEntity>(expectedDirectory.Select(ed => ed.ToString())),
+                cacheKey: GetCacheKey<FileEntity>(expectedDirectory.Select(static (ed) => ed.ToString())),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
             return memoryDataResult.ToArray();
         }
-        public async Task<IEnumerable<FileEntity>> GetAllByParentDirectoryIdsAsync(IEnumerable<string> expectedDirectory, IEnumerable<string> excludeFolders, bool useCachedResult)
+        public async Task<FileEntity[]> GetAllByParentDirectoryIdsAsync(IEnumerable<string> expectedDirectory, IEnumerable<string> excludeFolders, bool useCachedResult)
         {
             return await GetAllByParentDirectoryIdsAsync(expectedDirectory.Select(ed => Guid.TryParse(ed, out var dbGuid) ? dbGuid : new Guid()), excludeFolders, useCachedResult);
         }
         public async Task<IEnumerable<string>> GetAllFileFullNamesAsync(bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync<string>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .AsNoTracking()
@@ -152,7 +151,7 @@ namespace DLNAServer.Database.Repositories
         }
         public async Task<(bool ok, int? minDepth)> GetMinimalDepthAsync(bool useCachedResult)
         {
-            var minDepth = await GetSingleWithCacheAsync<int>(
+            var minDepth = await GetSingleWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .AsNoTracking()
@@ -164,9 +163,9 @@ namespace DLNAServer.Database.Repositories
                 );
             return minDepth == short.MaxValue ? (false, null) : (true, minDepth);
         }
-        public async Task<IEnumerable<FileEntity>> GetAllByDirectoryDepthAsync(int depth, bool useCachedResult)
+        public async Task<FileEntity[]> GetAllByDirectoryDepthAsync(int depth, bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync<FileEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .AsNoTracking()
@@ -178,9 +177,9 @@ namespace DLNAServer.Database.Repositories
                 );
             return memoryDataResult.ToArray();
         }
-        public async Task<IEnumerable<FileEntity>> GetAllByDirectoryDepthAsync(int depth, int skip, int take, bool useCachedResult)
+        public async Task<FileEntity[]> GetAllByDirectoryDepthAsync(int depth, int skip, int take, bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync<FileEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .AsNoTracking()
@@ -194,10 +193,10 @@ namespace DLNAServer.Database.Repositories
                 );
             return memoryDataResult.ToArray();
         }
-        public async Task<IEnumerable<FileEntity>> GetAllByPathFullNameAsync(string pathFullName, bool useCachedResult)
+        public async Task<FileEntity[]> GetAllByPathFullNameAsync(string pathFullName, bool useCachedResult)
         {
             pathFullName = pathFullName.ToLower();
-            var memoryDataResult = await GetAllWithCacheAsync<FileEntity>(
+            var memoryDataResult = await GetAllWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)

@@ -72,13 +72,18 @@ namespace DLNAServer.Features.FileWatcher
                 watcher.Dispose();
             }
         }
-        private bool ShouldExcludeByPath(string fullPath)
+        private bool ShouldExcludeByThumbnailPath(string fullPath)
+        {
+            return !_serverConfig.SubFolderForThumbnail.Any(exclude => fullPath.Contains(exclude, StringComparison.InvariantCultureIgnoreCase));
+        }
+        private bool ShouldExcludeByExcludeFoldersPath(string fullPath)
         {
             return _serverConfig.ExcludeFolders.Any(exclude => fullPath.Contains(exclude, StringComparison.InvariantCultureIgnoreCase));
         }
         private bool IsFileExtensionMatch(string fullPath)
         {
-            return _serverConfig.MediaFileExtensions.Any(extension => fullPath.EndsWith(extension.Key, StringComparison.InvariantCultureIgnoreCase));
+            string fileExtension = new FileInfo(fullPath).Extension;
+            return _serverConfig.MediaFileExtensions.Any(extension => fileExtension.Contains(extension.Key, StringComparison.InvariantCultureIgnoreCase));
         }
         private static bool IsDirectory(string fullPath)
         {
@@ -105,9 +110,16 @@ namespace DLNAServer.Features.FileWatcher
             {
                 fileLock = _fileEventsInProgress.AddOrUpdate(fullPath, (1, new SemaphoreSlim(1, 1)), (key, value) => (value.Count + 1, value.Semaphore)).Semaphore;
 
-                _logger.LogDebug($"{DateTime.Now} - {guid} - Wait for start handling event {changeType} for {fullPath}");
-                await fileLock.WaitAsync();
-                _logger.LogDebug($"{DateTime.Now} - {guid} - Started handling event {changeType} for {fullPath}");
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug($"{DateTime.Now} - {guid} - Wait for start handling event {changeType} for {fullPath}");
+                }
+
+                await fileLock.WaitAsync(TimeSpan.FromMinutes(30));
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug($"{DateTime.Now} - {guid} - Started handling event {changeType} for {fullPath}");
+                }
 
                 using (var scope = _serviceScopeFactory.CreateScope())
                 {
@@ -118,7 +130,7 @@ namespace DLNAServer.Features.FileWatcher
                         if (changeType == WatcherChangeTypes.Created ||
                             changeType == WatcherChangeTypes.Changed)
                         {
-                            if (!ShouldExcludeByPath(fullPath))
+                            if (!ShouldExcludeByExcludeFoldersPath(fullPath))
                             {
                                 await fileWatcherManager.HandleFileCreatedChanged(fullPath, changeType, eventTimestamp);
                             }
@@ -144,7 +156,10 @@ namespace DLNAServer.Features.FileWatcher
                         }
                     }
                 }
-                _logger.LogDebug($"{DateTime.Now} - {guid} - Event {changeType} done for {fullPath}");
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug($"{DateTime.Now} - {guid} - Event {changeType} done for {fullPath}");
+                }
             }
             catch (Exception ex)
             {
@@ -158,9 +173,15 @@ namespace DLNAServer.Features.FileWatcher
 
         private bool CheckPathForExclude(WatcherChangeTypes changeType, string fullPath, DateTime eventTimestamp)
         {
-            //if (ShouldExcludeByPath(fullPath))
+            if (ShouldExcludeByThumbnailPath(fullPath))
+            {
+                _logger.LogDebug($"{DateTime.Now} - Event '{changeType}' filtered out by thumbnail subfolder path for file {fullPath}");
+                return true;
+            }
+
+            //if (ShouldExcludeByExcludeFoldersPath(fullPath))
             //{
-            //    _logger.LogDebug($"{DateTime.Now} - Event '{changeType}' filtered out by watching path for file {fullPath}");
+            //    _logger.LogDebug($"{DateTime.Now} - Event '{changeType}' filtered out by exclude folder path for file {fullPath}");
             //    return true;
             //}
 
@@ -198,12 +219,12 @@ namespace DLNAServer.Features.FileWatcher
         }
         public async Task TerminateAsync()
         {
-            foreach (var watcher in _fileSystemWatchers.Values)
+            foreach (var watcher in _fileSystemWatchers.ToList())
             {
-                UnwatchPath(watcher.Path);
+                UnwatchPath(watcher.Key);
             }
 
-            foreach (var fileLocks in _fileEventsInProgress)
+            foreach (var fileLocks in _fileEventsInProgress.ToList())
             {
                 try
                 {

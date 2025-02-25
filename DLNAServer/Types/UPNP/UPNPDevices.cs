@@ -24,7 +24,7 @@ namespace DLNAServer.Types.UPNP
 
         public async Task InitializeAsync()
         {
-            foreach (var address in IP.ExternalIPAddresses)
+            foreach (var address in IP.ExternalIPAddresses.ToList())
             {
                 var uuid = Guid.NewGuid();
                 var types = new[] {

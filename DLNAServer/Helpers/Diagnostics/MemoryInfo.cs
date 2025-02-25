@@ -63,8 +63,8 @@ namespace DLNAServer.Helpers.Diagnostics
                     .ToDictionary(
                         static (ptg) => ptg.Key,
                         static (ptg) => ptg.GroupBy(static (pt) => pt.ThreadState == System.Diagnostics.ThreadState.Wait
-                            ? "Wait reason - " + pt.WaitReason.ToString()
-                            : pt.ThreadState.ToString())
+                            ? $"Wait reason - {pt.WaitReason}"
+                            : $"{pt.ThreadState}")
                             .ToDictionary(
                                 static (wrg) => wrg.Key,
                                 static (wrg) => wrg.Count()
@@ -94,8 +94,8 @@ namespace DLNAServer.Helpers.Diagnostics
                 { "Paged system memory size 64-bit (MB)", pagedSystemMemorySize64 },
                 { "Nonpaged system memory size 64-bit (MB)", nonpagedSystemMemorySize64 },
                 { "GC - Is Server GC", GCSettings.IsServerGC },
-                { "GC - Large Object Heap (LOH) compaction mode", GCSettings.LargeObjectHeapCompactionMode.ToString() },
-                { "GC - Latency mode ", GCSettings.LatencyMode.ToString() },
+                { "GC - Large Object Heap (LOH) compaction mode", $"{GCSettings.LargeObjectHeapCompactionMode}"},
+                { "GC - Latency mode ", $"{GCSettings.LatencyMode}" },
                 { "GC - Is Concurrent (background) GC", GC.GetGCMemoryInfo().Concurrent },
                 { "GC - Index of this GC", GC.GetGCMemoryInfo().Index },
                 { "GC - Generation of this GC", GC.GetGCMemoryInfo().Generation },
@@ -109,10 +109,10 @@ namespace DLNAServer.Helpers.Diagnostics
             var index = 0;
             foreach (var generationInfo in GC.GetGCMemoryInfo().GenerationInfo)
             {
-                data.Add("Generation Info " + index + " - Fragmentation before bytes", generationInfo.FragmentationBeforeBytes);
-                data.Add("Generation Info " + index + " - Fragmentation after bytes", generationInfo.FragmentationAfterBytes);
-                data.Add("Generation Info " + index + " - Size before bytes", generationInfo.SizeBeforeBytes);
-                data.Add("Generation Info " + index + " - Size after bytes", generationInfo.SizeAfterBytes);
+                data.Add("Generation Info " + index + " - Fragmentation before bytes", $"{generationInfo.FragmentationBeforeBytes}");
+                data.Add("Generation Info " + index + " - Fragmentation after bytes", $"{generationInfo.FragmentationAfterBytes}");
+                data.Add("Generation Info " + index + " - Size before bytes", $"{generationInfo.SizeBeforeBytes}");
+                data.Add("Generation Info " + index + " - Size after bytes", $"{generationInfo.SizeAfterBytes}");
                 index++;
             }
             return data;

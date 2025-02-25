@@ -18,8 +18,7 @@ namespace DLNAServer.SSDP
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IPEndPoint _endpoint;
         private readonly ServerConfig _serverConfig;
-        private readonly ConcurrentDictionary<(UPNPDevice device, IPEndPoint address, string notificationSubtype), byte[]> messageDatas = new();
-        private readonly Encoding decoder = Encoding.UTF8;
+        private readonly ConcurrentDictionary<(UPNPDevice device, IPEndPoint address, int ssdpPort, string notificationSubtype, string serverName), byte[]> messageDataStored = new(); 
         public SSDPNotifierService(
             ILogger<SSDPNotifierService> logger,
             IServiceScopeFactory serviceScopeFactory,
@@ -34,13 +33,13 @@ namespace DLNAServer.SSDP
         protected override async Task ExecuteAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation($"Starting SSDP notifiers for {_endpoint}...");
-            messageDatas.Clear();
+            messageDataStored.Clear();
             await StartNotifyingAsync(cancellationToken);
         }
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Stopping SSDP notifiers...");
-            messageDatas.Clear();
+            messageDataStored.Clear();
             await StopNotifyingAsync();
             await base.StopAsync(cancellationToken);
         }
@@ -118,33 +117,38 @@ namespace DLNAServer.SSDP
         {
             try
             {
-                if (!messageDatas.TryGetValue((device, receiverEndPoint, notificationSubtype), out byte[]? messageData))
+                var messageData = messageDataStored.GetOrAdd((device, receiverEndPoint, ssdpPort, notificationSubtype, _serverConfig.DlnaServerName), static (key) =>
                 {
                     StringBuilder sb = new();
                     _ = sb.Append($"NOTIFY * HTTP/1.1\r\n");
-                    _ = sb.Append($"HOST: {receiverEndPoint.ToString()}:{ssdpPort}\r\n");
+                    _ = sb.Append($"HOST: {key.address.ToString()}:{key.ssdpPort}\r\n");
                     _ = sb.Append($"CACHE-CONTROL: max-age = 600\r\n");
-                    _ = sb.Append($"LOCATION: {device.Descriptor}\r\n");
-                    _ = sb.Append($"SERVER: {_serverConfig.DlnaServerName}\r\n");
-                    _ = sb.Append($"NTS: {notificationSubtype}\r\n");
-                    _ = sb.Append($"NT: {device.Type}\r\n");
-                    _ = sb.Append($"USN: {device.USN}\r\n");
+                    _ = sb.Append($"LOCATION: {key.device.Descriptor}\r\n");
+                    _ = sb.Append($"SERVER: {key.serverName}\r\n");
+                    _ = sb.Append($"NTS: {key.notificationSubtype}\r\n");
+                    _ = sb.Append($"NT: {key.device.Type}\r\n");
+                    _ = sb.Append($"USN: {key.device.USN}\r\n");
                     _ = sb.Append("\r\n");
 
-                    messageData = decoder.GetBytes(sb.ToString());
-
-                    _ = messageDatas.TryAdd((device, receiverEndPoint, notificationSubtype), messageData);
-
-                    _ = sb.Clear();
-                }
+                    return Encoding.UTF8.GetBytes(sb.ToString());
+                });
 
                 _ = await udpClient.SendAsync(messageData, messageData.Length, receiverEndPoint);
+            } 
+            catch (SocketException ex)
+            {
+                _logger.LogError(ex, $"Error in SSDPNotifier: {ex.Message}");
+
+                Random random = new();
+                TimeSpan delay = TimeSpan.FromMinutes(_serverConfig.ServerDelayAfterUnsuccessfulSendSSDPMessageInMin).Add(TimeSpan.FromSeconds(random.Next(60)));
+                await Task.Delay(delay);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error in SSDPListener: {ex.Message}");
+                _logger.LogError(ex, $"Error in SSDPNotifier: {ex.Message}");
 
-                int delay = 60000 + new Random().Next(180000);
+                Random random = new();
+                TimeSpan delay = TimeSpan.FromMinutes(1).Add(TimeSpan.FromSeconds(random.Next(180)));
                 await Task.Delay(delay);
             }
         }

@@ -47,7 +47,7 @@ namespace DLNAServer.Helpers.Caching
 
                     if (!evictionControlTokensSource.Token.IsCancellationRequested)
                     {
-                        bool storeValue = true;
+                        object? storeValue = null;
                         _ = memoryCache.Set(
                             key: evictionCacheKey,
                             value: new WeakReference(storeValue),

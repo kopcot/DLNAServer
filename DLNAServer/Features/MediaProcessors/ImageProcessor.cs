@@ -57,7 +57,7 @@ namespace DLNAServer.Features.MediaProcessors
                 if (fileEntities.Count() == 1)
                 {
                     var file = fileEntities.First();
-                    file.IsThumbnailChecked = true;
+                    file.IsMetadataChecked = true;
                 }
                 else
                 {
@@ -93,7 +93,7 @@ namespace DLNAServer.Features.MediaProcessors
                             });
                     });
 
-                    await Task.WhenAll(producer, consumer);
+                    await Task.WhenAll([producer, consumer]);
                 }
 
                 _ = await FileRepository.SaveChangesAsync();
@@ -248,58 +248,56 @@ namespace DLNAServer.Features.MediaProcessors
                 double scaleFactor;
 
                 await using (var fileStream = new FileStream(fileEntity.FilePhysicalFullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                using (var data = SKData.Create(fileStream))
+                using (var codec = SKCodec.Create(fileStream))
                 {
-                    using (var codec = SKCodec.Create(data))
+                    if (codec == null)
                     {
-                        if (codec == null)
-                        {
-                            throw new NullReferenceException($"Unable to create SKCodec for {fileEntity.FilePhysicalFullPath}");
-                        }
-
-                        (imageFormat, fileExtension, dlnaProfileName) = ConvertDlnaMime(dlnaMimeRequested);
-                        (newHeight, newWidth, scaleFactor) = ThumbnailHelper.CalculateResize(codec.Info.Height, codec.Info.Width, (int)_serverConfig.MaxHeightForThumbnails, (int)_serverConfig.MaxWidthForThumbnails);
-                    };
-
-                    var outputThumbnailFileFullPath = Path.Combine(fileEntity.Folder!, _serverConfig.SubFolderForThumbnail, fileEntity.FileName + fileExtension);
-                    FileInfo thumbnailFile = new(outputThumbnailFileFullPath);
-                    var existsBefore = thumbnailFile.Exists;
-                    if (!existsBefore)
-                    {
-                        FileHelper.CreateDirectoryIfNoExists(thumbnailFile.Directory);
-                        {
-                            using (var sourceBitmap = SKBitmap.Decode(data))
-                            using (var resizedImage = sourceBitmap.Resize(new SKImageInfo(newWidth, newHeight), samplingOptions))
-                            using (var encodedImage = resizedImage.Encode(imageFormat, (int)_serverConfig.QualityForThumbnails))
-                            {
-                                byte[] thumbnailData = GC.AllocateUninitializedArray<byte>((int)encodedImage.Size, pinned: false);
-
-                                Marshal.Copy(
-                                    source: encodedImage.Data,
-                                    destination: thumbnailData,
-                                    startIndex: 0,
-                                    length: (int)encodedImage.Size);
-
-                                await using (var fileStreamThumbnailFile = new FileStream(outputThumbnailFileFullPath, FileMode.Create, FileAccess.Write, FileShare.Read))
-                                {
-                                    //encodedImage.SaveTo(fileStreamThumbnailFile);
-                                    await fileStreamThumbnailFile.WriteAsync(thumbnailData);
-                                }
-                                _logger.LogDebug($"{DateTime.Now} Created thumbnail as {outputThumbnailFileFullPath}");
-
-                                return (outputThumbnailFileFullPath, thumbnailData, ConvertToDlnaMime(imageFormat), dlnaProfileName);
-                            };
-                        };
+                        throw new NullReferenceException($"Unable to create SKCodec for {fileEntity.FilePhysicalFullPath}");
                     }
-                    else
-                    {
-                        var thumbnailData = _serverConfig.StoreThumbnailsForLocalImagesInDatabase
-                            ? (await FileHelper.ReadFileAsync(outputThumbnailFileFullPath, _logger) ?? ReadOnlyMemory<byte>.Empty)
-                            : ReadOnlyMemory<byte>.Empty;
 
-                        return (outputThumbnailFileFullPath, thumbnailData, ConvertToDlnaMime(imageFormat), dlnaProfileName);
-                    }
+                    (imageFormat, fileExtension, dlnaProfileName) = ConvertDlnaMime(dlnaMimeRequested);
+                    (newHeight, newWidth, scaleFactor) = ThumbnailHelper.CalculateResize(codec.Info.Height, codec.Info.Width, (int)_serverConfig.MaxHeightForThumbnails, (int)_serverConfig.MaxWidthForThumbnails);
                 };
+
+                var outputThumbnailFileFullPath = Path.Combine(fileEntity.Folder!, _serverConfig.SubFolderForThumbnail, fileEntity.FileName + fileExtension);
+                FileInfo thumbnailFile = new(outputThumbnailFileFullPath);
+                var existsBefore = thumbnailFile.Exists;
+                if (!existsBefore)
+                {
+                    FileHelper.CreateDirectoryIfNoExists(thumbnailFile.Directory);
+                    {
+                        await using (var fileStream = new FileStream(fileEntity.FilePhysicalFullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        using (var sourceBitmap = SKBitmap.Decode(fileStream))
+                        using (var resizedImage = sourceBitmap.Resize(new SKImageInfo(newWidth, newHeight), samplingOptions))
+                        using (var encodedImage = resizedImage.Encode(imageFormat, (int)_serverConfig.QualityForThumbnails))
+                        {
+                            byte[] thumbnailData = GC.AllocateUninitializedArray<byte>((int)encodedImage.Size, pinned: false);
+
+                            Marshal.Copy(
+                                source: encodedImage.Data,
+                                destination: thumbnailData,
+                                startIndex: 0,
+                                length: (int)encodedImage.Size);
+
+                            await using (var fileStreamThumbnailFile = new FileStream(outputThumbnailFileFullPath, FileMode.Create, FileAccess.Write, FileShare.Read))
+                            {
+                                //encodedImage.SaveTo(fileStreamThumbnailFile);
+                                await fileStreamThumbnailFile.WriteAsync(thumbnailData);
+                            }
+                            _logger.LogDebug($"{DateTime.Now} Created thumbnail as {outputThumbnailFileFullPath}");
+
+                            return (outputThumbnailFileFullPath, thumbnailData, dlnaMimeRequested, dlnaProfileName);
+                        };
+                    };
+                }
+                else
+                {
+                    var thumbnailData = _serverConfig.StoreThumbnailsForLocalImagesInDatabase
+                        ? (await FileHelper.ReadFileAsync(outputThumbnailFileFullPath, _logger) ?? ReadOnlyMemory<byte>.Empty)
+                        : ReadOnlyMemory<byte>.Empty;
+
+                    return (outputThumbnailFileFullPath, thumbnailData, dlnaMimeRequested, dlnaProfileName);
+                }
             }
             catch (Exception ex)
             {
@@ -331,7 +329,7 @@ namespace DLNAServer.Features.MediaProcessors
                     ?? throw new NullReferenceException($"No defined DLNA Profile Name for {dlnaMimeRequested}");
             }
 
-            return (imageFormat, fileExtension, dlnaProfileName);
+            return (imageFormat, fileExtension, dlnaProfileName); 
         }
         private static SKEncodedImageFormat ConvertFromDlnaMime(DlnaMime dlnaMime)
         {
@@ -345,20 +343,6 @@ namespace DLNAServer.Features.MediaProcessors
                 DlnaMime.ImageXIcon => SKEncodedImageFormat.Ico,
                 DlnaMime.ImageXWindowsBmp => SKEncodedImageFormat.Wbmp,
                 _ => throw new NotImplementedException($"Not defined Mime type = {dlnaMime}"),
-            };
-        }
-        private static DlnaMime ConvertToDlnaMime(SKEncodedImageFormat encodedImageFormat)
-        {
-            return encodedImageFormat switch
-            {
-                SKEncodedImageFormat.Bmp => DlnaMime.ImageBmp,
-                SKEncodedImageFormat.Gif => DlnaMime.ImageGif,
-                SKEncodedImageFormat.Jpeg => DlnaMime.ImageJpeg,
-                SKEncodedImageFormat.Png => DlnaMime.ImagePng,
-                SKEncodedImageFormat.Webp => DlnaMime.ImageWebp,
-                SKEncodedImageFormat.Ico => DlnaMime.ImageXIcon,
-                SKEncodedImageFormat.Wbmp => DlnaMime.ImageXWindowsBmp,
-                _ => throw new NotImplementedException($"Not defined image format = {encodedImageFormat}"),
             };
         }
 

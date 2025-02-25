@@ -17,14 +17,14 @@ namespace DLNAServer.Database
             _logger = logger;
             _serverConfig = serverConfig;
         }
-        public DbSet<DirectoryEntity> DirectoryEntities { get; set; }
-        public DbSet<FileEntity> FileEntities { get; set; }
-        public DbSet<MediaAudioEntity> MediaAudioEntities { get; set; }
-        public DbSet<MediaSubtitleEntity> MediaSubtitleEntities { get; set; }
-        public DbSet<MediaVideoEntity> MediaVideoEntities { get; set; }
-        public DbSet<ServerEntity> ServerEntities { get; set; }
-        public DbSet<ThumbnailDataEntity> ThumbnailDataEntities { get; set; }
-        public DbSet<ThumbnailEntity> ThumbnailEntities { get; set; }
+        public required DbSet<DirectoryEntity> DirectoryEntities { get; set; }
+        public required DbSet<FileEntity> FileEntities { get; set; }
+        public required DbSet<MediaAudioEntity> MediaAudioEntities { get; set; }
+        public required DbSet<MediaSubtitleEntity> MediaSubtitleEntities { get; set; }
+        public required DbSet<MediaVideoEntity> MediaVideoEntities { get; set; }
+        public required DbSet<ServerEntity> ServerEntities { get; set; }
+        public required DbSet<ThumbnailDataEntity> ThumbnailDataEntities { get; set; }
+        public required DbSet<ThumbnailEntity> ThumbnailEntities { get; set; }
         public async Task<bool> CheckDbSetsOk(CancellationToken cancellationToken)
         {
             try
@@ -88,9 +88,9 @@ namespace DLNAServer.Database
                 .GetTypes()
                 .Where(static (t) => t.IsClass && !t.IsAbstract && typeof(BaseEntity).IsAssignableFrom(t));
 
-            foreach (var entityType in entityTypes)
+            foreach (var entityType in entityTypes.ToList())
             {
-                var configurationType = typeof(BaseEntityConfiguration<>).MakeGenericType(entityType);
+                var configurationType = typeof(BaseEntityConfiguration<>).MakeGenericType([entityType]);
                 var configurationInstance = Activator.CreateInstance(configurationType);
 
                 modelBuilder.ApplyConfiguration((dynamic)configurationInstance!);
@@ -120,7 +120,7 @@ namespace DLNAServer.Database
                 {
                     var countCommand = connection.CreateCommand();
                     countCommand.CommandText = $"SELECT COUNT(*) FROM \"{tableName}\";";
-                    var count = (long)(await countCommand.ExecuteScalarAsync() ?? -1);
+                    var count = (long?)await countCommand.ExecuteScalarAsync() ?? -1;
                     rowCounts[tableName] = count;
                 }
             }

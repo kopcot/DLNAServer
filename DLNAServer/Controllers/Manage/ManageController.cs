@@ -2,7 +2,6 @@
 using DLNAServer.Database.Entities;
 using DLNAServer.Database.Repositories.Interfaces;
 using DLNAServer.Features.ApiBlocking.Interfaces;
-using DLNAServer.Features.Loggers.Interfaces;
 using DLNAServer.Features.MediaContent.Interfaces;
 using DLNAServer.Features.MediaProcessors.Interfaces;
 using DLNAServer.Features.Subscriptions.Data;
@@ -28,7 +27,6 @@ namespace DLNAServer.Controllers.Manage
         private readonly Lazy<IThumbnailDataRepository> _thumbnailDataRepositoryLazy;
         private readonly Lazy<IContentExplorerManager> _contentExplorerManagerLazy;
         private readonly Lazy<IMediaProcessingService> _mediaProcessingServiceLazy;
-        private readonly Lazy<ILogMessageHandler> _logMessageHandlerLazy;
         private readonly Lazy<IApiBlockerService> _apiBlockerServiceLazy;
         private readonly Lazy<IMemoryCache> _memoryCacheLazy;
 
@@ -39,7 +37,6 @@ namespace DLNAServer.Controllers.Manage
         private IThumbnailDataRepository ThumbnailDataRepository => _thumbnailDataRepositoryLazy.Value;
         private IContentExplorerManager ContentExplorerManager => _contentExplorerManagerLazy.Value;
         private IMediaProcessingService MediaProcessingService => _mediaProcessingServiceLazy.Value;
-        private ILogMessageHandler LogMessageHandler => _logMessageHandlerLazy.Value;
         private IApiBlockerService ApiBlockerService => _apiBlockerServiceLazy.Value;
         private IMemoryCache MemoryCache => _memoryCacheLazy.Value;
         public ManageController(
@@ -52,7 +49,6 @@ namespace DLNAServer.Controllers.Manage
             Lazy<IThumbnailDataRepository> thumbnailDataRepositoryLazy,
             Lazy<IContentExplorerManager> contentExplorerManagerLazy,
             Lazy<IMediaProcessingService> mediaProcessingServiceLazy,
-            Lazy<ILogMessageHandler> logMessageHandlerLazy,
             Lazy<IApiBlockerService> apiBlockerServiceLazy,
             Lazy<IMemoryCache> memoryCacheLazy,
             ILogger<ManageController> logger)
@@ -66,7 +62,6 @@ namespace DLNAServer.Controllers.Manage
             _thumbnailDataRepositoryLazy = thumbnailDataRepositoryLazy;
             _contentExplorerManagerLazy = contentExplorerManagerLazy;
             _mediaProcessingServiceLazy = mediaProcessingServiceLazy;
-            _logMessageHandlerLazy = logMessageHandlerLazy;
             _apiBlockerServiceLazy = apiBlockerServiceLazy;
             _memoryCacheLazy = memoryCacheLazy;
             _logger = logger;
@@ -147,13 +142,6 @@ namespace DLNAServer.Controllers.Manage
 
             return Ok(thumbnailData);
         }
-        [HttpGet("log/{take}")]
-        public async Task<IActionResult> GetLogMessages([FromRoute] uint take)
-        {
-            var messages = await LogMessageHandler.GetLastMessagesAsync(take);
-
-            return Ok(messages);
-        }
         [HttpGet("dlnaMime")]
         public async Task<IActionResult> GetAllDlnaMimes()
         {
@@ -166,11 +154,11 @@ namespace DLNAServer.Controllers.Manage
                     return new
                     {
                         Id = (int)m,
-                        DlnaMime = m.ToString(),
+                        DlnaMime = $"{m}", 
                         ContentType = m.ToMimeString(),
                         MimeDescription = m.ToMimeDescription(),
-                        DlnaMedia = m.ToDlnaMedia().ToString(),
-                        DefaultDlnaItemClass = m.ToDefaultDlnaItemClass().ToString(),
+                        DlnaMedia = $"{m.ToDlnaMedia()}",
+                        DefaultDlnaItemClass = $"{m.ToDefaultDlnaItemClass()}",
                         MainProfileName = m.ToMainProfileNameString() ?? string.Empty,
                         ProfileNames = m.ToProfileNameString(),
                         Extensions = m.DefaultFileExtensions(),
@@ -183,14 +171,14 @@ namespace DLNAServer.Controllers.Manage
                     return new
                     {
                         Id = (int)m,
-                        DlnaMime = m.ToString(),
+                        DlnaMime = $"{m}",
                         ContentType = string.Empty,
                         MimeDescription = string.Empty,
                         DlnaMedia = string.Empty,
                         DefaultDlnaItemClass = string.Empty,
                         MainProfileName = string.Empty,
-                        ProfileNames = new List<string>(),
-                        Extensions = new List<string>(),
+                        ProfileNames = Array.Empty<string>(),
+                        Extensions = Array.Empty<string>(),
                         IsError = true,
                         Error = ex.Message
                     };
@@ -208,35 +196,17 @@ namespace DLNAServer.Controllers.Manage
             await Task.CompletedTask;
             return Ok();
         }
-        [HttpGet("error")]
-        public async Task<IActionResult> GetErrorMessages()
-        {
-            var messages = await LogMessageHandler.GetLastMessagesAsync(_serverConfig.ServerMaxLogMessagesCount);
-
-            var errors = messages.Where(static (m) => m.LogLevel == LogLevel.Error).ToArray();
-
-            return Ok(errors);
-        }
-        [HttpGet("warning")]
-        public async Task<IActionResult> GetWarningMessages()
-        {
-            var messages = await LogMessageHandler.GetLastMessagesAsync(_serverConfig.ServerMaxLogMessagesCount);
-
-            var warnings = messages.Where(static (m) => m.LogLevel == LogLevel.Warning).ToArray();
-
-            return Ok(warnings);
-        }
         [HttpGet("memoryCache")]
         public async Task<IActionResult> GetMemoryCacheInfo()
         {
-            Dictionary<string, object> memoryCacheInfo = [];
+            Dictionary<string, string?> memoryCacheInfo = [];
             if (MemoryCache is MemoryCache memoryCache)
             {
-                memoryCacheInfo.Add("Count", memoryCache.Count);
+                memoryCacheInfo.Add("Count", $"{memoryCache.Count}");
                 var keys = memoryCache
                     .Keys
                     .OrderBy(static (k) => k)
-                    .Select(static (k, i) => new KeyValuePair<string, object>($"Key_{i}", k))
+                    .Select(static (k, i) => new KeyValuePair<string, string?>($"Key_{i}", $"{k}"))
                     .ToList();
                 foreach (var key in keys)
                 {
@@ -253,7 +223,7 @@ namespace DLNAServer.Controllers.Manage
             {
                 try
                 {
-                    foreach (var key in memoryCache.Keys)
+                    foreach (var key in memoryCache.Keys.ToList())
                     {
                         MemoryCache.Remove(key);
                     }
@@ -265,7 +235,8 @@ namespace DLNAServer.Controllers.Manage
                     _logger.LogError(ex, ex.Message);
                 }
 
-                GC.Collect();
+                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(2, GCCollectionMode.Forced);
                 GC.WaitForPendingFinalizers();
                 GC.Collect();
 
@@ -333,14 +304,14 @@ namespace DLNAServer.Controllers.Manage
                 {
                     const int maxChunkSize = 100;
 
-                    Guid[] filesId;
-                    FileEntity[] files;
-
                     long fileCountAll = await FileRepository.GetCountAsync();
                     long chunksCount = (long)Math.Round((double)fileCountAll / maxChunkSize, 0, MidpointRounding.ToPositiveInfinity);
 
                     for (int chunkIndex = 0; chunkIndex < chunksCount; chunkIndex++)
                     {
+                        Guid[] filesId = GC.AllocateUninitializedArray<Guid>(maxChunkSize, pinned: false);
+                        FileEntity[] files = GC.AllocateUninitializedArray<FileEntity>(maxChunkSize, pinned: false);
+
                         _logger.LogInformation($"{DateTime.Now:dd/MM/yyyy HH:mm:ss:fff} - Start refreshing info for chunk {chunkIndex + 1} of {chunksCount}, total files = {fileCountAll}");
 
                         ApiBlockerService.BlockApi(true, $"Recreate all file info. Progress {chunkIndex + 1} from {chunksCount}.");
@@ -355,7 +326,7 @@ namespace DLNAServer.Controllers.Manage
 
                             var task1 = ContentExplorerManager.ClearMetadataAsync(files);
                             var task2 = ContentExplorerManager.ClearThumbnailsAsync(files);
-                            await Task.WhenAll(task1, task2);
+                            await Task.WhenAll([task1, task2]);
 
                             _logger.LogDebug($"Clearing info done for chunk {chunkIndex + 1} of {chunksCount}");
                         }
@@ -372,7 +343,12 @@ namespace DLNAServer.Controllers.Manage
                             _logger.LogDebug($"Recreate info done for chunk {chunkIndex + 1} of {chunksCount}");
                         }
 
-                        await Task.Delay(1000);
+                        await Task.Delay(1000); // 1sec delay for cool down hardware system resources
+
+                        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        GC.Collect();
                     }
 
                     _logger.LogInformation($"Recreate info done");

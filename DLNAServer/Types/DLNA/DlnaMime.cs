@@ -769,7 +769,7 @@
         /// <summary>
         /// Return default list of extensions for <see cref="DlnaMime"/> <br /> 
         /// </summary>
-        public static List<string> DefaultFileExtensions(this DlnaMime dlnaMime)
+        public static string[] DefaultFileExtensions(this DlnaMime dlnaMime)
         {
             return dlnaMime switch
             {
@@ -922,7 +922,7 @@
         /// <summary>
         /// Return list of DLNA profile names of <see cref="DlnaMedia"/> <br /> 
         /// </summary>
-        public static List<string> ToProfileNameString(this DlnaMime dlnaMime)
+        public static string[] ToProfileNameString(this DlnaMime dlnaMime)
         {
             return dlnaMime switch
             {
