@@ -164,7 +164,7 @@ namespace DLNAServer.Features.MediaProcessors
                                 await RefreshSingleFileThumbnailAsync(file, setCheckedForFailed);
                             });
 
-                    await Task.WhenAll(producer, consumer);
+                    await Task.WhenAll([producer, consumer]);
                 }
 
                 _ = await FileRepository.SaveChangesAsync();
