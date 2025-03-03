@@ -23,15 +23,13 @@ namespace DLNAServer.Configuration
         [JsonIgnore]
         public static bool DlnaServerRestart { get; set; } = false;
         [JsonIgnore]
-        public static string ConfigurationJsonFile => Path.Combine(Directory.GetCurrentDirectory(), "Resources", "configuration", "config.json");
+        private static readonly string ConfigurationJsonFile = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "configuration", "config.json");
         [JsonIgnore]
-        public string DlnaServerName => GenerateServerSignature();
+        public string DlnaServerSignature => GenerateServerSignature();
         [JsonIgnore]
-        public string DlnaServerManufacturerName => $"Kopco";
+        public string DlnaServerManufacturerName = $"Kopco";
         [JsonIgnore]
-        public string DlnaServerManufacturerUrl => $"mailto:kopco.t@gmail.com";
-        [JsonIgnore]
-        public bool DlnaServerDebugMode { get; set; } = false;
+        public string DlnaServerManufacturerUrl = $"mailto:kopco.t@gmail.com";
         [JsonIgnore]
         public bool InstanceNotLoadedFromFile { get; set; } = false;
         [JsonIgnore]
@@ -39,15 +37,19 @@ namespace DLNAServer.Configuration
         #endregion
         // General
         [JsonRequired]
-        public string ServerConfigVersion { 
+        public string ServerConfigVersion
+        {
             get => _serverConfigVersion;
-            set 
+            set
             {
                 if (_serverConfigVersion != value)
+                {
                     throw new InvalidDataException("Configuration file is not correct version.");
+                }
+
                 _serverConfigVersion = value;
             }
-        } 
+        }
         public uint ServerPort { get; set; } = 26851;
         public string ServerFriendlyName { get; set; } = $"ZEN DLNA Server ({Environment.MachineName})";
         public string ServerModelName { get; set; } = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? $"0.0.0.0 (-9999)";
@@ -57,6 +59,12 @@ namespace DLNAServer.Configuration
         public bool ServerIgnoreRequestedCountAttributeFromRequest { get; set; } = false;
         public uint ServerMaxDegreeOfParallelism { get; set; } = (uint)Environment.ProcessorCount;
         public uint ServerDelayAfterUnsuccessfulSendSSDPMessageInMin { get; set; } = 10;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool ServerLogAllDatabaseMessages { get; set; } = false;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool ServerDebugMode { get; set; } = false;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool ServerShowDurationDetailsBrowseRequest { get; set; } = false;
         // FileServer
         public bool GenerateMetadataForLocalMovies { get; set; } = true;
         public bool GenerateMetadataForLocalAudio { get; set; } = true;
@@ -110,7 +118,8 @@ namespace DLNAServer.Configuration
                 "@Recycle",
             ];
         /// <summary>
-        /// unable to create system folders, like '.@__thumb', if they are disabled to create by system
+        /// unable to create system folders, like '.@__thumb', if they are disabled to create by system<br />
+        /// (QNAP Linux system as example)
         /// </summary>
         public string SubFolderForThumbnail { get; set; } = ".@__thumb";
 
@@ -118,27 +127,26 @@ namespace DLNAServer.Configuration
         {
             var os = Environment.OSVersion;
             string platform = os.Platform switch
-            { 
+            {
                 PlatformID.Win32NT or
                 PlatformID.Win32S or
                 PlatformID.Win32Windows or
                 PlatformID.WinCE
-                    => platform = "WIN",
-                PlatformID.Unix 
-                    => platform = "Linux",
+                    => "WIN",
+                PlatformID.Unix
+                    => "Linux",
                 PlatformID.Xbox or
                 PlatformID.MacOSX or
-                PlatformID.Other or 
-                _ 
-                    => platform = $"{os.Platform}",
-            }
-            ;
+                PlatformID.Other or
+                _
+                    => $"{os.Platform}",
+            };
             var version = Assembly.GetExecutingAssembly().GetName().Version;
             var versionMajor = version?.Major ?? -1;
             var versionMinor = version?.Minor ?? -1;
             var bitVersion = IntPtr.Size * 8;
             var signature = $"{platform}/{bitVersion}bit/{os.Version.Major}.{os.Version.Minor} UPnP/1.0 DLNADOC/1.5 zen_dlna/{versionMajor}.{versionMinor}/{ServerPort}";
-            return signature;
+            return string.Intern(signature);
         }
 
         #region Dispose

@@ -1,7 +1,7 @@
 ﻿using DLNAServer.Helpers.Attributes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Microsoft.EntityFrameworkCore.ValueGeneration; 
+using Microsoft.EntityFrameworkCore.ValueGeneration;
 using System.Reflection;
 
 namespace DLNAServer.Database.Entities.Configurations
@@ -12,7 +12,7 @@ namespace DLNAServer.Database.Entities.Configurations
         {
             ArgumentNullException.ThrowIfNull(nameof(builder));
 
-            _= builder.HasKey(static (e) => e.Id);
+            _ = builder.HasKey(static (e) => e.Id);
 
             // Configure Sequential Guid for Id
             _ = builder.Property(static (e) => e.Id)

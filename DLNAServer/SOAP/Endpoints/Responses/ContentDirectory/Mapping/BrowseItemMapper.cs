@@ -1,5 +1,6 @@
 ﻿using DLNAServer.Database.Entities;
 using DLNAServer.Types.DLNA;
+using System.Globalization;
 using System.Text;
 
 namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
@@ -14,12 +15,12 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
             {
                 return new BrowseItem()
                 {
-                    Title = GetTitle(directory, isRootFolder),
-                    ObjectID = GetObjectID(directory),
-                    ParentID = GetParentID(directory, isRootFolder),
-                    Class = GetUpnpClass(directory),
-                    ThumbnailUri = GetThumbnailUri(directory, ipEndpoint),
-                    Icon = GetThumbnailUri(directory, ipEndpoint),
+                    Title = GetTitle(ref directory, isRootFolder),
+                    ObjectID = GetObjectID(ref directory),
+                    ParentID = GetParentID(ref directory, isRootFolder),
+                    Class = GetUpnpClass(ref directory),
+                    ThumbnailUri = GetThumbnailUri(ref directory, ipEndpoint),
+                    Icon = GetThumbnailUri(ref directory, ipEndpoint),
                     Searchable = "1",
                 };
             }
@@ -28,14 +29,36 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
                 throw;
             }
         }
-        private static string GetTitle(DirectoryEntity directory, bool isRootFolder) => isRootFolder
-            ? $"{directory.Directory} ({directory.ParentDirectory?.DirectoryFullPath})"
-            : directory.Directory;
+        private static string GetTitle(ref readonly DirectoryEntity directory, bool isRootFolder)
+        {
+            StringBuilder sb = new();
+            if (isRootFolder)
+            {
+                return sb.Append(directory.Directory)
+                        .Append(" (")
+                        .Append(directory.ParentDirectory?.DirectoryFullPath)
+                        .Append(')')
+                        .ToString();
+            }
+            else
+            {
+                return sb.Append(directory.Directory)
+                    .ToString();
+            }
+        }
+
         //TODO
-        private static string GetUpnpClass(DirectoryEntity directory) => DlnaItemClass.Container.ToItemClass();
-        private static string GetObjectID(DirectoryEntity directory) => directory.Id.ToString();
-        private static string GetParentID(DirectoryEntity directory, bool isRootFolder) => isRootFolder ? rootParentId : directory.ParentDirectory?.Id.ToString() ?? rootParentId;
-        private static string GetThumbnailUri(DirectoryEntity directory, string ipEndpoint) => $"http://{ipEndpoint}/icon/folder.jpg";
+        private static string GetUpnpClass(ref readonly DirectoryEntity directory) => DlnaItemClass.Container.ToItemClass();
+        private static string GetObjectID(ref readonly DirectoryEntity directory) => directory.Id.ToString();
+        private static string GetParentID(ref readonly DirectoryEntity directory, bool isRootFolder) => isRootFolder ? rootParentId : directory.ParentDirectory?.Id.ToString() ?? rootParentId;
+        private static string GetThumbnailUri(ref readonly DirectoryEntity directory, string ipEndpoint)
+        {
+            StringBuilder sb = new(50);
+            return sb.Append("http://")
+                .Append(ipEndpoint)
+                .Append("/icon/folder.jpg")
+                .ToString();
+        }
         #endregion
         #region Item
         public static BrowseItem MapItem(this FileEntity file, string ipEndpoint, bool isRootFolder)
@@ -44,35 +67,35 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
             {
                 return new BrowseItem()
                 {
-                    Title = GetTitle(file, isRootFolder),
-                    ObjectID = GetObjectID(file),
-                    ParentID = GetParentID(file, isRootFolder),
-                    Class = GetUpnpClass(file),
-                    ThumbnailUri = GetResourceThumbnailUrl(file, ipEndpoint),
-                    Icon = GetResourceThumbnailUrl(file, ipEndpoint),
-                    Date = GetDate(file),
-                    VideoCodec = GetVideoCodec(file),
-                    AudioCodec = GetAudioCodec(file),
+                    Title = GetTitle(ref file, isRootFolder),
+                    ObjectID = GetObjectID(ref file),
+                    ParentID = GetParentID(ref file, isRootFolder),
+                    Class = GetUpnpClass(ref file),
+                    ThumbnailUri = GetResourceThumbnailUrl(ref file, ipEndpoint),
+                    Icon = GetResourceThumbnailUrl(ref file, ipEndpoint),
+                    Date = GetDate(ref file),
+                    VideoCodec = GetVideoCodec(ref file),
+                    AudioCodec = GetAudioCodec(ref file),
                     Resource =
                     [
                         new()
                     {
-                        ProtocolInfo = GetResourceProtocolInfo(file),
-                        Url = GetResourceUrl(file, ipEndpoint),
-                        SizeInBytes = GetResourceSize(file),
-                        Duration = GetResourceDuration(file),
-                        Resolution = GetResourceResolution(file),
-                        Bitrate = GetResourceBitrate(file),
-                        AudioChannels = GetAudioChannels(file),
-                        TypeOfMedia =  GetTypeOfMedia(file),
+                        ProtocolInfo = GetResourceProtocolInfo(ref file),
+                        Url = GetResourceUrl(ref file, ipEndpoint),
+                        SizeInBytes = GetResourceSize(ref file),
+                        Duration = GetResourceDuration(ref file),
+                        Resolution = GetResourceResolution(ref file),
+                        Bitrate = GetResourceBitrate(ref file),
+                        AudioChannels = GetAudioChannels(ref file),
+                        TypeOfMedia =  GetTypeOfMedia(ref file),
                     }
                     ],
-                    ResourceThumbnail = GetResourceThumbnailUrl(file, ipEndpoint) == null ? null
+                    ResourceThumbnail = GetResourceThumbnailUrl(ref file, ipEndpoint) == null ? null
                         : new()
                         {
-                            ProtocolInfo = GetResourceThumbnailProtocolInfo(file),
-                            Url = GetResourceThumbnailUrl(file, ipEndpoint)!,
-                            SizeInBytes = GetResourceThumbnailSize(file),
+                            ProtocolInfo = GetResourceThumbnailProtocolInfo(ref file),
+                            Url = GetResourceThumbnailUrl(ref file, ipEndpoint)!,
+                            SizeInBytes = GetResourceThumbnailSize(ref file),
                         }
                 };
             }
@@ -81,63 +104,114 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
                 throw;
             }
         }
-        private static string GetTitle(FileEntity file, bool isRootFolder) => isRootFolder
-            ? $"{file.Title} ({file.Folder})"
-            : file.Title;
-        private static string GetUpnpClass(FileEntity file) => file.UpnpClass.ToItemClass();
-        private static string GetObjectID(FileEntity file) => file.Id.ToString();
-        private static string GetParentID(FileEntity file, bool isRootFolder) => isRootFolder ? rootParentId : file.Directory?.Id.ToString() ?? rootParentId;
-        private static string GetDate(FileEntity file) => file.FileCreateDate.ToString("O");
-        private static string GetResourceUrl(FileEntity file, string ipEndpoint) => $"http://{ipEndpoint}/fileserver/file/{file.Id}";
-        private static string GetResourceProtocolInfo(FileEntity file)
+        private static string GetTitle(ref readonly FileEntity file, bool isRootFolder)
         {
+
             StringBuilder sb = new();
-            sb.Append($"http-get:*:");
-            sb.Append($"{file.FileDlnaMime.ToMimeString()}:");
-            sb.Append($"DLNA.ORG_PN={file.FileDlnaProfileName
-                        ?? file.FileExtension.ToUpper().Replace(".", "")};");
-            sb.Append($"DLNA.ORG_OP={ProtocolInfo.FlagsToString(ProtocolInfo.DlnaOrgOperation.TimeSeekSupported)};");
-            sb.Append($"DLNA.ORG_CI={ProtocolInfo.EnumToString(ProtocolInfo.DlnaOrgContentIndex.NoSpecificIndex)};");
-            sb.Append($"DLNA.ORG_FLAGS={(file.UpnpClass.ToDlnaMedia() == DlnaMedia.Image
-                        ? ProtocolInfo.DefaultFlagsInteractive
-                        : ProtocolInfo.DefaultFlagsStreaming)}");
-            return sb.ToString();
-        }
-        private static string? GetResourceThumbnailUrl(FileEntity file, string ipEndpoint)
-        {
-            if (file.ThumbnailId.HasValue)
+            if (isRootFolder)
             {
-                return $"http://{ipEndpoint}/fileserver/thumbnail/{file.ThumbnailId}";
+                return sb.Append(file.Title)
+                .Append(" (")
+                        .Append(file.Folder)
+                        .Append(')')
+                        .ToString();
             }
             else
             {
+                return sb.Append(file.Title)
+                    .ToString();
+            }
+        }
+
+        private static string GetUpnpClass(ref readonly FileEntity file) => file.UpnpClass.ToItemClass();
+        private static string GetObjectID(ref readonly FileEntity file) => file.Id.ToString();
+        private static string GetParentID(ref readonly FileEntity file, bool isRootFolder) => isRootFolder ? rootParentId : file.Directory?.Id.ToString() ?? rootParentId;
+        private static string GetDate(ref readonly FileEntity file) => file.FileCreateDate.ToString("O");
+        private static string GetResourceUrl(ref readonly FileEntity file, string ipEndpoint)
+        {
+            StringBuilder sb = new(50);
+            return sb.Append("http://")
+                .Append(ipEndpoint)
+                .Append("/fileserver/file/")
+                .Append(file.Id.ToString())
+                .ToString();
+        }
+
+        private static string GetResourceProtocolInfo(ref readonly FileEntity file)
+        {
+            StringBuilder sb = new(50);
+            _ = sb.Append("http-get:*:")
+                .Append(file.FileDlnaMime.ToMimeString())
+                .Append(':');
+            _ = sb.Append("DLNA.ORG_PN=")
+                .Append(file.FileDlnaProfileName
+                    ?? file.FileExtension.ToUpper().Replace(".", ""))
+                .Append(';');
+            _ = sb.Append("DLNA.ORG_OP=")
+                .Append(ProtocolInfo.FlagsToString(ProtocolInfo.DlnaOrgOperation.TimeSeekSupported))
+                .Append(';');
+            _ = sb.Append("DLNA.ORG_CI=")
+                .Append(ProtocolInfo.EnumToString(ProtocolInfo.DlnaOrgContentIndex.NoSpecificIndex))
+                .Append(';');
+            _ = sb.Append("DLNA.ORG_FLAGS=")
+                .Append(file.UpnpClass.ToDlnaMedia() == DlnaMedia.Image
+                    ? ProtocolInfo.DefaultFlagsInteractive
+                    : ProtocolInfo.DefaultFlagsStreaming);
+            return sb.ToString();
+        }
+        private static string? GetResourceThumbnailUrl(ref readonly FileEntity file, string ipEndpoint)
+        {
+            var sb = new StringBuilder(50);
+
+            if (file.ThumbnailId.HasValue)
+            {
+                return sb.Append("http://")
+                    .Append(ipEndpoint)
+                    .Append("/fileserver/thumbnail/")
+                    .Append(file.ThumbnailId.ToString())
+                    .ToString();
+            }
+            else
+            {
+                _ = sb.Append("http://")
+                    .Append(ipEndpoint);
+
                 return file.UpnpClass.ToDlnaMedia() switch
                 {
-                    DlnaMedia.Image => $"http://{ipEndpoint}/fileserver/file/{file.Id}",
-                    DlnaMedia.Video => $"http://{ipEndpoint}/icon/fileMovie.jpg",
-                    DlnaMedia.Audio => $"http://{ipEndpoint}/icon/fileAudio.jpg",
+                    DlnaMedia.Image => sb.Append("/fileserver/file/").Append(file.Id.ToString()).ToString(),
+                    DlnaMedia.Video => sb.Append("/icon/fileMovie.jpg").ToString(),
+                    DlnaMedia.Audio => sb.Append("/icon/fileAudio.jpg").ToString(),
                     _ => null,
                 };
             }
         }
-        private static string GetResourceThumbnailProtocolInfo(FileEntity file)
+        private static string GetResourceThumbnailProtocolInfo(ref readonly FileEntity file)
         {
             StringBuilder sb = new();
-            sb.Append($"http-get:*:");
-            sb.Append($"{file.Thumbnail?.ThumbnailFileDlnaMime.ToMimeString() ?? "*"}:");
-            sb.Append($"DLNA.ORG_PN={(file.Thumbnail?.ThumbnailFileDlnaMime != null && file.Thumbnail?.ThumbnailFileDlnaMime != DlnaMime.Undefined ? file.Thumbnail?.ThumbnailFileDlnaProfileName
+            _ = sb.Append("http-get:*:")
+                .Append(file.Thumbnail?.ThumbnailFileDlnaMime.ToMimeString() ?? "*")
+                .Append(':');
+            _ = sb.Append("DLNA.ORG_PN=")
+                .Append((file.Thumbnail?.ThumbnailFileDlnaMime != null && file.Thumbnail?.ThumbnailFileDlnaMime != DlnaMime.Undefined 
+                    ? file.Thumbnail?.ThumbnailFileDlnaProfileName
                     : file.FileDlnaMime.ToDlnaMedia() == DlnaMedia.Image ? file.FileDlnaProfileName
                     : file.FileDlnaMime.ToDlnaMedia() == DlnaMedia.Audio ? DlnaMime.ImageJpeg.ToMainProfileNameString()
                     : file.Thumbnail?.ThumbnailFileExtension?.ToUpper().Replace(".", ""))
-                    ?? ""};");
-            sb.Append($"DLNA.ORG_OP={ProtocolInfo.FlagsToString(ProtocolInfo.DlnaOrgOperation.None)};");
-            sb.Append($"DLNA.ORG_CI={ProtocolInfo.EnumToString(ProtocolInfo.DlnaOrgContentIndex.Thumbnail)};");
-            sb.Append($"DLNA.ORG_FLAGS={ProtocolInfo.DefaultFlagsInteractive}");
+                    ?? "")
+                .Append(';');
+            _ = sb.Append("DLNA.ORG_OP=")
+                .Append(ProtocolInfo.FlagsToString(ProtocolInfo.DlnaOrgOperation.None))
+                .Append(';');
+            _ = sb.Append("DLNA.ORG_CI=")
+                .Append(ProtocolInfo.EnumToString(ProtocolInfo.DlnaOrgContentIndex.Thumbnail))
+                .Append(';');
+            _ = sb.Append("DLNA.ORG_FLAGS=")
+                .Append(ProtocolInfo.DefaultFlagsInteractive);
             return sb.ToString();
         }
-        private static long GetResourceSize(FileEntity file) => file.FileSizeInBytes;
-        private static long GetResourceThumbnailSize(FileEntity file) => file.Thumbnail?.ThumbnailFileSizeInBytes ?? 0;
-        private static string? GetResourceDuration(FileEntity file)
+        private static long GetResourceSize(ref readonly FileEntity file) => file.FileSizeInBytes;
+        private static long GetResourceThumbnailSize(ref readonly FileEntity file) => file.Thumbnail?.ThumbnailFileSizeInBytes ?? 0;
+        private static string? GetResourceDuration(ref readonly FileEntity file)
         {
             return file.UpnpClass.ToDlnaMedia() switch
             {
@@ -152,10 +226,18 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
 
             static string FormatDuration(TimeSpan duration)
             {
-                return $"{(int)(duration.TotalHours):00}:{duration.Minutes:00}:{duration.Seconds:00}.{duration.Milliseconds:000}";
+                var sb = new StringBuilder(8);
+                _ = sb.Append((int)(duration.TotalHours))
+                    .Append(':')
+                    .Append(duration.Minutes.ToString("00"))
+                    .Append(':')
+                    .Append(duration.Seconds.ToString("00"))
+                    .Append('.')
+                    .Append(duration.Milliseconds.ToString("000"));
+                return sb.ToString();
             }
         }
-        private static string? GetResourceResolution(FileEntity file)
+        private static string? GetResourceResolution(ref readonly FileEntity file)
         {
             switch (file.UpnpClass.ToDlnaMedia())
             {
@@ -165,14 +247,18 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
                         metadata.Height.HasValue &&
                             metadata.Width.HasValue)
                         {
-                            return $"{metadata.Width}x{metadata.Height}";
+                            StringBuilder sb = new();
+                            _ = sb.Append(metadata.Width.ToString());
+                            _ = sb.Append('x');
+                            _ = sb.Append(metadata.Height.ToString());
+                            return sb.ToString();
                         }
                     }
                     break;
             }
             return null;
         }
-        private static string? GetResourceBitrate(FileEntity file)
+        private static string? GetResourceBitrate(ref readonly FileEntity file)
         {
             switch (file.UpnpClass.ToDlnaMedia())
             {
@@ -181,7 +267,7 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
                         if (file.VideoMetadata is MediaVideoEntity metadata &&
                             metadata.Bitrate.HasValue)
                         {
-                            return $"{metadata.Bitrate}";
+                            return string.Intern(metadata.Bitrate.Value.ToString(CultureInfo.InvariantCulture));
                         }
                     }
                     break;
@@ -190,14 +276,14 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
                         if (file.AudioMetadata is MediaAudioEntity metadata &&
                             metadata.Bitrate.HasValue)
                         {
-                            return $"{metadata.Bitrate}";
+                            return string.Intern(metadata.Bitrate.Value.ToString(CultureInfo.InvariantCulture));
                         }
                     }
                     break;
             }
             return null;
         }
-        private static string? GetVideoCodec(FileEntity file)
+        private static string? GetVideoCodec(ref readonly FileEntity file)
         {
             switch (file.UpnpClass.ToDlnaMedia())
             {
@@ -206,14 +292,14 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
                         if (file.VideoMetadata is MediaVideoEntity metadata &&
                             !string.IsNullOrWhiteSpace(metadata.Codec))
                         {
-                            return $"{metadata.Codec}";
+                            return string.Intern(metadata.Codec.ToString(CultureInfo.InvariantCulture));
                         }
                     }
                     break;
             }
             return null;
         }
-        private static string? GetAudioCodec(FileEntity file)
+        private static string? GetAudioCodec(ref readonly FileEntity file)
         {
             switch (file.UpnpClass.ToDlnaMedia())
             {
@@ -222,7 +308,7 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
                         if (file.AudioMetadata is MediaAudioEntity metadata &&
                             !string.IsNullOrWhiteSpace(metadata.Codec))
                         {
-                            return $"{metadata.Codec}";
+                            return string.Intern(metadata.Codec.ToString(CultureInfo.InvariantCulture));
                         }
                     }
                     break;
@@ -231,14 +317,14 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
                         if (file.AudioMetadata is MediaAudioEntity metadata &&
                             !string.IsNullOrWhiteSpace(metadata.Codec))
                         {
-                            return $"{metadata.Codec}";
+                            return string.Intern(metadata.Codec.ToString(CultureInfo.InvariantCulture));
                         }
                     }
                     break;
             }
             return null;
         }
-        private static string? GetAudioChannels(FileEntity file)
+        private static string? GetAudioChannels(ref readonly FileEntity file)
         {
             switch (file.UpnpClass.ToDlnaMedia())
             {
@@ -247,7 +333,7 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
                         if (file.AudioMetadata is MediaAudioEntity metadata &&
                             metadata.Channels.HasValue)
                         {
-                            return $"{metadata.Channels}";
+                            return string.Intern(metadata.Channels.Value.ToString(CultureInfo.InvariantCulture));
                         }
                     }
                     break;
@@ -256,25 +342,25 @@ namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory.Mapping
                         if (file.AudioMetadata is MediaAudioEntity metadata &&
                             metadata.Channels.HasValue)
                         {
-                            return $"{metadata.Channels}";
+                            return string.Intern(metadata.Channels.Value.ToString(CultureInfo.InvariantCulture));
                         }
                     }
                     break;
             }
             return null;
         }
-        private static string? GetTypeOfMedia(FileEntity file)
+        private static string? GetTypeOfMedia(ref readonly FileEntity file)
         {
             switch (file.UpnpClass.ToDlnaMedia())
             {
                 case DlnaMedia.Video:
-                    return "video";
+                    return string.Intern("video");
                 case DlnaMedia.Audio:
-                    return "audio";
+                    return string.Intern("audio");
                 case DlnaMedia.Image:
-                    return "image";
+                    return string.Intern("image");
                 case DlnaMedia.Subtitle:
-                    return "subtitles";
+                    return string.Intern("subtitle");
                 default:
                     break;
             }

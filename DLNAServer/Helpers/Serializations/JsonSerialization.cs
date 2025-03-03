@@ -15,7 +15,8 @@ namespace DLNAServer.Helpers.Serializations
             {
                 new JsonStringEnumConverter(),
                 new DlnaMimeKeyValuePairConverter()
-            }
+            },
+            DefaultIgnoreCondition = JsonIgnoreCondition.Never
         };
         public static T LoadFromJsonOrCreateNew<T>(string fileFullPath, Func<T> createNew)
         {
@@ -36,7 +37,7 @@ namespace DLNAServer.Helpers.Serializations
                         {
                             return configLoaded;
                         }
-                    };
+                    }
                 }
                 catch
                 {

@@ -1,4 +1,6 @@
-﻿using DLNAServer.Configuration;
+﻿using DLNAServer.Common;
+using DLNAServer.Configuration;
+using DLNAServer.Helpers.Logger;
 using DLNAServer.Types.IP.Interfaces;
 using DLNAServer.Types.UPNP;
 using DLNAServer.Types.UPNP.Interfaces;
@@ -11,7 +13,7 @@ namespace DLNAServer.SSDP
     /// <summary>
     /// Simple Service Discovery Protocol Listener service 
     /// </summary>
-    public class SSDPListenerService : BackgroundService
+    public partial class SSDPListenerService : BackgroundService
     {
         private readonly ILogger<SSDPListenerService> _logger;
         private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -27,24 +29,24 @@ namespace DLNAServer.SSDP
             _serviceScopeFactory = serviceScopeFactory;
             _serverConfig = serverConfig;
         }
-        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+        protected override Task ExecuteAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Starting SSDP listeners...");
+            InformationStarting();
             _udpClientSenders.Clear();
-            await StartListeningAsync(cancellationToken);
+            return StartListeningAsync(cancellationToken);
         }
-        public override async Task StopAsync(CancellationToken cancellationToken)
+        public override Task StopAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Stopping SSDP listeners...");
+            InformationStopping();
             _udpClientSenders.Clear();
-            await base.StopAsync(cancellationToken);
+            return base.StopAsync(cancellationToken);
         }
 
         public async Task StartListeningAsync(CancellationToken cancellationToken)
         {
             try
             {
-                _logger.LogDebug("Listening for M-SEARCH requests...");
+                DebugStartedListening();
 
                 using (var scope = _serviceScopeFactory.CreateScope())
                 using (var udpClientReceiver = new UdpClient())
@@ -64,6 +66,8 @@ namespace DLNAServer.SSDP
 
                     UdpReceiveResult result;
                     string? receivedMessage;
+                    const string headerMSearch = "M-SEARCH";
+                    const string headerMan = "MAN: \"ssdp:discover\"";
 
                     while (!cancellationToken.IsCancellationRequested)
                     {
@@ -71,14 +75,14 @@ namespace DLNAServer.SSDP
                         receivedMessage = decoder.GetString(result.Buffer);
 
                         // Check if it's an M-SEARCH request
-                        if (receivedMessage.Contains("M-SEARCH", StringComparison.OrdinalIgnoreCase)
-                            && receivedMessage.Contains("MAN: \"ssdp:discover\"", StringComparison.OrdinalIgnoreCase))
+                        if (receivedMessage.Contains(headerMSearch, StringComparison.OrdinalIgnoreCase)
+                            && receivedMessage.Contains(headerMan, StringComparison.OrdinalIgnoreCase))
                         {
                             await HandleSearchRequestAsync(receivedMessage, result.RemoteEndPoint, upnpDevices.AllUPNPDevices);
                         }
                     }
 
-                    _logger.LogDebug("Listening for M-SEARCH requests... (Cancellation requested)");
+                    DebugListeningCancelationRequest();
 
                     udpClientReceiver.DropMulticastGroup(ip.MulticastAddress);
                     CleanUpdClient(udpClientReceiver);
@@ -86,20 +90,22 @@ namespace DLNAServer.SSDP
                     {
                         CleanUpdClient(udpClientSender);
                     }
-                };
+                }
             }
             catch (TaskCanceledException)
             {
-                _logger.LogInformation($"Task was canceled");
+                LoggerHelper.LogWarningTaskCanceled(_logger);
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation($"Operation was canceled");
+                LoggerHelper.LogWarningOperationCanceled(_logger);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error in SSDPListener: {ex.Message}");
+                _logger.LogGeneralErrorMessage(ex);
             }
+
+            _logger.LogGeneralWarningMessage($"{nameof(StartListeningAsync)} - finished");
         }
 
         private async Task HandleSearchRequestAsync(string message, IPEndPoint remoteEndPoint, UPNPDevice[] upnpDevices)
@@ -109,6 +115,8 @@ namespace DLNAServer.SSDP
             var devicesEndpoint = upnpDevices.GroupBy(static (d) => d.Endpoint);
             foreach (var devices in devicesEndpoint.ToList())
             {
+                bool isMessageSend = true;
+
                 if (!_udpClientSenders.TryGetValue(devices.Key, out var udpClient))
                 {
                     udpClient = new UdpClient();
@@ -124,28 +132,37 @@ namespace DLNAServer.SSDP
                 {
                     // Check the "ST" (Search Target) header to determine what the client is looking for
                     if (searchTarget != null &&
-                        !searchTarget.Contains(device.Type, StringComparison.CurrentCultureIgnoreCase))
+                       !searchTarget.Contains(device.Type, StringComparison.CurrentCultureIgnoreCase))
                     {
-                        await SendMessage(udpClient, device, remoteEndPoint);
+                        isMessageSend &= await SendMessage(udpClient, device, remoteEndPoint);
+                    }
+
+                    if (!isMessageSend)
+                    {
+                        CleanUpdClient(udpClient);
+                        _ = _udpClientSenders.Remove(devices.Key);
+
+                        _logger.LogGeneralWarningMessage($"{nameof(HandleSearchRequestAsync)} - message not send");
+                        break;
                     }
                 }
             }
         }
 
-        private async Task SendMessage(UdpClient udpClient, UPNPDevice device, IPEndPoint remoteEndPoint)
+        private async Task<bool> SendMessage(UdpClient udpClient, UPNPDevice device, IPEndPoint remoteEndPoint)
         {
             try
             {
                 StringBuilder sb = new();
-                _ = sb.Append($"HTTP/1.1 200 OK\r\n");
-                _ = sb.Append($"CACHE-CONTROL: max-age=600\r\n");
-                _ = sb.Append($"DATE: {DateTime.Now:R}\r\n");
-                _ = sb.Append($"EXT: {string.Empty}\r\n");
-                _ = sb.Append($"LOCATION: {device.Descriptor}\r\n");
-                _ = sb.Append($"SERVER: {_serverConfig.DlnaServerName}\r\n");
-                _ = sb.Append($"ST: {device.Type}\r\n");
-                _ = sb.Append($"USN: {device.USN}\r\n");
-                _ = sb.Append($"\r\n");
+                _ = sb.Append("HTTP/1.1 200 OK\r\n");
+                _ = sb.Append("CACHE-CONTROL: max-age=600\r\n");
+                _ = sb.Append("DATE: ").Append(DateTime.Now.ToString("R")).Append("\r\n");
+                _ = sb.Append("EXT: ").Append("\r\n");
+                _ = sb.Append("LOCATION: ").Append(device.Descriptor).Append("\r\n");
+                _ = sb.Append("SERVER: ").Append(_serverConfig.DlnaServerSignature).Append("\r\n");
+                _ = sb.Append("ST: ").Append(device.Type).Append("\r\n");
+                _ = sb.Append("USN: ").Append(device.USN).Append("\r\n");
+                _ = sb.Append("\r\n");
 
                 // Convert the response to bytes
                 byte[] responseBytes = GC.AllocateUninitializedArray<byte>(decoder.GetByteCount(sb.ToString()), pinned: false);
@@ -154,28 +171,35 @@ namespace DLNAServer.SSDP
                 // Send SSDP response
                 _ = await udpClient.SendAsync(responseBytes, responseBytes.Length, remoteEndPoint);
 
-                _logger.LogDebug($"Sent SSDP response to {remoteEndPoint.Address}:{remoteEndPoint.Port}; {device.Descriptor}");
+                DebugSendResponse(remoteEndPoint.Address, remoteEndPoint.Port, device.Descriptor);
 
                 _ = sb.Clear();
+
+                return true;
             }
             catch (SocketException ex)
             {
-                _logger.LogError(ex, $"Error in SSDPListener: {ex.Message}");
-
                 Random random = new();
                 TimeSpan delay = TimeSpan.FromMinutes(_serverConfig.ServerDelayAfterUnsuccessfulSendSSDPMessageInMin).Add(TimeSpan.FromSeconds(random.Next(60)));
+
+                ErrorStopNotifySend(ex.Message, delay.TotalMinutes);
+
                 await Task.Delay(delay);
+
+                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error in SSDPListener: {ex.Message}");
+                _logger.LogGeneralErrorMessage(ex);
 
                 Random random = new();
-                TimeSpan delay = TimeSpan.FromMinutes(1).Add(TimeSpan.FromSeconds(random.Next(180)));
+                TimeSpan delay = TimeSpanValues.Time1min.Add(TimeSpan.FromSeconds(random.Next(180)));
                 await Task.Delay(delay);
+
+                return false;
             }
         }
-        private static void CleanUpdClient(UdpClient udpClient)
+        private static void CleanUpdClient(in UdpClient udpClient)
         {
             if (udpClient.Client.Connected)
             {

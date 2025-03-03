@@ -1,15 +1,17 @@
-﻿using DLNAServer.Configuration;
+﻿using DLNAServer.Common;
+using DLNAServer.Configuration;
 using DLNAServer.Database.Entities;
 using DLNAServer.Database.Repositories.Interfaces;
 using DLNAServer.Features.MediaProcessors.Interfaces;
 using DLNAServer.Helpers.Files;
+using DLNAServer.Helpers.Logger;
 using DLNAServer.Types.DLNA;
 using System.Threading.Channels;
 using Xabe.FFmpeg;
 
 namespace DLNAServer.Features.MediaProcessors
 {
-    public class AudioProcessor : IAudioProcessor, IDisposable
+    public partial class AudioProcessor : IAudioProcessor, IDisposable
     {
         private readonly ILogger<AudioProcessor> _logger;
         private readonly ServerConfig _serverConfig;
@@ -25,11 +27,11 @@ namespace DLNAServer.Features.MediaProcessors
             _fileRepositoryLazy = fileRepositoryLazy;
         }
 
-        public async Task InitializeAsync()
+        public Task InitializeAsync()
         {
-            await FFmpegHelper.EnsureFFmpegDownloaded(_logger);
+            return FFmpegHelper.EnsureFFmpegDownloaded(_logger);
         }
-        public async Task FillEmptyMetadataAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public Task FillEmptyMetadataAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
         {
             var files = fileEntities
                 .Where(static (fe) =>
@@ -39,32 +41,31 @@ namespace DLNAServer.Features.MediaProcessors
 
             if (files.Length == 0)
             {
-                return;
+                return Task.CompletedTask;
             }
 
-            await RefreshMetadataAsync(files, setCheckedForFailed);
+            return files.Length != 0 ? RefreshMetadataAsync(files, setCheckedForFailed) : Task.CompletedTask;
         }
-        public async Task RefreshMetadataAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task RefreshMetadataAsync(FileEntity[] fileEntities, bool setCheckedForFailed = true)
         {
             try
             {
                 if (!_serverConfig.GenerateMetadataForLocalAudio
-                    || !fileEntities.Any())
+                    || fileEntities.Length == 0)
                 {
                     return;
                 }
 
                 await FFmpegHelper.EnsureFFmpegDownloaded(_logger);
 
-                if (fileEntities.Count() == 1)
+                if (fileEntities.Length == 1)
                 {
                     var file = fileEntities.First();
                     await RefreshSingleFileMetadataAsync(file, setCheckedForFailed);
                 }
                 else
                 {
-                    var fileEntitiesAsync = fileEntities.ToAsyncEnumerable();
-                    var maxDegreeOfParallelism = Math.Min(fileEntities.Count(), (int)_serverConfig.ServerMaxDegreeOfParallelism);
+                    var maxDegreeOfParallelism = Math.Min(fileEntities.Length, (int)_serverConfig.ServerMaxDegreeOfParallelism);
 
                     var channel = Channel.CreateBounded<FileEntity>(new BoundedChannelOptions(maxDegreeOfParallelism)
                     {
@@ -75,7 +76,7 @@ namespace DLNAServer.Features.MediaProcessors
 
                     var producer = Task.Run(async () =>
                     {
-                        await foreach (var file in fileEntitiesAsync)
+                        foreach (var file in fileEntities)
                         {
                             await channel.Writer.WriteAsync(file);
                         }
@@ -98,7 +99,7 @@ namespace DLNAServer.Features.MediaProcessors
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message);
+                _logger.LogGeneralErrorMessage(ex);
             }
         }
 
@@ -111,10 +112,9 @@ namespace DLNAServer.Features.MediaProcessors
             {
                 file.IsMetadataChecked = true;
 
-                _logger.LogInformation($"Set metadata for file: '{file.FilePhysicalFullPath}'");
+                InformationSetMetadata(file.FilePhysicalFullPath);
             }
         }
-
         private async Task<MediaAudioEntity?> GetFileMetadataAsync(FileEntity fileEntity)
         {
             if (fileEntity == null)
@@ -130,17 +130,16 @@ namespace DLNAServer.Features.MediaProcessors
 
             try
             {
-                using (var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+                using (var cancellationTokenSource = new CancellationTokenSource(TimeSpanValues.Time5min))
                 {
                     IMediaInfo mediaInfo = await FFmpeg.GetMediaInfo(fileEntity.FilePhysicalFullPath, cancellationTokenSource.Token);
-                    var audio = ExtractAudioMetadataAsync(ref mediaInfo);
-
-                    return audio;
-                };
+                    fileEntity.FileSizeInBytes = mediaInfo.Size;
+                    return (ExtractAudioMetadataAsync(ref mediaInfo));
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message, [fileEntity.FilePhysicalFullPath]);
+                _logger.LogGeneralErrorMessage(ex);
                 return null;
             }
         }
@@ -154,10 +153,14 @@ namespace DLNAServer.Features.MediaProcessors
                     {
                         FilePhysicalFullPath = mediaInfo.Path,
                         Duration = audioStream.Duration,
-                        Codec = audioStream.Codec,
+                        Codec = !string.IsNullOrWhiteSpace(audioStream.Codec)
+                            ? string.Intern(audioStream.Codec)
+                            : null,
                         Bitrate = audioStream.Bitrate,
                         Channels = audioStream.Channels,
-                        Language = audioStream.Language,
+                        Language = !string.IsNullOrWhiteSpace(audioStream.Language)
+                            ? string.Intern(audioStream.Language)
+                            : null,
                         SampleRate = audioStream.SampleRate
                     };
                 }
@@ -168,11 +171,11 @@ namespace DLNAServer.Features.MediaProcessors
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message, [mediaInfo.Path]);
+                _logger.LogGeneralErrorMessage(ex);
                 return null;
             }
         }
-        public async Task FillEmptyThumbnailsAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public Task FillEmptyThumbnailsAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
         {
             var files = fileEntities
                 .Where(static (fe) =>
@@ -180,31 +183,25 @@ namespace DLNAServer.Features.MediaProcessors
                     && fe.FileDlnaMime.ToDlnaMedia() == DlnaMedia.Audio
                     && !fe.IsThumbnailChecked).ToArray();
 
-            if (files.Length == 0)
-            {
-                return;
-            }
-
-            await RefreshThumbnailsAsync(files, setCheckedForFailed);
+            return files.Length != 0 ? RefreshThumbnailsAsync(files, setCheckedForFailed) : Task.CompletedTask;
         }
-        public async Task RefreshThumbnailsAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task RefreshThumbnailsAsync(FileEntity[] fileEntities, bool setCheckedForFailed = true)
         {
             try
             {
-                if (!fileEntities.Any())
+                if (fileEntities.Length == 0)
                 {
                     return;
                 }
 
-                if (fileEntities.Count() == 1)
+                if (fileEntities.Length == 1)
                 {
                     var file = fileEntities.First();
                     file.IsThumbnailChecked = true;
                 }
                 else
                 {
-                    var fileEntitiesAsync = fileEntities.ToAsyncEnumerable();
-                    var maxDegreeOfParallelism = Math.Min(fileEntities.Count(), (int)_serverConfig.ServerMaxDegreeOfParallelism);
+                    var maxDegreeOfParallelism = Math.Min(fileEntities.Length, (int)_serverConfig.ServerMaxDegreeOfParallelism);
 
                     var channel = Channel.CreateBounded<FileEntity>(new BoundedChannelOptions(maxDegreeOfParallelism)
                     {
@@ -215,7 +212,7 @@ namespace DLNAServer.Features.MediaProcessors
 
                     var producer = Task.Run(async () =>
                     {
-                        await foreach (var file in fileEntitiesAsync)
+                        foreach (var file in fileEntities)
                         {
                             await channel.Writer.WriteAsync(file);
                         }
@@ -224,7 +221,6 @@ namespace DLNAServer.Features.MediaProcessors
 
                     var consumer = Task.Run(async () =>
                     {
-
                         await Parallel.ForEachAsync(
                             channel.Reader.ReadAllAsync(),
                             parallelOptions: new() { MaxDegreeOfParallelism = maxDegreeOfParallelism },
@@ -243,13 +239,13 @@ namespace DLNAServer.Features.MediaProcessors
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message);
+                _logger.LogGeneralErrorMessage(ex);
             }
         }
 
-        public async Task TerminateAsync()
+        public Task TerminateAsync()
         {
-            await Task.CompletedTask;
+            return Task.CompletedTask;
         }
         #region Dispose
         private bool disposedValue;

@@ -1,4 +1,5 @@
-﻿using DLNAServer.Features.Subscriptions.Data;
+﻿using DLNAServer.Common;
+using DLNAServer.Features.Subscriptions.Data;
 using DLNAServer.Features.Subscriptions.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -26,7 +27,7 @@ namespace DLNAServer.Features.Subscriptions
                            };
                            _ = entry.SetValue(result);
                            _ = entry.SetSlidingExpiration(timeout);
-                           entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1);
+                           entry.AbsoluteExpirationRelativeToNow = TimeSpanValues.Time1day;
                            entry.Size = 1;
 
                            return result;
@@ -48,7 +49,7 @@ namespace DLNAServer.Features.Subscriptions
                     new MemoryCacheEntryOptions
                     {
                         SlidingExpiration = subscription.Timeout,
-                        AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(1),
+                        AbsoluteExpirationRelativeToNow = TimeSpanValues.Time1day,
                         Size = 1
                     }
                     );

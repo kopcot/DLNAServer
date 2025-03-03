@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Caching.Memory;
+﻿using DLNAServer.Common;
+using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Concurrent;
 
 namespace DLNAServer.Helpers.Caching
@@ -19,7 +20,7 @@ namespace DLNAServer.Helpers.Caching
         public static void StartEvictCachedKey(this IMemoryCache memoryCache, string cacheKey, TimeSpan delayEviction)
         {
 
-            string evictionCacheKey = $"_{nameof(StartEvictCachedKey)} {cacheKey}";
+            string evictionCacheKey = string.Format("_{0} {1}", [string.Intern(nameof(StartEvictCachedKey)), string.Intern(cacheKey)]);
 
             var evictionControlTokensSource = EvictionControlTokens.AddOrUpdate(
                 key: evictionCacheKey,
@@ -47,14 +48,13 @@ namespace DLNAServer.Helpers.Caching
 
                     if (!evictionControlTokensSource.Token.IsCancellationRequested)
                     {
-                        object? storeValue = null;
+                        const object? storeValue = null;
                         _ = memoryCache.Set(
                             key: evictionCacheKey,
                             value: new WeakReference(storeValue),
                             options: memoryCacheEntryOptions);
                     }
 
-                    // remove _evictedCachedKey
                     await Task.Delay(memoryCacheEntryOptions.SlidingExpiration!.Value, evictionControlTokensSource.Token);
 
                     if (!evictionControlTokensSource.Token.IsCancellationRequested)
@@ -89,8 +89,8 @@ namespace DLNAServer.Helpers.Caching
         private static readonly MemoryCacheEntryOptions memoryCacheEntryOptions = new()
         {
             Size = 1,
-            SlidingExpiration = TimeSpan.FromSeconds(10),
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10),
+            SlidingExpiration = TimeSpanValues.Time10sec,
+            AbsoluteExpirationRelativeToNow = TimeSpanValues.Time10min,
             Priority = CacheItemPriority.Low
         };
     }

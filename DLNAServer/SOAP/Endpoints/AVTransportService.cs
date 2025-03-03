@@ -1,9 +1,10 @@
-﻿using DLNAServer.SOAP.Endpoints.Interfaces;
+﻿using DLNAServer.Helpers.Logger;
+using DLNAServer.SOAP.Endpoints.Interfaces;
 using DLNAServer.SOAP.Endpoints.Responses.AVTransport;
 
 namespace DLNAServer.SOAP.Endpoints
 {
-    public class AVTransportService : IAVTransportService
+    public partial class AVTransportService : IAVTransportService
     {
         private readonly ILogger<ContentDirectoryService> _logger;
         private readonly IHttpContextAccessor _httpContextAccessor;
@@ -14,14 +15,21 @@ namespace DLNAServer.SOAP.Endpoints
         {
             _logger = logger;
             _httpContextAccessor = httpContextAccessor;
-
-            _logger.LogWarning($"{DateTime.Now} AVTransportEndpointService - constructor");
         }
         public async Task<SetAVTransportURI> SetAVTransportURI(int InstanceID, string CurrentURI, string CurrentURIMetaData)
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} SetAVTransportURI(InstanceID: {InstanceID}, AVTransportURI: {CurrentURI}, AVTransportURIMetaData: {CurrentURIMetaData}) - not implemented");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(SetAVTransportURI),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            WarningSetAVTransportURIRequestInfo(nameof(SetAVTransportURI), InstanceID, CurrentURI, CurrentURIMetaData);
 
             await Task.CompletedTask;
             return new() { InstanceID = InstanceID };
@@ -29,8 +37,17 @@ namespace DLNAServer.SOAP.Endpoints
         public async Task<Play> Play(int InstanceID, string Speed)
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} Play(InstanceID: {InstanceID}, Speed: {Speed}) - not implemented");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(Play),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            WarningPlayRequestInfo(nameof(Play), InstanceID, Speed);
 
             await Task.CompletedTask;
             return new() { };
@@ -39,8 +56,17 @@ namespace DLNAServer.SOAP.Endpoints
         public async Task<Pause> Pause(int InstanceID)
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} Pause(InstanceID: {InstanceID}) - not implemented");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(Pause),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            WarningPauseRequestInfo(nameof(Pause), InstanceID);
 
             await Task.CompletedTask;
             return new() { };
@@ -49,8 +75,17 @@ namespace DLNAServer.SOAP.Endpoints
         public async Task<Stop> Stop(int InstanceID)
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} Stop(InstanceID: {InstanceID}) - not implemented");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(Stop),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            WarningStopRequestInfo(nameof(Stop), InstanceID);
 
             await Task.CompletedTask;
             return new() { };
@@ -59,8 +94,17 @@ namespace DLNAServer.SOAP.Endpoints
         public async Task<Seek> Seek(int InstanceID, string SeekMode, string Target)
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} Seek(InstanceID: {InstanceID}, SeekMode: {SeekMode}, Target: {Target}) - not implemented");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(Seek),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            WarningSeekRequestInfo(nameof(Seek), InstanceID, SeekMode, Target);
 
             await Task.CompletedTask;
             return new() { };
@@ -69,8 +113,17 @@ namespace DLNAServer.SOAP.Endpoints
         public async Task<GetTransportInfo> GetTransportInfo(int InstanceID)
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} Seek(InstanceID: {InstanceID}) - not implemented");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(GetTransportInfo),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            WarningGetTransportInfoRequestInfo(nameof(GetTransportInfo), InstanceID);
 
             await Task.CompletedTask;
             return new() { };
@@ -79,8 +132,17 @@ namespace DLNAServer.SOAP.Endpoints
         public async Task<GetPositionInfo> GetPositionInfo(int InstanceID)
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} Seek(InstanceID: {InstanceID}) - not implemented");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(GetPositionInfo),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            WarningGetPositionInfoRequestInfo(nameof(GetPositionInfo), InstanceID);
 
             await Task.CompletedTask;
             return new() { };

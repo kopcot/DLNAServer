@@ -1,4 +1,5 @@
-﻿using DLNAServer.Database.Entities;
+﻿using DLNAServer.Common;
+using DLNAServer.Database.Entities;
 using DLNAServer.Database.Repositories.Interfaces;
 using DLNAServer.Helpers.Database;
 using Microsoft.EntityFrameworkCore;
@@ -10,29 +11,29 @@ namespace DLNAServer.Database.Repositories
     {
         public ThumbnailRepository(DlnaDbContext dbContext, Lazy<IMemoryCache> memoryCacheLazy) : base(dbContext, memoryCacheLazy, nameof(ThumbnailRepository))
         {
-            defaultCacheDuration = TimeSpan.FromMinutes(5);
-            defaultCacheAbsoluteDuration = TimeSpan.FromHours(1);
+            defaultCacheDuration = TimeSpanValues.Time5min;
+            defaultCacheAbsoluteDuration = TimeSpanValues.Time1hour;
             DefaultOrderBy = static (entities) => entities
                 .OrderBy(static (f) => f.LC_ThumbnailFilePhysicalFullPath)
                 .ThenByDescending(static (f) => f.CreatedInDB);
             DefaultInclude = static (entities) => entities
                 .Include(t => t.ThumbnailData);
         }
-        public new async Task<ThumbnailEntity?> GetByIdAsync(Guid guid, bool useCachedResult)
+        public new Task<ThumbnailEntity?> GetByIdAsync(Guid guid, bool useCachedResult)
         {
-            return await GetSingleWithCacheAsync(
+            return GetSingleWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
-                    .IncludeChildEntities(DefaultInclude) 
+                    .IncludeChildEntities(DefaultInclude)
                     .FirstOrDefaultAsync(t => t.Id == guid),
                 cacheKey: GetCacheKey<ThumbnailEntity>([guid.ToString()]),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
         }
-        public new async Task<ThumbnailEntity?> GetByIdAsync(Guid guid, bool asNoTracking, bool useCachedResult)
+        public new Task<ThumbnailEntity?> GetByIdAsync(Guid guid, bool asNoTracking, bool useCachedResult)
         {
-            return await GetSingleWithCacheAsync(
+            return GetSingleWithCacheAsync(
                 queryAction: asNoTracking
                         ? DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
@@ -48,18 +49,18 @@ namespace DLNAServer.Database.Repositories
                 useCachedResult: useCachedResult
                 );
         }
-        public new async Task<ThumbnailEntity?> GetByIdAsync(string guid, bool useCachedResult)
+        public new Task<ThumbnailEntity?> GetByIdAsync(string guid, bool useCachedResult)
         {
-            return Guid.TryParse(guid, out var dbGuid) ? await GetByIdAsync(dbGuid, useCachedResult) : null;
+            return Guid.TryParse(guid, out var dbGuid) ? GetByIdAsync(dbGuid, useCachedResult) : Task.FromResult<ThumbnailEntity?>(null);
         }
-        public new async Task<ThumbnailEntity?> GetByIdAsync(string guid, bool asNoTracking, bool useCachedResult)
+        public new Task<ThumbnailEntity?> GetByIdAsync(string guid, bool asNoTracking, bool useCachedResult)
         {
-            return Guid.TryParse(guid, out var dbGuid) ? await GetByIdAsync(dbGuid, asNoTracking, useCachedResult) : null;
+            return Guid.TryParse(guid, out var dbGuid) ? GetByIdAsync(dbGuid, asNoTracking, useCachedResult) : Task.FromResult<ThumbnailEntity?>(null);
         }
-        public async Task<ThumbnailEntity[]> GetAllByPathFullNameAsync(string pathFullName, bool useCachedResult)
+        public Task<ThumbnailEntity[]> GetAllByPathFullNameAsync(string pathFullName, bool useCachedResult)
         {
-            pathFullName = pathFullName.ToLower();
-            var memoryDataResult = await GetAllWithCacheAsync(
+            pathFullName = pathFullName.ToLower(culture: System.Globalization.CultureInfo.InvariantCulture);
+            var memoryDataResult = GetAllWithCacheAsync(
                 queryAction: DbSet
                     .OrderEntitiesByDefault(DefaultOrderBy)
                     .IncludeChildEntities(DefaultInclude)
@@ -68,7 +69,7 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
-            return memoryDataResult.ToArray();
+            return memoryDataResult.ContinueWith(static (fe) => fe.Result.ToArray());
         }
     }
 }

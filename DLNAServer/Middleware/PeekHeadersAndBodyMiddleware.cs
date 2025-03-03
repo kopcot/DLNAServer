@@ -1,6 +1,6 @@
 ﻿namespace DLNAServer.Middleware
 {
-    public class PeekHeadersAndBodyMiddleware
+    public partial class PeekHeadersAndBodyMiddleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<PeekHeadersAndBodyMiddleware> _logger;
@@ -21,7 +21,7 @@
             //showInformation = headers.Any(h => h.Contains("SOAP"));
             if (showInformation)
             {
-                _logger.LogInformation($"Request Headers: {Environment.NewLine}{string.Join(Environment.NewLine, headers)}");
+                InformationShowRequestHeaders(string.Join(Environment.NewLine, headers));
             }
 
             // Peek into request body without consuming it
@@ -29,7 +29,7 @@
             var requestBody = await ReadRequestBody(context.Request);
             if (showInformation)
             {
-                _logger.LogInformation($"Request Body: {Environment.NewLine}{requestBody}");
+                InformationShowRequestBody(requestBody);
             }
 
             context.Request.Body.Position = 0; // Reset the stream position for the next component in the pipeline to read it
@@ -46,20 +46,20 @@
                 // Peek into response headers
                 if (showInformation)
                 {
-                    _logger.LogInformation($"Sending response: {Environment.NewLine}{context.Response.StatusCode}");
+                    InformationShowResponseStatusCode(context.Response.StatusCode);
                 }
 
                 var responseHeaders = context.Response.Headers.Select(h => $"{h.Key}: {h.Value}").ToList();
                 if (showInformation)
                 {
-                    _logger.LogInformation($"Response Headers: {Environment.NewLine}{string.Join(Environment.NewLine, headers)}");
+                    InformationShowResponseHeaders(string.Join(Environment.NewLine, headers));
                 }
 
                 // Peek into response body
                 var responseBody = await ReadResponseBody(context.Response);
                 if (showInformation)
                 {
-                    _logger.LogInformation($"ResponseBody: {Environment.NewLine}{responseBody}");
+                    InformationShowResponseBody(responseBody);
                 }
 
                 responseBodyStream.Position = 0; // Reset the stream position

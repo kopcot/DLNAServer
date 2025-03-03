@@ -3,6 +3,7 @@ using DLNAServer.Database.Entities;
 using DLNAServer.Database.Entities.Configurations;
 using DLNAServer.Helpers.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
 
 namespace DLNAServer.Database
 {
@@ -49,23 +50,25 @@ namespace DLNAServer.Database
             // see DLNAServer.Database.SQLitePragmaInterceptor too 
             try
             {
+                StringBuilder sb = new();
                 // SQLite stores data in fixed-size pages (default 4096 bytes on modern systems).
-                _ = await this.Database.ExecuteSqlRawAsync("PRAGMA page_size=16384;", cancellationToken);
+                _ = sb.Append("PRAGMA page_size=16384; ");
 
                 // Changes the journaling mode to WAL, improves performance for concurrent reads/writes
                 // WAL = Write-Ahead Logging
-                _ = await this.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", cancellationToken);
+                _ = sb.Append("PRAGMA journal_mode=WAL; ");
 
                 // reduces fsync() calls on disk writes, making transactions faster
                 // trade durability for speed
-                _ = await this.Database.ExecuteSqlRawAsync("PRAGMA synchronous=NORMAL;", cancellationToken);
+                _ = sb.Append("PRAGMA synchronous=NORMAL; ");
 
                 // runs internal optimizations like reindexing and clearing unused pages
-                _ = await this.Database.ExecuteSqlRawAsync("PRAGMA optimize;", cancellationToken);
+                _ = sb.Append("PRAGMA optimize; ");
 
                 // rebuilds the database file, removing fragmentation and reducing its size
                 // !!! locks the database while running command !!!
-                _ = await this.Database.ExecuteSqlRawAsync("VACUUM;", cancellationToken);
+                _ = sb.Append("VACUUM; ");
+                _ = await this.Database.ExecuteSqlRawAsync(sb.ToString(), cancellationToken);
                 return true;
             }
             catch
@@ -146,15 +149,15 @@ namespace DLNAServer.Database
             ChangeTrackerModify();
             return base.SaveChanges(acceptAllChangesOnSuccess);
         }
-        public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
         {
             ChangeTrackerModify();
-            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         }
-        public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             ChangeTrackerModify();
-            return await base.SaveChangesAsync(cancellationToken);
+            return base.SaveChangesAsync(cancellationToken);
         }
 
         private void ChangeTrackerModify()

@@ -1,9 +1,10 @@
-﻿using DLNAServer.SOAP.Endpoints.Interfaces;
+﻿using DLNAServer.Helpers.Logger;
+using DLNAServer.SOAP.Endpoints.Interfaces;
 using DLNAServer.SOAP.Endpoints.Responses.ConnectionManager;
 
 namespace DLNAServer.SOAP.Endpoints
 {
-    public class ConnectionManagerService : IConnectionManagerService
+    public partial class ConnectionManagerService : IConnectionManagerService
     {
         private readonly ILogger<ConnectionManagerService> _logger;
         private readonly IHttpContextAccessor _httpContextAccessor;
@@ -13,15 +14,22 @@ namespace DLNAServer.SOAP.Endpoints
         {
             _logger = logger;
             _httpContextAccessor = httpContextAccessor;
-
-            _logger.LogWarning($"{DateTime.Now} ConnectionManagerEndpointService - constructor");
         }
 
         public async Task<ConnectionComplete> ConnectionComplete(int connectionID)
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} ConnectionComplete(ConnectionID: {connectionID})");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(ConnectionComplete),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            WarningConnectionCompleteRequestInfo(nameof(ConnectionComplete), connectionID);
 
             await Task.CompletedTask;
             return new() { };
@@ -30,8 +38,17 @@ namespace DLNAServer.SOAP.Endpoints
         public async Task<GetCurrentConnectionIDs> GetCurrentConnectionIDs()
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} GetCurrentConnectionIDs()");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(GetCurrentConnectionIDs),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            LoggerHelper.LogGeneralWarningMessage(_logger, nameof(GetCurrentConnectionIDs));
 
             await Task.CompletedTask;
             return new()
@@ -43,8 +60,17 @@ namespace DLNAServer.SOAP.Endpoints
         public async Task<GetCurrentConnectionInfo> GetCurrentConnectionInfo(int connectionID)
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} GetCurrentConnectionInfo(ConnectionID: {connectionID})");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(GetCurrentConnectionInfo),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            WarningGetCurrentConnectionInfoRequestInfo(nameof(GetCurrentConnectionInfo), connectionID);
 
             await Task.CompletedTask;
             return new()
@@ -62,8 +88,17 @@ namespace DLNAServer.SOAP.Endpoints
         public async Task<GetProtocolInfo> GetProtocolInfo()
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} GetProtocolInfo()");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(GetProtocolInfo),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            LoggerHelper.LogGeneralWarningMessage(_logger, nameof(GetProtocolInfo));
 
             await Task.CompletedTask;
             return new()
@@ -76,8 +111,23 @@ namespace DLNAServer.SOAP.Endpoints
         public async Task<PrepareForConnection> PrepareForConnection(string remoteProtocolInfo, string peerConnectionManager, int peerConnectionID, string direction)
         {
             var connection = _httpContextAccessor.HttpContext?.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort} , Local IP Address: {connection?.LocalIpAddress}:{connection?.LocalPort}");
-            _logger.LogWarning($"{DateTime.Now} PrepareForConnection(RemoteProtocolInfo: {remoteProtocolInfo}, PeerConnectionManager: {peerConnectionManager}, PeerConnectionID: {peerConnectionID}, Direction: {direction})");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(PrepareForConnection),
+                connection?.RemoteIpAddress,
+                connection?.RemotePort,
+                connection?.LocalIpAddress,
+                connection?.LocalPort,
+                _httpContextAccessor.HttpContext?.Request.Path.Value,
+                _httpContextAccessor.HttpContext?.Request.Method);
+            // not found operation in real usage
+            WarningGetCurrentConnectionInfoRequestInfo(
+                nameof(PrepareForConnection),
+                remoteProtocolInfo,
+                peerConnectionManager,
+                peerConnectionID,
+                direction
+                );
 
             await Task.CompletedTask;
             return new()

@@ -13,16 +13,15 @@ namespace DLNAServer.Middleware
             _blockerService = blockerService;
         }
 
-        public async Task InvokeAsync(HttpContext context)
+        public Task InvokeAsync(HttpContext context)
         {
             if (_blockerService.IsBlocked)
             {
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
-                await context.Response.WriteAsync($"API is temporarily unavailable. Reason = '{_blockerService.Reason}'");
-                return;
+                return context.Response.WriteAsync(string.Format("API is temporarily unavailable. Reason = '{0}'", [_blockerService.Reason]));
             }
 
-            await _next(context);
+            return _next(context);
         }
     }
 }

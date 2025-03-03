@@ -1,5 +1,5 @@
 ﻿using DLNAServer.Configuration;
-using DLNAServer.Types.DLNA;
+using DLNAServer.SOAP.Constants;
 using DLNAServer.Types.IP.Interfaces;
 using DLNAServer.Types.UPNP.Interfaces;
 using System.Collections.Concurrent;
@@ -22,17 +22,18 @@ namespace DLNAServer.Types.UPNP
         private static UPNPDevice[]? AllUPNPDevicesArray { get; set; }
         public UPNPDevice[] AllUPNPDevices => AllUPNPDevicesArray ?? throw new ArgumentNullException(nameof(AllUPNPDevicesArray), $"Uninitialized property '{nameof(AllUPNPDevicesArray)}'");
 
-        public async Task InitializeAsync()
+        public Task InitializeAsync()
         {
             foreach (var address in IP.ExternalIPAddresses.ToList())
             {
                 var uuid = Guid.NewGuid();
                 var types = new[] {
-                    XmlNamespaces.NS_RootDevice,
-                    XmlNamespaces.NS_MediaServer,
-                    XmlNamespaces.NS_ServiceType_ContentDirectory,
-                    XmlNamespaces.NS_ServiceType_ConnectionManager,
-                    XmlNamespaces.NS_ServiceType_X_MS_MediaReceiverRegistrar,
+                    Services.RootDevice,
+                    Services.MediaServer,
+                    Services.ServiceType.ContentDirectory,
+                    Services.ServiceType.AVTransport,
+                    Services.ServiceType.ConnectionManager,
+                    Services.ServiceType.X_MS_MediaReceiverRegistrar,
                     "uuid:" + uuid
                 }.Select(t => new UPNPDevice(
                     _address: address,
@@ -45,14 +46,14 @@ namespace DLNAServer.Types.UPNP
                 _ = Devices.TryAdd(new IPEndPoint(address, (int)_serverConfig.ServerPort), types);
             }
             AllUPNPDevicesArray = Devices.SelectMany(static (x) => x.Value).ToArray();
-            await Task.CompletedTask;
+            return Task.CompletedTask;
         }
 
-        public async Task TerminateAsync()
+        public Task TerminateAsync()
         {
             AllUPNPDevicesArray = [];
             Devices.Clear();
-            await Task.CompletedTask;
+            return Task.CompletedTask;
         }
     }
 }

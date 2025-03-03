@@ -9,8 +9,6 @@ namespace DLNAServer.SOAP.Endpoints
             ILogger<MediaReceiverRegistrarService> logger)
         {
             _logger = logger;
-
-            _logger.LogWarning($"{DateTime.Now} MediaReceiverRegistrarEndpointService - constructor");
         }
     }
 }

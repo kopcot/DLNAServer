@@ -13,12 +13,12 @@ namespace DLNAServer.Database.Repositories
             DefaultOrderBy = static (entities) => entities
                 .OrderByDescending(static (f) => f.LasAccess);
         }
-        public async Task<string?> GetLastAccessMachineNameAsync()
+        public Task<string?> GetLastAccessMachineNameAsync()
         {
-            var lastAccess = await DbSet
+            var lastAccess = DbSet
                 .OrderEntitiesByDefault(DefaultOrderBy)
                 .FirstOrDefaultAsync();
-            return lastAccess?.MachineName;
+            return lastAccess.ContinueWith(static (se) => se.Result?.MachineName);
         }
     }
 }

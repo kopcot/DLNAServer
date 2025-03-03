@@ -26,7 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.1.19" />
+    <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.4.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.2">
       <PrivateAssets>all</PrivateAssets>
@@ -35,10 +35,9 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.2" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
-    <PackageReference Include="SkiaSharp" Version="3.118.0-preview.2.3" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.118.0-preview.2.3" />
+    <PackageReference Include="SkiaSharp" Version="3.116.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.116.1" />
     <PackageReference Include="SoapCore" Version="1.2.0" />
-    <PackageReference Include="SQLitePCLRaw.core" Version="2.1.11-pre20241216174303" />
     <PackageReference Include="System.Linq.Async" Version="6.0.1" />
     <PackageReference Include="System.Security.Cryptography.Xml" Version="9.0.2" />
     <PackageReference Include="Xabe.FFmpeg" Version="6.0.1" />

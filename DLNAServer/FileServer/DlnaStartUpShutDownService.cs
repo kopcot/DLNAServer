@@ -6,12 +6,13 @@ using DLNAServer.Features.Cache.Interfaces;
 using DLNAServer.Features.FileWatcher.Interfaces;
 using DLNAServer.Features.MediaContent.Interfaces;
 using DLNAServer.Features.MediaProcessors.Interfaces;
+using DLNAServer.Helpers.Logger;
 using DLNAServer.Types.DLNA;
 using DLNAServer.Types.UPNP.Interfaces;
 
 namespace DLNAServer.FileServer
 {
-    public class DlnaStartUpShutDownService : IHostedService
+    public partial class DlnaStartUpShutDownService : IHostedService
     {
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ILogger<DlnaStartUpShutDownService> _logger;
@@ -32,7 +33,7 @@ namespace DLNAServer.FileServer
                 await InitVideoProcessor(scope);
                 await InitImageProcessor(scope);
                 await InitFileWatcherManager(scope);
-            };
+            }
         }
 
         public async Task StopAsync(CancellationToken cancellationToken)
@@ -48,7 +49,7 @@ namespace DLNAServer.FileServer
                 await TerminateAudioProcessor(scope);
                 await TerminateVideoProcessor(scope);
                 await TerminateImageProcessor(scope);
-            };
+            }
         }
         #region StartUp 
 
@@ -56,43 +57,43 @@ namespace DLNAServer.FileServer
         {
             var audioProcessor = scope.ServiceProvider.GetRequiredService<IAudioProcessor>();
             await audioProcessor.InitializeAsync();
-            _logger.LogInformation($"Audio processor - Initialized");
+            InformationInstanceInitialized("Audio processor");
         }
         private async Task InitVideoProcessor(IServiceScope scope)
         {
             var videoProcessor = scope.ServiceProvider.GetRequiredService<IVideoProcessor>();
             await videoProcessor.InitializeAsync();
-            _logger.LogInformation($"Video processor - Initialized");
+            InformationInstanceInitialized("Video processor");
         }
         private async Task InitImageProcessor(IServiceScope scope)
         {
             var imageProcessor = scope.ServiceProvider.GetRequiredService<IImageProcessor>();
             await imageProcessor.InitializeAsync();
-            _logger.LogInformation($"Image processor - Initialized");
+            InformationInstanceInitialized("Image processor");
         }
 
         private async Task InitContentExplorer(IServiceScope scope)
         {
             var contentExplorer = scope.ServiceProvider.GetRequiredService<IContentExplorerManager>();
             await contentExplorer.InitializeAsync();
-            _logger.LogInformation($"Content explorer - Initialized");
+            InformationInstanceInitialized("Content explorer");
         }
 
         private async Task InitUPNPDevices(IServiceScope scope)
         {
             var uPNPDevices = scope.ServiceProvider.GetRequiredService<IUPNPDevices>();
             await uPNPDevices.InitializeAsync();
-            _logger.LogInformation($"UPNPDevices Devices - Initialized");
+            InformationInstanceInitialized("UPNPDevices Devices");
         }
 
-        private async Task ShowGeneralInfo(IServiceScope scope)
+        private Task ShowGeneralInfo(IServiceScope scope)
         {
             var serverConfig = scope.ServiceProvider.GetRequiredService<ServerConfig>();
-            _logger.LogInformation($"Dlna server name: {serverConfig.ServerFriendlyName}");
-            _logger.LogInformation($"Source folders: {string.Join(";", serverConfig.SourceFolders)}");
-            _logger.LogInformation($"Extensions: {string.Join(";", serverConfig.MediaFileExtensions.Select(e => (e.Key, e.Value.Key.ToMimeString(), e.Value.Value)).ToArray())}");
+            InformationServerName(serverConfig.ServerFriendlyName);
+            InformationSourceFolders(string.Join(";", serverConfig.SourceFolders));
+            InformationExtensions(string.Join(";", serverConfig.MediaFileExtensions.Select(e => (e.Key, e.Value.Key.ToMimeString(), e.Value.Value)).ToArray()));
 
-            await Task.CompletedTask;
+            return Task.CompletedTask;
         }
         private async Task InitDatabase(IServiceScope scope, CancellationToken cancellationToken)
         {
@@ -105,13 +106,13 @@ namespace DLNAServer.FileServer
                 _ = await dbContext.Database.EnsureCreatedAsync(cancellationToken);
                 var canConnect = await dbContext.Database.CanConnectAsync(cancellationToken);
                 var lastMachineName = await serverRepository.GetLastAccessMachineNameAsync();
-                _logger.LogInformation($"ActualMachineName = '{Environment.MachineName}', LastMachineName = '{lastMachineName}'");
+                InformationMachineName(Environment.MachineName, lastMachineName);
                 isDbOk &= lastMachineName == Environment.MachineName;
                 isDbOk &= await dbContext.CheckDbSetsOk(cancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message);
+                _logger.LogGeneralErrorMessage(ex);
                 isDbOk = false;
             }
 
@@ -124,7 +125,7 @@ namespace DLNAServer.FileServer
                     LasAccess = DateTime.Now,
                     MachineName = Environment.MachineName,
                 });
-                _logger.LogWarning($"Database cleared!!!");
+                WarningMachineName();
             }
             try
             {
@@ -132,16 +133,16 @@ namespace DLNAServer.FileServer
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message);
+                _logger.LogGeneralErrorMessage(ex);
             }
 
-            _logger.LogInformation($"Database - Initialized");
+            InformationInstanceInitialized("Database");
         }
         private async Task InitFileWatcherManager(IServiceScope scope)
         {
             var fileWatcherManager = scope.ServiceProvider.GetRequiredService<IFileWatcherManager>();
             await fileWatcherManager.InitializeAsync();
-            _logger.LogInformation($"FileWatcherManager Devices - Initialized");
+            InformationInstanceInitialized("FileWatcherManager Devices");
         }
 
         #endregion
@@ -151,55 +152,55 @@ namespace DLNAServer.FileServer
         {
             var fileMemoryCacheManager = scope.ServiceProvider.GetRequiredService<IFileMemoryCacheManager>();
             await fileMemoryCacheManager.TerminateAsync();
-            _logger.LogDebug($"File memory cache - Terminated");
+            DebugInstanceTerminated("File memory cache");
         }
         private async Task TerminateUPNPDevices(IServiceScope scope)
         {
             var uPNPDevices = scope.ServiceProvider.GetRequiredService<IUPNPDevices>();
             await uPNPDevices.TerminateAsync();
-            _logger.LogDebug($"UPNPDevices Devices - Terminated");
+            DebugInstanceTerminated("UPNPDevices Devices");
         }
         private async Task TerminateFileWatcherHandler(IServiceScope scope)
         {
             var fileWatcherHandler = scope.ServiceProvider.GetRequiredService<IFileWatcherHandler>();
             await fileWatcherHandler.TerminateAsync();
-            _logger.LogDebug($"File watcher handler - Terminated");
+            DebugInstanceTerminated("File watcher handler");
         }
         private async Task TerminateContentExplorer(IServiceScope scope)
         {
             var contentExplorerManager = scope.ServiceProvider.GetRequiredService<IContentExplorerManager>();
             await contentExplorerManager.TerminateAsync();
-            _logger.LogDebug($"Content explorer  - Terminated");
+            DebugInstanceTerminated("Content explorer");
         }
         private async Task TerminateDatabase(IServiceScope scope)
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<DlnaDbContext>();
             await dbContext.TerminateAsync();
-            _logger.LogDebug($"Database - Terminated");
+            DebugInstanceTerminated("Database");
         }
         private async Task TerminateFileWatcherManager(IServiceScope scope)
         {
             var fileWatcherManager = scope.ServiceProvider.GetRequiredService<IFileWatcherManager>();
             await fileWatcherManager.TerminateAsync();
-            _logger.LogDebug($"FileWatcherManager - Terminated");
+            DebugInstanceTerminated("File Watcher Manager");
         }
         private async Task TerminateAudioProcessor(IServiceScope scope)
         {
             var audioProcessor = scope.ServiceProvider.GetRequiredService<IAudioProcessor>();
             await audioProcessor.TerminateAsync();
-            _logger.LogDebug($"AudioProcessor - Terminated");
+            DebugInstanceTerminated("Audio Processor");
         }
         private async Task TerminateVideoProcessor(IServiceScope scope)
         {
             var videoProcessor = scope.ServiceProvider.GetRequiredService<IVideoProcessor>();
             await videoProcessor.TerminateAsync();
-            _logger.LogDebug($"VideoProcessor - Terminated");
+            DebugInstanceTerminated("Video Processor");
         }
         private async Task TerminateImageProcessor(IServiceScope scope)
         {
             var imageProcessor = scope.ServiceProvider.GetRequiredService<IImageProcessor>();
             await imageProcessor.TerminateAsync();
-            _logger.LogDebug($"ImageProcessor - Terminated");
+            DebugInstanceTerminated("Image Processor");
         }
         #endregion
     }

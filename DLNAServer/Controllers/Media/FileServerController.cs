@@ -1,7 +1,10 @@
-﻿using DLNAServer.Configuration;
+﻿using CommunityToolkit.HighPerformance;
+using DLNAServer.Common;
+using DLNAServer.Configuration;
 using DLNAServer.Database.Entities;
 using DLNAServer.Database.Repositories.Interfaces;
 using DLNAServer.Features.Cache.Interfaces;
+using DLNAServer.Helpers.Logger;
 using DLNAServer.Types.DLNA;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,7 +12,7 @@ namespace DLNAServer.Controllers.Media
 {
     [Route("[controller]")]
     [ApiController]
-    public class FileServerController : Controller
+    public partial class FileServerController : Controller
     {
         private readonly ILogger<FileServerController> _logger;
         private readonly ServerConfig _serverConfig;
@@ -42,14 +45,21 @@ namespace DLNAServer.Controllers.Media
             var file = await FileRepository.GetByIdAsync(fileGuid, asNoTracking: true, useCachedResult: true);
             if (file == null)
             {
-                _logger.LogWarning($"{DateTime.Now} File with id '{fileGuid}' not found");
+                WarningFileNotFound(fileGuid);
                 return NotFound($"File with id '{fileGuid}' not found");
             }
 
-            var connection = HttpContext.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection.RemoteIpAddress}:{connection.RemotePort} , Local IP Address: {connection.LocalIpAddress}:{connection.LocalPort}");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(GetMediaFileAsync),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
 
-            return GetMediaFile(file);
+            return GetMediaFile(ref file);
         }
         [HttpGet("thumbnail/{thumbnailGuid}")]
         public async Task<IActionResult> GetMediaFileThumbnailAsync([FromRoute] string thumbnailGuid)
@@ -57,35 +67,50 @@ namespace DLNAServer.Controllers.Media
             var file = await ThumbnailRepository.GetByIdAsync(thumbnailGuid, asNoTracking: true, useCachedResult: true);
             if (file == null)
             {
-                _logger.LogWarning($"{DateTime.Now} Thumbnail with id '{thumbnailGuid}' not found");
+                WarningFileNotFound(thumbnailGuid);
                 return NotFound($"Thumbnail with id '{thumbnailGuid}' not found");
             }
 
-            var connection = HttpContext.Connection;
-            _logger.LogDebug($"{DateTime.Now} Remote IP Address: {connection.RemoteIpAddress}:{connection.RemotePort} , Local IP Address: {connection.LocalIpAddress}:{connection.LocalPort}");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(GetMediaFileAsync),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
 
             return await GetMediaFileThumbnailAsync(file);
         }
-        private IActionResult GetMediaFile(FileEntity file)
+        private IActionResult GetMediaFile(ref FileEntity file)
         {
             try
             {
                 var connection = HttpContext.Connection;
                 if (!System.IO.File.Exists(file.FilePhysicalFullPath))
                 {
-                    string message = $"File '{file.FilePhysicalFullPath}' not found";
-                    _logger.LogError(new FileNotFoundException(message: message, fileName: file.FilePhysicalFullPath), message, [file.FilePhysicalFullPath]);
-                    return NotFound($"File '{file.FilePhysicalFullPath}' not found");
+                    string message = string.Format("File '{0}' not found", [file.FilePhysicalFullPath]);
+                    _logger.LogGeneralErrorMessage(new FileNotFoundException(message: message, fileName: file.FilePhysicalFullPath));
+                    return NotFound(message);
                 }
-                _logger.LogDebug($"File path: {file.FilePhysicalFullPath}");
+                DebugFilePath(file.FilePhysicalFullPath);
 
                 if (_serverConfig.UseMemoryCacheForStreamingFile && !file.FileUnableToCache)
                 {
-                    (bool isCachedSuccessful, var cachedData) = FileMemoryCache.GetCheckCachedFile(file.FilePhysicalFullPath);
+                    (bool isCachedSuccessful, var cachedData) = FileMemoryCache.GetCheckCachedFile(
+                        file.FilePhysicalFullPath,
+                        TimeSpan.FromMinutes(_serverConfig.StoreFileInMemoryCacheAfterLoadInMinute));
                     if (isCachedSuccessful)
                     {
-                        _logger.LogInformation($"{DateTime.Now}: Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort}, Serving file from cache = {file.FilePhysicalFullPath}, {file.FileDlnaMime.ToMimeString()} , {(double)file.FileSizeInBytes / (1024 * 1024):0.00}MB");
-                        return File(cachedData.ToArray(), file.FileDlnaMime.ToMimeString(), enableRangeProcessing: true);
+                        InformationServingFileFromCache(
+                            connection?.RemoteIpAddress,
+                            connection?.RemotePort,
+                            file.FilePhysicalFullPath,
+                            file.FileDlnaMime.ToMimeString(),
+                            file.FileSizeInBytes / (1024.0 * 1024.0)
+                        );
+                        return File(cachedData.AsStream(), file.FileDlnaMime.ToMimeString(), enableRangeProcessing: true);
                     }
                     else
                     {
@@ -95,17 +120,23 @@ namespace DLNAServer.Controllers.Media
                     }
                 }
 
-                _logger.LogInformation($"{DateTime.Now}: Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort}, Serving file from disk = {file.FilePhysicalFullPath}, {file.FileDlnaMime.ToMimeString()} , {(double)file.FileSizeInBytes / (1024 * 1024):0.00}MB");
+                InformationServingFileFromDisk(
+                    connection?.RemoteIpAddress,
+                    connection?.RemotePort,
+                    file.FilePhysicalFullPath,
+                    file.FileDlnaMime.ToMimeString(),
+                    file.FileSizeInBytes / (1024.0 * 1024.0)
+                );
                 return PhysicalFile(file.FilePhysicalFullPath, file.FileDlnaMime.ToMimeString(), enableRangeProcessing: true);
             }
             catch (OperationCanceledException)
             {
-                _logger.LogWarning($"Request was canceled by the user");
+                LoggerHelper.LogWarningOperationCanceled(_logger);
                 return StatusCode(StatusCodes.Status499ClientClosedRequest, "Client Closed Request");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception  {ex.Message}{Environment.NewLine}{ex.StackTrace}", [file.FilePhysicalFullPath]);
+                _logger.LogGeneralErrorMessage(ex);
                 return BadRequest(ex);
             }
         }
@@ -114,51 +145,68 @@ namespace DLNAServer.Controllers.Media
             try
             {
                 var connection = HttpContext.Connection;
-                _logger.LogDebug($"Thumbnail file path: {thumbnail.ThumbnailFilePhysicalFullPath}");
+                DebugThumbnailFilePath(thumbnail.ThumbnailFilePhysicalFullPath);
 
                 if (thumbnail.ThumbnailDataId.HasValue)
                 {
-                    var thumbnailData = thumbnail.ThumbnailData ?? await ThumbnailDataRepository.GetByIdAsync(thumbnail.ThumbnailDataId.Value, asNoTracking: true, useCachedResult: true);
+                    var thumbnailData = thumbnail.ThumbnailData
+                        ?? await ThumbnailDataRepository.GetByIdAsync(thumbnail.ThumbnailDataId.Value, asNoTracking: true, useCachedResult: true);
                     if (thumbnailData != null
                         && thumbnailData.ThumbnailData != null)
                     {
-                        _logger.LogInformation($"{DateTime.Now}: Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort}, Serving thumbnail file from database = {thumbnail.ThumbnailFilePhysicalFullPath}, {thumbnail.ThumbnailFileDlnaMime.ToMimeString()} , {(double)thumbnail.ThumbnailFileSizeInBytes / (1024):0.00}kB");
+                        InformationServingThumbnailFileFromDatabase(
+                            connection?.RemoteIpAddress,
+                            connection?.RemotePort,
+                            thumbnail.ThumbnailFilePhysicalFullPath,
+                            thumbnail.ThumbnailFileDlnaMime.ToMimeString(),
+                            thumbnail.ThumbnailFileSizeInBytes / (1024.0)
+                        );
                         return File(thumbnailData.ThumbnailData, thumbnail.ThumbnailFileDlnaMime.ToMimeString() ?? string.Empty, enableRangeProcessing: true);
                     }
                 }
 
                 if (!System.IO.File.Exists(thumbnail.ThumbnailFilePhysicalFullPath))
                 {
-                    string message = $"Thumbnail '{thumbnail.ThumbnailFilePhysicalFullPath}' not found";
-                    _logger.LogError(new FileNotFoundException(message: message, fileName: thumbnail.ThumbnailFilePhysicalFullPath), message, [thumbnail.ThumbnailFilePhysicalFullPath]);
-                    return NotFound($"Thumbnail '{thumbnail.ThumbnailFilePhysicalFullPath}' not found");
+                    string message = string.Format("Thumbnail file '{0}' not found", [thumbnail.ThumbnailFilePhysicalFullPath]);
+                    _logger.LogGeneralErrorMessage(new FileNotFoundException(message: message, fileName: thumbnail.ThumbnailFilePhysicalFullPath));
+                    return NotFound(message);
                 }
 
                 if (_serverConfig.UseMemoryCacheForStreamingFile)
                 {
-                    (var isCachedSuccessful, var fileMemoryByteMemory) = await FileMemoryCache.CacheFileAndReturnAsync(thumbnail.ThumbnailFilePhysicalFullPath, TimeSpan.FromDays(1));
-                    if (isCachedSuccessful
-                        && fileMemoryByteMemory != null
-                        && fileMemoryByteMemory.HasValue)
+                    (var isCachedSuccessful, var fileMemoryByteMemory) = await FileMemoryCache.CacheFileAndReturnAsync(thumbnail.ThumbnailFilePhysicalFullPath, TimeSpanValues.Time1day);
+                    if (isCachedSuccessful)
                     {
-                        _logger.LogInformation($"{DateTime.Now}: Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort}, Serving thumbnail file from cache = {thumbnail.ThumbnailFilePhysicalFullPath}, {thumbnail.ThumbnailFileDlnaMime.ToMimeString()} , {(double)thumbnail.ThumbnailFileSizeInBytes / (1024):0.00}kB");
-                        return File(fileMemoryByteMemory.Value.ToArray(), thumbnail.ThumbnailFileDlnaMime.ToMimeString() ?? string.Empty, enableRangeProcessing: true);
+                        InformationServingThumbnailFileFromCache(
+                            connection?.RemoteIpAddress,
+                            connection?.RemotePort,
+                            thumbnail.ThumbnailFilePhysicalFullPath,
+                            thumbnail.ThumbnailFileDlnaMime.ToMimeString(),
+                            thumbnail.ThumbnailFileSizeInBytes / (1024.0)
+                        );
+                        return File(fileMemoryByteMemory.AsStream(), thumbnail.ThumbnailFileDlnaMime.ToMimeString() ?? string.Empty, enableRangeProcessing: true);
                     }
 
-                    _logger.LogDebug($"{DateTime.Now}: Unable to cache thumbnail file, serving from disk.");
+                    DebugUnableToCacheThumbnailFile();
                 }
 
-                _logger.LogInformation($"{DateTime.Now}: Remote IP Address: {connection?.RemoteIpAddress}:{connection?.RemotePort}, Serving thumbnail file from disk = {thumbnail.ThumbnailFilePhysicalFullPath}, {thumbnail.ThumbnailFileDlnaMime.ToMimeString()} , {(double)thumbnail.ThumbnailFileSizeInBytes / (1024):0.00}kB");
+                InformationServingThumbnailFileFromDisk(
+                    connection?.RemoteIpAddress,
+                    connection?.RemotePort,
+                    thumbnail.ThumbnailFilePhysicalFullPath,
+                    thumbnail.ThumbnailFileDlnaMime.ToMimeString(),
+                    thumbnail.ThumbnailFileSizeInBytes / (1024.0)
+                );
                 return PhysicalFile(thumbnail.ThumbnailFilePhysicalFullPath, thumbnail.ThumbnailFileDlnaMime.ToMimeString() ?? string.Empty, enableRangeProcessing: true);
             }
             catch (OperationCanceledException)
             {
-                _logger.LogWarning($"Request was canceled by the user");
+                LoggerHelper.LogWarningOperationCanceled(_logger);
                 return StatusCode(StatusCodes.Status499ClientClosedRequest, "Client Closed Request");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Exception  {ex.Message}{Environment.NewLine}{ex.StackTrace}", [thumbnail.ThumbnailFilePhysicalFullPath]);
+                _logger.LogGeneralErrorMessage(ex);
                 return BadRequest(ex);
             }
         }

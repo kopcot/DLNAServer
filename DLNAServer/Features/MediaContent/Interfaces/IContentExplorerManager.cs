@@ -13,6 +13,8 @@ namespace DLNAServer.Features.MediaContent.Interfaces
             int startingIndex,
             int requestedCount
             );
+        Task<IEnumerable<FileEntity>> CheckFilesExistingAsync(IEnumerable<FileEntity> fileEntities);
+        Task<IEnumerable<DirectoryEntity>> CheckDirectoriesExistingAsync(IEnumerable<DirectoryEntity> directoryEntities);
         Task ClearThumbnailsAsync(IEnumerable<FileEntity> files, bool deleteThumbnailFile = true);
         Task ClearAllThumbnailsAsync(bool deleteThumbnailFile = true);
         Task ClearAllMetadataAsync();

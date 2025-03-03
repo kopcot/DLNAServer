@@ -1,17 +1,18 @@
-﻿using DLNAServer.Configuration;
+﻿using DLNAServer.Common;
+using DLNAServer.Configuration;
 using DLNAServer.Database.Entities;
 using DLNAServer.Database.Repositories.Interfaces;
 using DLNAServer.Features.MediaContent.Interfaces;
 using DLNAServer.Features.MediaProcessors.Interfaces;
+using DLNAServer.Helpers.Logger;
 using DLNAServer.Types.DLNA;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Concurrent;
-using System.Text;
 
 namespace DLNAServer.Features.MediaContent
 {
-    public class ContentExplorerManager : IContentExplorerManager, IDisposable
+    public partial class ContentExplorerManager : IContentExplorerManager, IDisposable
     {
         private readonly ILogger<ContentExplorerManager> _logger;
         private readonly ServerConfig _serverConfig;
@@ -60,15 +61,14 @@ namespace DLNAServer.Features.MediaContent
                 _ = await CheckDirectoriesExistingAsync(directoriesInDbChunk);
             }
 
-            _logger.LogInformation($"Refreshed {directoriesInDb.Count()} directories and {filesInDb.Count()} files.");
+            InformationRefreshedInfo(directoriesInDb.Length, filesInDb.Length);
         }
-        public async Task TerminateAsync()
+        public Task TerminateAsync()
         {
-            await Task.CompletedTask;
+            return Task.CompletedTask;
         }
         private Dictionary<DlnaMime, IEnumerable<string>> GetAllFilesInFolders(IEnumerable<string> sourceFolders, bool withSubdirectories)
         {
-            Dictionary<DlnaMime, IEnumerable<string>> foundFiles = [];
             List<string> filesInSourceFolders = [];
 
             foreach (var sourceFolder in sourceFolders.ToList())
@@ -76,7 +76,7 @@ namespace DLNAServer.Features.MediaContent
                 var directory = new DirectoryInfo(sourceFolder);
                 if (!directory.Exists)
                 {
-                    _logger.LogWarning($"{DateTime.Now} - Directory not exists: {sourceFolder}");
+                    WarningDirectoryNotExists(sourceFolder);
                     continue;
                 }
                 // unable to use search patters from ServerConfig.Extensions,
@@ -94,18 +94,18 @@ namespace DLNAServer.Features.MediaContent
                         MaxRecursionDepth = int.MaxValue,
                         ReturnSpecialDirectories = true,
                     })
-                    .Select(static (f) => f.FullName)
-                    .ToArray();
+                    .Select(static (f) => f.FullName);
+
                 filesInSourceFolders
                     .AddRange(files);
             }
-             
-            foundFiles = filesInSourceFolders
-                .Where(f => !_serverConfig.ExcludeFolders.Any(skip => f.Contains(skip)))
+
+            Dictionary<DlnaMime, IEnumerable<string>> foundFiles = filesInSourceFolders
+                .Where(f => !_serverConfig.ExcludeFolders.Any(skip => f.Contains(skip, StringComparison.InvariantCultureIgnoreCase)))
                 .DistinctBy(static (f) => f)
                 .OrderBy(static (f) => f)
-                .GroupBy(f => 
-                { 
+                .GroupBy(f =>
+                {
                     var extension = _serverConfig.MediaFileExtensions.FirstOrDefault(e => f.EndsWith(e.Key, StringComparison.InvariantCultureIgnoreCase));
                     return extension.Value.Key;
                 })
@@ -113,7 +113,7 @@ namespace DLNAServer.Features.MediaContent
                 .ToDictionary(static (g) => g.Key, static (g) => g.ToArray().AsEnumerable());
 
             return foundFiles;
-        } 
+        }
         private static readonly SemaphoreSlim semaphoreRefreshFoundFiles = new(1, 1);
         /// <param name="inputFiles">Files to check and add to database</param>
         /// <param name="shouldBeAdded"><see langword="true"/> if <paramref name="inputFiles"/> should not exists in the database</param>
@@ -122,7 +122,7 @@ namespace DLNAServer.Features.MediaContent
         {
             try
             {
-                _ = await semaphoreRefreshFoundFiles.WaitAsync(TimeSpan.FromMinutes(5));
+                _ = await semaphoreRefreshFoundFiles.WaitAsync(TimeSpanValues.Time5min);
 
                 List<FileEntity> fileEntities = [];
 
@@ -149,13 +149,14 @@ namespace DLNAServer.Features.MediaContent
                                 FileCreateDate = fileInfo.CreationTime,
                                 FileModifiedDate = fileInfo.LastWriteTime,
                                 FileName = fileInfo.Name,
-                                FileExtension = fileInfo.Extension.ToUpper(),
-                                Folder = fileInfo.Directory?.FullName,
+                                FileExtension = string.Intern(fileInfo.Extension.ToUpper(culture: System.Globalization.CultureInfo.InvariantCulture)),
+                                Folder = fileInfo.Directory != null ? string.Intern(fileInfo.Directory!.FullName) : null,
                                 FilePhysicalFullPath = fileInfo.FullName,
                                 Title = fileInfo.Name,
                                 FileSizeInBytes = fileInfo.Length,
                                 FileDlnaMime = fileExtensionConfiguration.Key,
-                                FileDlnaProfileName = fileExtensionConfiguration.Value ?? mimeGroup.Key.ToMainProfileNameString(),
+                                FileDlnaProfileName = fileExtensionConfiguration.Value != null
+                                    ? string.Intern(fileExtensionConfiguration.Value) : mimeGroup.Key.ToMainProfileNameString(),
                                 UpnpClass = mimeGroup.Key.ToDefaultDlnaItemClass(),
                             });
                         }
@@ -179,39 +180,27 @@ namespace DLNAServer.Features.MediaContent
 
                 if (directoryEntities.Any() || fileEntities.Count != 0)
                 {
-                    _logger.LogInformation($"Total adding {directoryEntities.Count()} directory(ies) and {fileEntities.Count} file(s)");
+                    InformationTotalAdding(directoryEntities.Count(), fileEntities.Count);
 
                     const int maxShownCount = 10;
                     if (directoryEntities.Any())
                     {
-                        StringBuilder sb = new();
-                        _ = sb.AppendLine("Directories: ");
-                        _ = sb.AppendLine(string.Join(Environment.NewLine, directoryEntities.Select(fe => fe.DirectoryFullPath).Take(maxShownCount)));
-                        if (directoryEntities.Count() > maxShownCount)
-                        {
-                            _ = sb.AppendLine("...");
-                        }
-
-                        _logger.LogInformation(sb.ToString());
+                        InformationDirectoriesCount(
+                            string.Join(Environment.NewLine, directoryEntities.Select(static (fe) => fe.DirectoryFullPath).Take(maxShownCount)),
+                            directoryEntities.Count() > maxShownCount ? $"{Environment.NewLine}..." : string.Empty);
 
                         _ = await DirectoryRepository.AddRangeAsync(directoryEntities);
-                        _ = await DirectoryRepository.GetAllAsync(asNoTracking: true, useCachedResult: false); // to refresh cached value
                     }
                     if (fileEntities.Count != 0)
                     {
-                        StringBuilder sb = new();
-                        _ = sb.AppendLine("Files: ");
-                        _ = sb.AppendLine(string.Join(Environment.NewLine, fileEntities.Select(fe => fe.FilePhysicalFullPath).Take(maxShownCount)));
-                        if (fileEntities.Count > maxShownCount)
-                        {
-                            _ = sb.AppendLine("...");
-                        }
-
-                        _logger.LogInformation(sb.ToString());
+                        InformationFilesCount(
+                            string.Join(Environment.NewLine, fileEntities.Select(static (fe) => fe.FilePhysicalFullPath).Take(maxShownCount)),
+                            directoryEntities.Count() > maxShownCount ? $"{Environment.NewLine}..." : string.Empty);
 
                         _ = await FileRepository.AddRangeAsync(fileEntities);
-                        _ = await FileRepository.GetAllFileFullNamesAsync(useCachedResult: false); // to refresh cached value
                     }
+                    _ = await DirectoryRepository.GetAllAsync(asNoTracking: true, useCachedResult: false); // to refresh cached value
+                    _ = await FileRepository.GetAllFileFullNamesAsync(useCachedResult: false); // to refresh cached value
                 }
             }
             catch
@@ -238,7 +227,7 @@ namespace DLNAServer.Features.MediaContent
                 }
                 else
                 {
-                    _logger.LogDebug($"Directory '{directoryEntity.DirectoryFullPath}' is without parent");
+                    DebugDirectoryWithoutParent(directoryEntity.DirectoryFullPath);
                 }
             }
             foreach (var file in fileEntities.ToList())
@@ -321,13 +310,13 @@ namespace DLNAServer.Features.MediaContent
 
             return (files: filesItems, directories: directoryContainers);
         }
-        private async Task<(IEnumerable<FileEntity> files, IEnumerable<DirectoryEntity> directories)> GetFilesByLastAddedToDbAsync(uint numberOfFiles)
+        private Task<(FileEntity[] files, DirectoryEntity[] directories)> GetFilesByLastAddedToDbAsync(uint numberOfFiles)
         {
-            var files = await FileRepository.GetAllByAddedToDbAsync((int)numberOfFiles, _serverConfig.ExcludeFolders, useCachedResult: false);
-            var directories = Enumerable.Empty<DirectoryEntity>();
-            return (files, directories);
+            return FileRepository
+                .GetAllByAddedToDbAsync((int)numberOfFiles, _serverConfig.ExcludeFolders, useCachedResult: false)
+                .ContinueWith(fe => (fe.Result, Array.Empty<DirectoryEntity>()));
         }
-        private async Task<IEnumerable<FileEntity>> CheckFilesExistingAsync(IEnumerable<FileEntity> fileEntities)
+        public async Task<IEnumerable<FileEntity>> CheckFilesExistingAsync(IEnumerable<FileEntity> fileEntities)
         {
             try
             {
@@ -355,7 +344,7 @@ namespace DLNAServer.Features.MediaContent
                         }
                         else
                         {
-                            _logger.LogInformation($"{DateTime.Now} - File missing {file.FilePhysicalFullPath}");
+                            InformationFileMissing(file.FilePhysicalFullPath);
                             notExistingFiles.Add(file);
                         }
                     });
@@ -382,14 +371,14 @@ namespace DLNAServer.Features.MediaContent
                         .OrderBy(static (k) => k)
                         .Select(static (k, i) => new KeyValuePair<string, object>($"Key_{i}", k))
                         .ToList();
-                    _logger.LogInformation($"Cached keys:{Environment.NewLine}{string.Join(Environment.NewLine, keys)}");
+                    InformationCachedKeys(string.Join(Environment.NewLine, keys));
                 }
-                _logger.LogError(ex, ex.Message);
+                _logger.LogGeneralErrorMessage(ex);
                 return fileEntities;
             }
         }
 
-        private async Task<IEnumerable<DirectoryEntity>> CheckDirectoriesExistingAsync(IEnumerable<DirectoryEntity> directoryEntities)
+        public async Task<IEnumerable<DirectoryEntity>> CheckDirectoriesExistingAsync(IEnumerable<DirectoryEntity> directoryEntities)
         {
             try
             {
@@ -417,7 +406,7 @@ namespace DLNAServer.Features.MediaContent
                         }
                         else
                         {
-                            _logger.LogInformation($"{DateTime.Now} - Directory missing {directory.DirectoryFullPath}");
+                            InformationDirectoryMissing(directory.DirectoryFullPath);
                             notExistingDirectories.Add(directory);
                         }
                     });
@@ -428,7 +417,7 @@ namespace DLNAServer.Features.MediaContent
                         .GetAllStartingByPathFullNamesAsync(
                             pathFullNames: notExistingDirectories.Select(static (ned) => ned.DirectoryFullPath),
                             useCachedResult: false);
-                    if (notExistingSubdirectories.Any())
+                    if (notExistingSubdirectories.Length != 0)
                     {
                         foreach (var item in notExistingSubdirectories.ToList())
                         {
@@ -438,7 +427,7 @@ namespace DLNAServer.Features.MediaContent
 
                     var removeFiles = await FileRepository
                         .GetAllByParentDirectoryIdsAsync(notExistingDirectories.Select(static (ned) => ned.Id), [], useCachedResult: false);
-                    if (removeFiles.Any())
+                    if (removeFiles.Length != 0)
                     {
                         _ = await CheckFilesExistingAsync(removeFiles);
                     }
@@ -460,9 +449,9 @@ namespace DLNAServer.Features.MediaContent
                         .OrderBy(static (k) => k)
                         .Select(static (k, i) => new KeyValuePair<string, object>($"Key_{i}", k))
                         .ToList();
-                    _logger.LogInformation($"Cached keys:{Environment.NewLine}{string.Join(Environment.NewLine, keys)}");
+                    InformationCachedKeys(string.Join(Environment.NewLine, keys));
                 }
-                _logger.LogError(ex, ex.Message);
+                _logger.LogGeneralErrorMessage(ex);
                 return directoryEntities;
             }
         }
@@ -524,28 +513,30 @@ namespace DLNAServer.Features.MediaContent
 
             if (countBeforeCheck != (fileEntities.Count() + directoryEntities.Count()))
             {
-                _logger.LogWarning($"{DateTime.Now} - {objectID} Some object was removed for directory {directoryStartObject?.DirectoryFullPath}. Object in database = {countBeforeCheck}. Objects after check = {fileEntities.Count() + directoryEntities.Count()}");
+                WarningObjectsRemovedFromDirectory(
+                    objectID,
+                    directoryStartObject?.DirectoryFullPath,
+                    countBeforeCheck,
+                    fileEntities.Count() + directoryEntities.Count());
             }
 
-            if (_logger.IsEnabled(LogLevel.Debug))
+            if (_serverConfig.ServerShowDurationDetailsBrowseRequest)
             {
-                StringBuilder sb = new();
-                _ = sb.Append($"{DateTime.Now:dd/MM/yyyy HH:mm:ss:fff}");
-                _ = sb.Append($" - ");
-                _ = sb.Append($"ObjectID: {objectID}, ");
-                _ = sb.Append($"Start: {startTime:HH:mm:ss:fff}, ");
-                _ = sb.Append($"Get directory: {getDirectoryTime:HH:mm:ss:fff} ({(getDirectoryTime - startTime).TotalMilliseconds:0.00}ms), ");
-                _ = sb.Append($"Get files: {getAllFilesInDirectoryTime:HH:mm:ss:fff} ({(getAllFilesInDirectoryTime - getDirectoryTime).TotalMilliseconds:0.00}ms), ");
-                _ = sb.Append($"Refresh found files: {refreshFoundFilesTime:HH:mm:ss:fff} ({(refreshFoundFilesTime - getAllFilesInDirectoryTime).TotalMilliseconds:0.00}ms), ");
-                _ = sb.Append($"Get data from database: {getEntitiesTime:HH:mm:ss:fff} ({(getEntitiesTime - refreshFoundFilesTime).TotalMilliseconds:0.00}ms), ");
-                _ = sb.Append($"Add additional data from database: {addAdditionalEntitiesTime:HH:mm:ss:fff} ({(addAdditionalEntitiesTime - getEntitiesTime).TotalMilliseconds:0.00}ms), ");
-                _ = sb.Append($"Filter data: {filterEntitiesTime:HH:mm:ss:fff} ({(filterEntitiesTime - addAdditionalEntitiesTime).TotalMilliseconds:0.00}ms), ");
-                _ = sb.Append($"Check files: {checkEntitiesTime:HH:mm:ss:fff} ({(checkEntitiesTime - filterEntitiesTime).TotalMilliseconds:0.00}ms), ");
-                _ = sb.Append($"Fill empty data : {endTime:HH:mm:ss:fff} ({(endTime - checkEntitiesTime).TotalMilliseconds:0.00}ms), ");
-                _ = sb.Append($"End: {endTime:HH:mm:ss:fff}, ");
-                _ = sb.Append($"Total duration (ms): {(endTime - startTime).TotalMilliseconds:0.00}, ");
-                _ = sb.Append($"Directory: {directoryStartObject?.DirectoryFullPath}");
-                _logger.LogInformation(sb.ToString());
+                InformationBrowseDetailInfo(
+                    objectID: objectID,
+                    startTime: startTime,
+                    endTime: endTime,
+                    getDirectory: (getDirectoryTime - startTime).TotalMilliseconds,
+                    getFiles: (getAllFilesInDirectoryTime - getDirectoryTime).TotalMilliseconds,
+                    refreshFoundFiles: (refreshFoundFilesTime - getAllFilesInDirectoryTime).TotalMilliseconds,
+                    getDataFromDatabase: (getEntitiesTime - refreshFoundFilesTime).TotalMilliseconds,
+                    addAdditionalDataFromDatabase: (addAdditionalEntitiesTime - getEntitiesTime).TotalMilliseconds,
+                    filterData: (filterEntitiesTime - addAdditionalEntitiesTime).TotalMilliseconds,
+                    checkFiles: (checkEntitiesTime - filterEntitiesTime).TotalMilliseconds,
+                    fillEmptyData: (endTime - checkEntitiesTime).TotalMilliseconds,
+                    totalDuration: (endTime - startTime).TotalMilliseconds,
+                    directory: directoryStartObject?.DirectoryFullPath
+                    );
             }
 
             return (fileEntities.ToArray(), directoryEntities.ToArray(), isRootFolder, totalMatches);

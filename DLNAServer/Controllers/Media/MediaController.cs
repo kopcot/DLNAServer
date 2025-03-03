@@ -1,7 +1,6 @@
 ﻿using DLNAServer.Configuration;
-using DLNAServer.SOAP.Endpoints;
-using DLNAServer.Types.DLNA;
-using DLNAServer.Types.UPNP.Interfaces;
+using DLNAServer.Helpers.Logger;
+using DLNAServer.SOAP.Constants;
 using Microsoft.AspNetCore.Mvc;
 using System.Text;
 using System.Xml;
@@ -14,20 +13,25 @@ namespace DLNAServer.Controllers.Media
     {
         private readonly ILogger<MediaController> _logger;
         private readonly ServerConfig _serverConfig;
-        private readonly IUPNPDevices _upnpDevices;
         public MediaController(
             ILogger<MediaController> logger,
-            ServerConfig serverConfig,
-            IUPNPDevices uPNPDevices)
+            ServerConfig serverConfig)
         {
             _logger = logger;
             _serverConfig = serverConfig;
-            _upnpDevices = uPNPDevices;
         }
         [HttpGet("description.xml")]
         public IActionResult GetDescription([FromQuery] string uuid)
         {
-            _logger.LogDebug($"{nameof(GetDescription)}, {HttpContext.Connection.RemoteIpAddress}:{HttpContext.Connection.RemotePort}  path: '{ControllerContext.HttpContext.Request.Path.Value}',  method: '{HttpContext.Request.Method}'");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(GetDescription),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
 
             string xmlContent = $@"<?xml version=""1.0"" encoding=""utf-8""?>
 <root xmlns=""urn:schemas-upnp-org:device-1-0""  xmlns:dlna=""urn:schemas-dlna-org:device-1-0"" xmlns:sec=""http://www.sec.co.kr/dlna"">
@@ -97,29 +101,29 @@ namespace DLNAServer.Controllers.Media
 		</iconList>
 		<serviceList>
 			<service>
-				<serviceType>{XmlNamespaces.NS_ServiceType_ConnectionManager}</serviceType>
-				<serviceId>{XmlNamespaces.NS_ServiceId_ConnectionManager}</serviceId>
+				<serviceType>{Services.ServiceType.ConnectionManager}</serviceType>
+				<serviceId>{Services.ServiceId.ConnectionManager}</serviceId>
 				<eventSubURL>/event/eventAction/ConnectionManager</eventSubURL>
 				<controlURL>{EndpointServices.ConnectionManagerServicePath}</controlURL>
 				<SCPDURL>/SCPD/connectionManager.xml</SCPDURL>
 			</service>
 			<service>
-				<serviceType>{XmlNamespaces.NS_ServiceType_X_MS_MediaReceiverRegistrar}</serviceType>
-				<serviceId>{XmlNamespaces.NS_ServiceId_X_MS_MediaReceiverRegistrar}</serviceId>
+				<serviceType>{Services.ServiceType.X_MS_MediaReceiverRegistrar}</serviceType>
+				<serviceId>{Services.ServiceId.X_MS_MediaReceiverRegistrar}</serviceId>
 				<eventSubURL>/event/eventAction/X_MS_MediaReceiverRegistrar</eventSubURL>
 				<controlURL>{EndpointServices.MediaReceiverRegistrarServicePath}</controlURL>
 				<SCPDURL>/SCPD/MediaReceiverRegistrar.xml</SCPDURL>
 			</service>
 			<service>
-				<serviceType>{XmlNamespaces.NS_ServiceType_AVTransport}</serviceType>
-				<serviceId>{XmlNamespaces.NS_ServiceId_AVTransport}</serviceId>
+				<serviceType>{Services.ServiceType.AVTransport}</serviceType>
+				<serviceId>{Services.ServiceId.AVTransport}</serviceId>
 				<eventSubURL>/event/eventAction/AVTransport</eventSubURL>
 				<controlURL>{EndpointServices.AVTransportServicePath}</controlURL>
 				<SCPDURL>/SCPD/avTransport.xml</SCPDURL>
 			</service>
 			<service>
-				<serviceType>{XmlNamespaces.NS_ServiceType_ContentDirectory}</serviceType>
-				<serviceId>{XmlNamespaces.NS_ServiceId_ContentDirectory}</serviceId>
+				<serviceType>{Services.ServiceType.ContentDirectory}</serviceType>
+				<serviceId>{Services.ServiceId.ContentDirectory}</serviceId>
 				<eventSubURL>/event/eventAction/ContentDirectory</eventSubURL>
 				<controlURL>{EndpointServices.ContentDirectoryServicePath}</controlURL>
 				<SCPDURL>/SCPD/contentDirectory.xml</SCPDURL>

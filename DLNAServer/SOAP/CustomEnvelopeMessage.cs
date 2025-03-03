@@ -28,25 +28,31 @@ namespace DLNAServer.SOAP
                 writer.WriteStartDocument();
             }
 
-            var prefix = Version.Envelope.NamespacePrefix(NamespaceManager);
-            writer.WriteStartElement(prefix, "Envelope", Version.Envelope.Namespace());
-            writer.WriteXmlnsAttribute(prefix, Version.Envelope.Namespace());
-            writer.WriteAttributeString(prefix, "encodingStyle", null, "http://schemas.xmlsoap.org/soap/encoding/");
+            string prefix = string.Intern(Version.Envelope.NamespacePrefix(NamespaceManager));
+            string envelopeNamespace = string.Intern(Version.Envelope.Namespace());
 
-            var xsdPrefix = Namespaces.AddNamespaceIfNotAlreadyPresentAndGetPrefix(NamespaceManager, "xsd", Namespaces.XMLNS_XSD);
+            const string envelope = "Envelope";
+            const string encodingStyle = "encodingStyle";
+            const string encodingStyleUri = "http://schemas.xmlsoap.org/soap/encoding/";
+            writer.WriteStartElement(prefix, envelope, envelopeNamespace);
+            writer.WriteXmlnsAttribute(prefix, envelopeNamespace);
+            writer.WriteAttributeString(prefix, encodingStyle, null, encodingStyleUri);
+
+            const string xsd = "xsd";
+            string xsdPrefix = string.Intern(Namespaces.AddNamespaceIfNotAlreadyPresentAndGetPrefix(NamespaceManager, xsd, Namespaces.XMLNS_XSD));
             writer.WriteXmlnsAttribute(xsdPrefix, Namespaces.XMLNS_XSD);
 
-            var xsiPrefix = Namespaces.AddNamespaceIfNotAlreadyPresentAndGetPrefix(NamespaceManager, "xsi", Namespaces.XMLNS_XSI);
+            const string xsi = "xsi";
+            string xsiPrefix = string.Intern(Namespaces.AddNamespaceIfNotAlreadyPresentAndGetPrefix(NamespaceManager, xsi, Namespaces.XMLNS_XSI));
             writer.WriteXmlnsAttribute(xsiPrefix, Namespaces.XMLNS_XSI);
 
             if (AdditionalEnvelopeXmlnsAttributes != null)
             {
                 foreach (var rec in AdditionalEnvelopeXmlnsAttributes)
                 {
-                    writer.WriteXmlnsAttribute(rec.Key, rec.Value);
+                    writer.WriteXmlnsAttribute(string.Intern(rec.Key), string.Intern(rec.Value));
                 }
             }
-
         }
     }
 }

@@ -1,10 +1,10 @@
-﻿using DLNAServer.SOAP.Endpoints.Responses.ContentDirectory;
-using DLNAServer.Types.DLNA;
+﻿using DLNAServer.SOAP.Constants;
+using DLNAServer.SOAP.Endpoints.Responses.ContentDirectory;
 using System.ServiceModel;
 
 namespace DLNAServer.SOAP.Endpoints.Interfaces
 {
-    [ServiceContract(Namespace = XmlNamespaces.NS_ServiceType_ContentDirectory)]
+    [ServiceContract(Namespace = Services.ServiceType.ContentDirectory)]
     public interface IContentDirectoryService
     {
         [OperationContract(Name = "Browse")]

@@ -26,6 +26,7 @@ namespace DLNAServer.Features.MediaProcessors
         {
             if (!fileEntities.Any())
             {
+                await Task.CompletedTask;
                 return;
             }
 
@@ -36,13 +37,13 @@ namespace DLNAServer.Features.MediaProcessors
                 switch (group.Key)
                 {
                     case DlnaMedia.Audio:
-                        await AudioProcessor.FillEmptyMetadataAsync(group, setCheckedForFailed);
+                        await AudioProcessor.FillEmptyMetadataAsync([.. group], setCheckedForFailed);
                         break;
                     case DlnaMedia.Image:
-                        await ImageProcessor.FillEmptyMetadataAsync(group, setCheckedForFailed);
+                        await ImageProcessor.FillEmptyMetadataAsync([.. group], setCheckedForFailed);
                         break;
                     case DlnaMedia.Video:
-                        await VideoProcessor.FillEmptyMetadataAsync(group, setCheckedForFailed);
+                        await VideoProcessor.FillEmptyMetadataAsync([.. group], setCheckedForFailed);
                         break;
                     default:
                         throw new NotSupportedException($"Unsupported media type: {group.Key}");
@@ -53,6 +54,7 @@ namespace DLNAServer.Features.MediaProcessors
         {
             if (!fileEntities.Any())
             {
+                await Task.CompletedTask;
                 return;
             }
 
@@ -63,23 +65,24 @@ namespace DLNAServer.Features.MediaProcessors
                 switch (group.Key)
                 {
                     case DlnaMedia.Audio:
-                        await AudioProcessor.FillEmptyThumbnailsAsync(group, setCheckedForFailed);
+                        await AudioProcessor.FillEmptyThumbnailsAsync([.. group], setCheckedForFailed);
                         break;
                     case DlnaMedia.Image:
-                        await ImageProcessor.FillEmptyThumbnailsAsync(group, setCheckedForFailed);
+                        await ImageProcessor.FillEmptyThumbnailsAsync([.. group], setCheckedForFailed);
                         break;
                     case DlnaMedia.Video:
-                        await VideoProcessor.FillEmptyThumbnailsAsync(group, setCheckedForFailed);
+                        await VideoProcessor.FillEmptyThumbnailsAsync([.. group], setCheckedForFailed);
                         break;
                     default:
                         throw new NotSupportedException($"Unsupported media type: {group.Key}");
                 }
             }
         }
-        public async Task RefreshMetadataAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task RefreshMetadataAsync(FileEntity[] fileEntities, bool setCheckedForFailed = true)
         {
-            if (!fileEntities.Any())
+            if (fileEntities.Length == 0)
             {
+                await Task.CompletedTask;
                 return;
             }
 
@@ -90,23 +93,24 @@ namespace DLNAServer.Features.MediaProcessors
                 switch (group.Key)
                 {
                     case DlnaMedia.Audio:
-                        await AudioProcessor.RefreshMetadataAsync(group, setCheckedForFailed);
+                        await AudioProcessor.RefreshMetadataAsync([.. group], setCheckedForFailed);
                         break;
                     case DlnaMedia.Image:
-                        await ImageProcessor.RefreshMetadataAsync(group, setCheckedForFailed);
+                        await ImageProcessor.RefreshMetadataAsync([.. group], setCheckedForFailed);
                         break;
                     case DlnaMedia.Video:
-                        await VideoProcessor.RefreshMetadataAsync(group, setCheckedForFailed);
+                        await VideoProcessor.RefreshMetadataAsync([.. group], setCheckedForFailed);
                         break;
                     default:
                         throw new NotSupportedException($"Unsupported media type: {group.Key}");
                 }
             }
         }
-        public async Task RefreshThumbnailsAsync(IEnumerable<FileEntity> fileEntities, bool setCheckedForFailed = true)
+        public async Task RefreshThumbnailsAsync(FileEntity[] fileEntities, bool setCheckedForFailed = true)
         {
-            if (!fileEntities.Any())
+            if (fileEntities.Length == 0)
             {
+                await Task.CompletedTask;
                 return;
             }
 
@@ -117,13 +121,13 @@ namespace DLNAServer.Features.MediaProcessors
                 switch (group.Key)
                 {
                     case DlnaMedia.Audio:
-                        await AudioProcessor.RefreshThumbnailsAsync(group, setCheckedForFailed);
+                        await AudioProcessor.RefreshThumbnailsAsync([.. group], setCheckedForFailed);
                         break;
                     case DlnaMedia.Image:
-                        await ImageProcessor.RefreshThumbnailsAsync(group, setCheckedForFailed);
+                        await ImageProcessor.RefreshThumbnailsAsync([.. group], setCheckedForFailed);
                         break;
                     case DlnaMedia.Video:
-                        await VideoProcessor.RefreshThumbnailsAsync(group, setCheckedForFailed);
+                        await VideoProcessor.RefreshThumbnailsAsync([.. group], setCheckedForFailed);
                         break;
                     default:
                         throw new NotSupportedException($"Unsupported media type: {group.Key}");

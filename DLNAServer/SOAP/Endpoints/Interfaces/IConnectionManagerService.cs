@@ -1,10 +1,10 @@
-﻿using DLNAServer.SOAP.Endpoints.Responses.ConnectionManager;
-using DLNAServer.Types.DLNA;
+﻿using DLNAServer.SOAP.Constants;
+using DLNAServer.SOAP.Endpoints.Responses.ConnectionManager;
 using System.ServiceModel;
 
 namespace DLNAServer.SOAP.Endpoints.Interfaces
 {
-    [ServiceContract(Namespace = XmlNamespaces.NS_ServiceType_ConnectionManager)]
+    [ServiceContract(Namespace = Services.ServiceType.ConnectionManager)]
     public interface IConnectionManagerService
     {
         [OperationContract(Name = "GetProtocolInfo")]

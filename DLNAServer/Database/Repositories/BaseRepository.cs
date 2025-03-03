@@ -1,4 +1,6 @@
-﻿using DLNAServer.Database.Entities;
+﻿using CommunityToolkit.HighPerformance;
+using DLNAServer.Common;
+using DLNAServer.Database.Entities;
 using DLNAServer.Database.Repositories.Interfaces;
 using DLNAServer.Helpers.Caching;
 using DLNAServer.Helpers.Database;
@@ -21,16 +23,15 @@ namespace DLNAServer.Database.Repositories
             _memoryCacheLazy = memoryCacheLazy;
             _repositoryName = repositoryName;
         }
-        protected TimeSpan defaultCacheDuration = TimeSpan.FromSeconds(5);
-        protected TimeSpan defaultCacheAbsoluteDuration = TimeSpan.FromMinutes(5);
+        protected TimeSpan defaultCacheDuration = TimeSpanValues.Time5sec;
+        protected TimeSpan defaultCacheAbsoluteDuration = TimeSpanValues.Time5min;
         protected virtual Func<IQueryable<T>, IOrderedQueryable<T>> DefaultOrderBy { get; set; } = static (query) => query.OrderByDescending(static (e) => e.CreatedInDB);
         protected virtual Func<IQueryable<T>, IQueryable<T>> DefaultInclude { get; set; } = static (query) => query;
         DlnaDbContext IBaseRepository<T>.DbContext => DbContext;
 
-        public async Task<bool> SaveChangesAsync()
+        public Task<int> SaveChangesAsync()
         {
-            _ = await DbContext.SaveChangesAsync();
-            return true;
+            return DbContext.SaveChangesAsync();
         }
         public void MarkForDelete<T1>(T1 entity)
         {
@@ -45,14 +46,13 @@ namespace DLNAServer.Database.Repositories
                 DbSet.RemoveRange(DbSet);
                 _ = await DbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
-            };
+            }
             return true;
         }
-        public async Task<bool> DeleteAsync(T entity)
+        public Task<bool> DeleteAsync(T entity)
         {
             _ = DbSet.Remove(entity);
-            _ = await DbContext.SaveChangesAsync();
-            return true;
+            return DbContext.SaveChangesAsync().ContinueWith(static (e) => e.Result == 1);
         }
         public async Task<bool> DeleteByGuidAsync(string guid)
         {
@@ -61,7 +61,6 @@ namespace DLNAServer.Database.Repositories
             {
                 return await DeleteAsync(entities);
             }
-
             return false;
         }
         public async Task<bool> DeleteRangeAsync(IEnumerable<T> entities)
@@ -71,7 +70,7 @@ namespace DLNAServer.Database.Repositories
                 DbSet.RemoveRange(entities);
                 _ = await DbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
-            };
+            }
             return true;
         }
         public async Task<bool> DeleteRangeByGuidsAsync(IEnumerable<Guid> guids)
@@ -82,10 +81,10 @@ namespace DLNAServer.Database.Repositories
                 DbSet.RemoveRange(entities);
                 _ = await DbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
-            };
+            }
             return true;
         }
-        public async Task<bool> DeleteRangeByGuidsAsync(IEnumerable<string> guids)
+        public Task<bool> DeleteRangeByGuidsAsync(IEnumerable<string> guids)
         {
             List<Guid> guidsParsed = [];
             foreach (var guid in guids.ToList())
@@ -95,13 +94,12 @@ namespace DLNAServer.Database.Repositories
                     guidsParsed.Add(dbGuid);
                 }
             }
-
-            return await DeleteRangeByGuidsAsync(guidsParsed);
+            return DeleteRangeByGuidsAsync(guidsParsed);
         }
-        public async Task<T[]> GetAllAsync(bool useCachedResult) => await GetAllAsync(false, useCachedResult);
-        public async Task<T[]> GetAllAsync(bool asNoTracking, bool useCachedResult)
+        public Task<T[]> GetAllAsync(bool useCachedResult) => GetAllAsync(false, useCachedResult);
+        public Task<T[]> GetAllAsync(bool asNoTracking, bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync(
+            var memoryDataResult = GetAllWithCacheAsync(
                 queryAction: asNoTracking
                         ? DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
@@ -114,13 +112,13 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
-            return memoryDataResult.ToArray();
+            return memoryDataResult.ContinueWith(static (e) => e.Result.ToArray());
         }
 
-        public async Task<T[]> GetAllAsync(int skip, int take, bool useCachedResult) => await GetAllAsync(skip, take, false, useCachedResult);
-        public async Task<T[]> GetAllAsync(int skip, int take, bool asNoTracking, bool useCachedResult)
+        public Task<T[]> GetAllAsync(int skip, int take, bool useCachedResult) => GetAllAsync(skip, take, false, useCachedResult);
+        public Task<T[]> GetAllAsync(int skip, int take, bool asNoTracking, bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync(
+            var memoryDataResult = GetAllWithCacheAsync(
                 queryAction: asNoTracking
                         ? DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
@@ -137,21 +135,20 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
-            return memoryDataResult.ToArray();
+            return memoryDataResult.ContinueWith(static (e) => e.Result.ToArray());
         }
-        public async Task<long> GetCountAsync(bool useCachedResult)
+        public Task<long> GetCountAsync(bool useCachedResult)
         {
-            return await GetSingleWithCacheAsync(
+            return GetSingleWithCacheAsync(
                 queryAction: DbSet.LongCountAsync(),
                 cacheKey: GetCacheKey<T>(),
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
         }
-
-        public async Task<T[]> GetAllByIdsAsync(IEnumerable<Guid> guids, bool useCachedResult)
+        public Task<T[]> GetAllByIdsAsync(IEnumerable<Guid> guids, bool useCachedResult)
         {
-            var memoryDataResult = await GetAllWithCacheAsync(
+            var memoryDataResult = GetAllWithCacheAsync(
                 queryAction: DbSet
                         .OrderEntitiesByDefault(DefaultOrderBy)
                         .IncludeChildEntities(DefaultInclude)
@@ -160,12 +157,12 @@ namespace DLNAServer.Database.Repositories
                 cacheDuration: defaultCacheDuration,
                 useCachedResult: useCachedResult
                 );
-            return memoryDataResult.ToArray();
+            return memoryDataResult.ContinueWith(static (e) => e.Result.ToArray());
         }
-        public async Task<T?> GetByIdAsync(Guid guid, bool useCachedResult) => await GetByIdAsync(guid, false, useCachedResult);
-        public async Task<T?> GetByIdAsync(Guid guid, bool asNoTracking, bool useCachedResult)
+        public Task<T?> GetByIdAsync(Guid guid, bool useCachedResult) => GetByIdAsync(guid, false, useCachedResult);
+        public Task<T?> GetByIdAsync(Guid guid, bool asNoTracking, bool useCachedResult)
         {
-            return await GetSingleWithCacheAsync(
+            return GetSingleWithCacheAsync(
                 queryAction: asNoTracking
                         ? DbSet
                             .OrderEntitiesByDefault(DefaultOrderBy)
@@ -181,18 +178,18 @@ namespace DLNAServer.Database.Repositories
                 useCachedResult: useCachedResult
                 );
         }
-        public async Task<T?> GetByIdAsync(string guid, bool useCachedResult)
+        public Task<T?> GetByIdAsync(string guid, bool useCachedResult)
         {
-            return Guid.TryParse(guid, out var dbGuid) ? await GetByIdAsync(dbGuid, useCachedResult) : null;
+            return Guid.TryParse(guid, out var dbGuid) ? GetByIdAsync(dbGuid, useCachedResult) : Task.FromResult<T?>(null);
         }
-        public async Task<T?> GetByIdAsync(string guid, bool asNoTracking, bool useCachedResult)
+        public Task<T?> GetByIdAsync(string guid, bool asNoTracking, bool useCachedResult)
         {
-            return Guid.TryParse(guid, out var dbGuid) ? await GetByIdAsync(dbGuid, asNoTracking, useCachedResult) : null;
+            return Guid.TryParse(guid, out var dbGuid) ? GetByIdAsync(dbGuid, asNoTracking, useCachedResult) : Task.FromResult<T?>(null);
         }
-        public async Task<bool> AddAsync(T entity)
+        public Task<bool> AddAsync(T entity)
         {
             T[] entities = [entity];
-            return await AddRangeAsync(entities);
+            return AddRangeAsync(entities);
         }
         public async Task<bool> AddRangeAsync(IEnumerable<T> entities)
         {
@@ -201,13 +198,13 @@ namespace DLNAServer.Database.Repositories
                 await DbSet.AddRangeAsync(entities);
                 _ = await DbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
-            };
+            }
             return true;
         }
-        public async Task<bool> UpdateAsync(T entity)
+        public Task<bool> UpdateAsync(T entity)
         {
             T[] entities = [entity];
-            return await UpdateRangeAsync(entities);
+            return UpdateRangeAsync(entities);
         }
         public async Task<bool> UpdateRangeAsync(T[] entities)
         {
@@ -216,16 +213,16 @@ namespace DLNAServer.Database.Repositories
                 DbSet.UpdateRange(entities);
                 _ = await DbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
-            };
+            }
             return true;
         }
-        public async Task<bool> UpsertAsync(T entity)
+        public Task<bool> UpsertAsync(T entity)
         {
             T[] entities = [entity];
-            return await UpsertRangeAsync(entities);
+            return UpsertRangeAsync(entities);
         }
         public async Task<bool> UpsertRangeAsync(T[] entities)
-        { 
+        {
             var existingById = (await GetAllByIdsAsync(entities.Select(static (e) => e.Id), false)).ToArray();
             var notExist = entities.Where(e => !existingById.Any(ex => ex.Id.Equals(e.Id))).ToArray();
             var exist = entities.Where(e => existingById.Any(ex => ex.Id.Equals(e.Id))).ToArray();
@@ -244,23 +241,23 @@ namespace DLNAServer.Database.Repositories
 
                 _ = await DbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
-            };
+            }
 
             existingById = [];
             notExist = [];
             exist = [];
 
-            return true; 
-        }  
-        public async Task<bool> IsAnyItemAsync()
+            return true;
+        }
+        public Task<bool> IsAnyItemAsync()
         {
-            return await DbSet
+            return DbSet
                 .AsNoTracking()
                 .AnyAsync();
         }
 
         #region Helpers 
-        protected async Task<ReadOnlyMemory<TResult>> GetAllWithCacheAsync<TResult>(
+        protected Task<Memory<TResult>> GetAllWithCacheAsync<TResult>(
             IQueryable<TResult> queryAction,
             string cacheKey,
             TimeSpan cacheDuration,
@@ -268,7 +265,7 @@ namespace DLNAServer.Database.Repositories
         {
             if (useCachedResult)
             {
-                var resultAsMemory = await MemoryCache.GetOrCreateAsync(
+                var resultAsMemory = MemoryCache.GetOrCreateAsync(
                     cacheKey,
                     async entry =>
                     {
@@ -284,16 +281,16 @@ namespace DLNAServer.Database.Repositories
 
                 MemoryCache.StartEvictCachedKey(cacheKey, cacheDuration);
 
-                return resultAsMemory;
+                return resultAsMemory.ContinueWith(static (t) => t.Result.AsMemory());
             }
             else
             {
                 MemoryCache.Remove(cacheKey);
 
-                return await queryAction.ToArrayAsync();
+                return queryAction.ToArrayAsync().ContinueWith(static (t) => t.Result.AsMemory());
             }
         }
-        protected async Task<TResult?> GetSingleWithCacheAsync<TResult>(
+        protected Task<TResult?> GetSingleWithCacheAsync<TResult>(
             Task<TResult> queryAction,
             string cacheKey,
             TimeSpan cacheDuration,
@@ -301,7 +298,7 @@ namespace DLNAServer.Database.Repositories
         {
             if (useCachedResult)
             {
-                var result = await MemoryCache.GetOrCreateAsync(
+                var result = MemoryCache.GetOrCreateAsync(
                     cacheKey,
                     async entry =>
                     {
@@ -323,7 +320,7 @@ namespace DLNAServer.Database.Repositories
             {
                 MemoryCache.Remove(cacheKey);
 
-                return await queryAction;
+                return queryAction.ContinueWith(static (t) => (TResult?)t.Result);
             }
         }
 
@@ -331,9 +328,9 @@ namespace DLNAServer.Database.Repositories
         {
             if (additionalArgs == null || !additionalArgs.Any())
             {
-                return $"{_repositoryName} {methodName} {typeof(TResult).Name}";
+                return string.Format("{0} {1} {2}", [_repositoryName, methodName, typeof(TResult).Name]);
             }
-            return $"{_repositoryName} {methodName} {typeof(TResult).Name} {string.Join(';', additionalArgs)}";
+            return string.Format("{0} {1} {2} {3}", [_repositoryName, methodName, typeof(TResult).Name, string.Join(';', additionalArgs)]);
         }
         #endregion
 

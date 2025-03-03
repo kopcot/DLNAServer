@@ -1,4 +1,5 @@
-﻿using DLNAServer.Database.Entities;
+﻿using DLNAServer.Common;
+using DLNAServer.Database.Entities;
 using DLNAServer.Database.Repositories.Interfaces;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -8,8 +9,8 @@ namespace DLNAServer.Database.Repositories
     {
         public ThumbnailDataRepository(DlnaDbContext dbContext, Lazy<IMemoryCache> memoryCacheLazy) : base(dbContext, memoryCacheLazy, nameof(ThumbnailDataRepository))
         {
-            defaultCacheDuration = TimeSpan.FromMinutes(5);
-            defaultCacheAbsoluteDuration = TimeSpan.FromHours(1);
+            defaultCacheDuration = TimeSpanValues.Time5min;
+            defaultCacheAbsoluteDuration = TimeSpanValues.Time1hour;
         }
     }
 }

@@ -1,10 +1,10 @@
-﻿using DLNAServer.SOAP.Endpoints.Responses.AVTransport;
-using DLNAServer.Types.DLNA;
+﻿using DLNAServer.SOAP.Constants;
+using DLNAServer.SOAP.Endpoints.Responses.AVTransport;
 using System.ServiceModel;
 
 namespace DLNAServer.SOAP.Endpoints.Interfaces
 {
-    [ServiceContract(Namespace = XmlNamespaces.NS_ServiceType_AVTransport)]
+    [ServiceContract(Namespace = Services.ServiceType.AVTransport)]
     public interface IAVTransportService
     {
         [OperationContract(Name = "SetAVTransportURI")]

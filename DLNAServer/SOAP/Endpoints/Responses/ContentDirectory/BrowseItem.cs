@@ -1,4 +1,4 @@
-﻿using DLNAServer.Types.DLNA;
+﻿using DLNAServer.SOAP.Constants;
 using System.Xml.Serialization;
 
 namespace DLNAServer.SOAP.Endpoints.Responses.ContentDirectory

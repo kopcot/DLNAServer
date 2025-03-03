@@ -1,16 +1,18 @@
-﻿using DLNAServer.Configuration;
+﻿using DLNAServer.Common;
+using DLNAServer.Configuration;
 using DLNAServer.Database.Entities;
 using DLNAServer.Database.Repositories.Interfaces;
 using DLNAServer.Features.Cache.Interfaces;
 using DLNAServer.Helpers.Caching;
 using DLNAServer.Helpers.Files;
+using DLNAServer.Helpers.Logger;
 using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Concurrent;
 using System.Runtime;
 
 namespace DLNAServer.Features.Cache
 {
-    public class FileMemoryCacheManager : IFileMemoryCacheManager
+    public partial class FileMemoryCacheManager : IFileMemoryCacheManager
     {
         private readonly ILogger<FileMemoryCacheManager> _logger;
         private readonly Lazy<IMemoryCache> _memoryCacheLazy;
@@ -19,7 +21,7 @@ namespace DLNAServer.Features.Cache
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly static ConcurrentDictionary<string, SemaphoreSlim> cachingFilesInProgress = new();
         private readonly static SemaphoreSlim postEvictionCallbackInProgress = new(1, 1);
-        private readonly static TimeSpan defaultExpiration = TimeSpan.FromMinutes(1);
+        private readonly static TimeSpan defaultExpiration = TimeSpanValues.Time1min;
 
         public FileMemoryCacheManager(
             ServerConfig serverConfig,
@@ -34,7 +36,7 @@ namespace DLNAServer.Features.Cache
         }
         public void CacheFileInBackground(FileEntity file, TimeSpan? slidingExpiration)
         {
-            new Task(async () =>
+            Task backgroundCaching = new(async () =>
             {
                 using (var scope = _serviceScopeFactory.CreateScope())
                 {
@@ -42,7 +44,7 @@ namespace DLNAServer.Features.Cache
                         ? slidingExpiration
                         : defaultExpiration;
 
-                    (var isCachedSuccessful, var fileMemoryByteWR) = await CacheFileAndReturnAsync(file.FilePhysicalFullPath, slidingExpiration, true);
+                    (var isCachedSuccessful, _) = await CacheFileAndReturnAsync(file.FilePhysicalFullPath, slidingExpiration, true);
 
                     if (file.FileUnableToCache != !isCachedSuccessful)
                     {
@@ -53,28 +55,29 @@ namespace DLNAServer.Features.Cache
                         _ = await fileRepository.SaveChangesAsync();
                     }
 
-                    _logger.LogDebug($"{DateTime.Now} - File cached in background done - {file!.FilePhysicalFullPath} ");
-                };
-            }, creationOptions: TaskCreationOptions.RunContinuationsAsynchronously).Start();
+                    DebugBackgroundFileCachedDone(file!.FilePhysicalFullPath);
+                }
+            }, creationOptions: TaskCreationOptions.RunContinuationsAsynchronously);
+            backgroundCaching.Start();
         }
-        public async Task<(bool isCachedSuccessful, ReadOnlyMemory<byte>? file)> CacheFileAndReturnAsync(
+        public async Task<(bool isCachedSuccessful, ReadOnlyMemory<byte> file)> CacheFileAndReturnAsync(
             string filePath,
             TimeSpan? slidingExpiration,
             bool checkExistingInCache = true)
         {
             var fileLock = cachingFilesInProgress.GetOrAdd(filePath, new SemaphoreSlim(1, 1));
 
-            _logger.LogDebug($"{DateTime.Now} - Started caching file: {filePath}");
-            await fileLock.WaitAsync(TimeSpan.FromMinutes(30));
+            DebugFileCacheStarted(filePath);
+            _ = await fileLock.WaitAsync(TimeSpanValues.Time30min);
 
             try
             {
                 if (checkExistingInCache)
                 {
-                    (bool isCached, ReadOnlyMemory<byte> file) = GetCheckCachedFile(filePath);
+                    (bool isCached, ReadOnlyMemory<byte> file) = GetCheckCachedFile(filePath, slidingExpiration);
                     if (isCached)
                     {
-                        _logger.LogDebug($"{DateTime.Now} - File cached before - {filePath} ");
+                        DebugFileCacheBefore(filePath);
                         return (isCached, file);
                     }
                 }
@@ -82,121 +85,110 @@ namespace DLNAServer.Features.Cache
                 FileInfo fileInfo = new(filePath);
                 if (!fileInfo.Exists || fileInfo.Length == 0)
                 {
-                    return (false, null);
+                    return (false, ReadOnlyMemory<byte>.Empty);
                 }
                 var cachedData = await FileHelper.ReadFileAsync(filePath, _logger, (long)_serverConfig.MaxSizeOfFileForUseMemoryCacheInMBytes * 1024 * 1024);
                 if (cachedData == null)
                 {
-                    return (false, null);
+                    return (false, ReadOnlyMemory<byte>.Empty);
                 }
                 GC.AddMemoryPressure(cachedData.Value.Length);
 
-                CacheFileData(filePath, slidingExpiration, cachedData.Value);
+                var cachedDataMemory = cachedData.Value.ToArray();
 
-                return (true, cachedData.Value);
+                CacheFileData(ref filePath, ref slidingExpiration, ref cachedDataMemory);
+
+                return (true, cachedDataMemory);
 
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message, [filePath, ex.StackTrace]);
-                return (false, null);
+                _logger.LogGeneralErrorMessage(ex);
+                return (false, ReadOnlyMemory<byte>.Empty);
             }
             finally
             {
                 _ = fileLock.Release();
-                _logger.LogDebug($"{DateTime.Now} - Finished caching file: {filePath}");
+
+                DebugFileCacheFinished(filePath);
 
                 _ = cachingFilesInProgress.Remove(filePath, out _);
             }
         }
-
-        private void CacheFileData(string filePath, TimeSpan? slidingExpiration, ReadOnlyMemory<byte> cachedData)
+        private const int delayBeforeGCCollect = 30; // in seconds
+        private const int delayAfterGCCollect = 1;   // in seconds
+        private void CacheFileData(ref readonly string filePath, ref readonly TimeSpan? slidingExpiration, ref byte[] cachedData)
         {
             try
             {
                 long bytesAllocated = cachedData.Length;
-                const int delayBeforeGCCollect = 30; // in seconds
-                const int delayAfterGCCollect = 1;   // in seconds
-
-                _ = MemoryCache.Set(GetFileCachedKey(filePath), cachedData, new MemoryCacheEntryOptions()
-                {
-                    Size = cachedData.Length,
-                    SlidingExpiration = slidingExpiration,
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(12),
-                    Priority = CacheItemPriority.Low,
-                }
-                .RegisterPostEvictionCallback((key, value, reason, state) =>
-                {
-                    new Task(async () =>
-                    {
-                        if (_logger.IsEnabled(LogLevel.Debug))
-                        {
-                            _logger.LogDebug($"{DateTime.Now} - Wait {delayBeforeGCCollect}s before start removing file from cache: {(key as string)}, reason: {reason}");
-                        }
-
-                        Thread.Sleep(TimeSpan.FromSeconds(delayBeforeGCCollect));
-
-                        if (_logger.IsEnabled(LogLevel.Debug))
-                        {
-                            _logger.LogDebug($"{DateTime.Now} - Started file remove from cache: {(key as string)}, reason: {reason}, allocated bytes: {bytesAllocated}");
-                        }
-
-                        await postEvictionCallbackInProgress.WaitAsync(TimeSpan.FromMinutes(30));
-
-                        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-                        GC.RemoveMemoryPressure(bytesAllocated);
-                        GC.Collect();
-                        GC.WaitForPendingFinalizers();
-                        GC.Collect();
-
-                        Thread.Sleep(TimeSpan.FromSeconds(delayAfterGCCollect));
-
-                        _ = postEvictionCallbackInProgress.Release();
-
-                        if (_logger.IsEnabled(LogLevel.Debug))
-                        {
-                            _logger.LogDebug($"{DateTime.Now} - File removed from cache: {(key as string)}, reason: {reason}");
-                        }
-                    }).Start();
-                }));
+                _ = MemoryCache.Set(GetFileCachedKey(filePath), cachedData, entryOptions(cachedData.Length, slidingExpiration));
 
                 MemoryCache.StartEvictCachedKey(
                     GetFileCachedKey(filePath),
-                    slidingExpiration.HasValue
-                        ? slidingExpiration.Value.Add(TimeSpan.FromSeconds(delayBeforeGCCollect + delayAfterGCCollect))
-                        : TimeSpan.FromMinutes(1));
+                    // doubled slidingExpiration for streaming file
+                    slidingExpiration?.Add(slidingExpiration.Value) ?? TimeSpanValues.Time1min);
 
-                if (_logger.IsEnabled(LogLevel.Debug))
-                {
-                    _logger.LogDebug($"{DateTime.Now} - File cached - {filePath} ");
-                }
+                DebugFileCacheDone(filePath);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message, [filePath]);
+                _logger.LogGeneralErrorMessage(ex);
             }
         }
-        public (bool isCached, ReadOnlyMemory<byte> file) GetCheckCachedFile(string filePath)
+        public (bool isCached, ReadOnlyMemory<byte> file) GetCheckCachedFile(string filePath, TimeSpan? slidingExpiration)
         {
             try
             {
-                if (MemoryCache.TryGetValue(GetFileCachedKey(filePath), out ReadOnlyMemory<byte>? fileMemoryByte)
-                    && fileMemoryByte != null
-                    && fileMemoryByte.HasValue)
+                if (MemoryCache.TryGetValue(GetFileCachedKey(filePath), out byte[]? fileMemoryByte)
+                    && fileMemoryByte != null)
                 {
                     MemoryCache.StartEvictCachedKey(
                         GetFileCachedKey(filePath),
-                        TimeSpan.FromMinutes(_serverConfig.StoreFileInMemoryCacheAfterLoadInMinute));
+                        // doubled slidingExpiration for streaming file
+                        slidingExpiration?.Add(slidingExpiration.Value) ?? TimeSpanValues.Time1min);
 
-                    return (true, fileMemoryByte.Value);
+                    return (true, fileMemoryByte);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message, [filePath, ex.StackTrace]);
+                _logger.LogGeneralErrorMessage(ex);
             }
             return (false, ReadOnlyMemory<byte>.Empty);
         }
+
+        private static readonly Func<long, TimeSpan?, MemoryCacheEntryOptions> entryOptions = (size, slidingExpiration) =>
+        {
+            return new MemoryCacheEntryOptions()
+            {
+                Size = size,
+                SlidingExpiration = slidingExpiration,
+                AbsoluteExpirationRelativeToNow = TimeSpanValues.Time12hour,
+                Priority = CacheItemPriority.Low,
+            }
+            .RegisterPostEvictionCallback((key, value, reason, state) =>
+            {
+                Task clearMemory = new(async () =>
+                {
+                    Thread.Sleep(TimeSpan.FromSeconds(delayBeforeGCCollect));
+
+                    _ = await postEvictionCallbackInProgress.WaitAsync(TimeSpanValues.Time30min);
+
+                    GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+                    GC.RemoveMemoryPressure(size);
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    GC.Collect();
+
+                    Thread.Sleep(TimeSpan.FromSeconds(delayAfterGCCollect));
+
+                    _ = postEvictionCallbackInProgress.Release();
+
+                });
+                clearMemory.Start();
+            });
+        };
         public void EvictSingleFile(string filePath)
         {
             try
@@ -205,14 +197,14 @@ namespace DLNAServer.Features.Cache
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message, [filePath, ex.StackTrace]);
+                _logger.LogGeneralErrorMessage(ex);
             }
         }
         private static string GetFileCachedKey(string filePath)
         {
-            return $"{nameof(FileMemoryCacheManager)} {nameof(CacheFileData)} {typeof(byte[]).Name} {filePath}";
+            return string.Format("{0} {1} {2} {3}", [nameof(FileMemoryCacheManager), nameof(CacheFileData), typeof(byte[]).Name, filePath]);
         }
-        public async Task TerminateAsync()
+        public Task TerminateAsync()
         {
             cachingFilesInProgress.Clear();
 
@@ -223,7 +215,7 @@ namespace DLNAServer.Features.Cache
             }
             MemoryCache.Dispose();
 
-            await Task.CompletedTask;
+            return Task.CompletedTask;
         }
     }
 }

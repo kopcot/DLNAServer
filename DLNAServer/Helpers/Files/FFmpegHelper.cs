@@ -1,4 +1,6 @@
-﻿using Xabe.FFmpeg;
+﻿using DLNAServer.Common;
+using DLNAServer.Helpers.Logger;
+using Xabe.FFmpeg;
 using Xabe.FFmpeg.Downloader;
 
 namespace DLNAServer.Helpers.Files
@@ -10,8 +12,8 @@ namespace DLNAServer.Helpers.Files
         {
             try
             {
-                _logger.LogDebug($"{DateTime.Now} - Started downloading ffmpeg files");
-                _ = await downloadFFmpegFile.WaitAsync(timeout: TimeSpan.FromMinutes(5));
+                _logger.LogGeneralDebugMessage("Started downloading ffmpeg files");
+                _ = await downloadFFmpegFile.WaitAsync(timeout: TimeSpanValues.Time5min);
 
                 var executablesPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "executables");
 
@@ -35,7 +37,7 @@ namespace DLNAServer.Helpers.Files
                 }
                 else
                 {
-                    _logger.LogError(new ArgumentOutOfRangeException(), "Undefined OperatingSystem");
+                    _logger.LogGeneralErrorMessage(new ArgumentOutOfRangeException("OperatingSystem"));
                     throw new ApplicationException("Undefined OperatingSystem");
                 }
 
@@ -45,7 +47,7 @@ namespace DLNAServer.Helpers.Files
 
                 if (!isDownloaded)
                 {
-                    await FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, executablesPath).WaitAsync(TimeSpan.FromMinutes(15));
+                    await FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, executablesPath).WaitAsync(TimeSpanValues.Time15min);
                     files = directoryInfo.EnumerateFiles();
                     ffmpeg = files.First(f => f.Name.Equals(ffmpegFileName, StringComparison.InvariantCultureIgnoreCase));
                     ffprobe = files.First(f => f.Name.Equals(ffprobeFileName, StringComparison.InvariantCultureIgnoreCase));
@@ -55,14 +57,14 @@ namespace DLNAServer.Helpers.Files
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, ex.Message);
+                _logger.LogGeneralErrorMessage(ex);
             }
             finally
             {
                 _ = downloadFFmpegFile.Release();
             }
 
-            _logger.LogDebug($"{DateTime.Now} - Downloading ffmpeg files done");
+            _logger.LogGeneralDebugMessage("Downloading ffmpeg files done");
         }
     }
 }

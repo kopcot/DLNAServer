@@ -2,20 +2,23 @@
 using DLNAServer.Database.Entities;
 using DLNAServer.Database.Repositories.Interfaces;
 using DLNAServer.Features.ApiBlocking.Interfaces;
+using DLNAServer.Features.FileWatcher.Interfaces;
 using DLNAServer.Features.MediaContent.Interfaces;
 using DLNAServer.Features.MediaProcessors.Interfaces;
 using DLNAServer.Features.Subscriptions.Data;
 using DLNAServer.Helpers.Diagnostics;
+using DLNAServer.Helpers.Logger;
 using DLNAServer.Types.DLNA;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using System.Buffers;
 using System.Runtime;
 
 namespace DLNAServer.Controllers.Manage
 {
     [Route("[controller]")]
     [ApiController]
-    public class ManageController : Controller
+    public partial class ManageController : Controller
     {
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ILogger<ManageController> _logger;
@@ -29,6 +32,7 @@ namespace DLNAServer.Controllers.Manage
         private readonly Lazy<IMediaProcessingService> _mediaProcessingServiceLazy;
         private readonly Lazy<IApiBlockerService> _apiBlockerServiceLazy;
         private readonly Lazy<IMemoryCache> _memoryCacheLazy;
+        private readonly Lazy<IFileWatcherHandler> _fileWatcherHandlerLazy;
 
         private IFileRepository FileRepository => _fileRepositoryLazy.Value;
         private IDirectoryRepository DirectoryRepository => _directoryRepositoryLazy.Value;
@@ -39,6 +43,7 @@ namespace DLNAServer.Controllers.Manage
         private IMediaProcessingService MediaProcessingService => _mediaProcessingServiceLazy.Value;
         private IApiBlockerService ApiBlockerService => _apiBlockerServiceLazy.Value;
         private IMemoryCache MemoryCache => _memoryCacheLazy.Value;
+        private IFileWatcherHandler FileWatcherHandler => _fileWatcherHandlerLazy.Value;
         public ManageController(
             IServiceScopeFactory serviceScopeFactory,
             ServerConfig serverConfig,
@@ -51,6 +56,7 @@ namespace DLNAServer.Controllers.Manage
             Lazy<IMediaProcessingService> mediaProcessingServiceLazy,
             Lazy<IApiBlockerService> apiBlockerServiceLazy,
             Lazy<IMemoryCache> memoryCacheLazy,
+            Lazy<IFileWatcherHandler> fileWatcherHandlerLazy,
             ILogger<ManageController> logger)
         {
             _serverConfig = serverConfig;
@@ -64,6 +70,7 @@ namespace DLNAServer.Controllers.Manage
             _mediaProcessingServiceLazy = mediaProcessingServiceLazy;
             _apiBlockerServiceLazy = apiBlockerServiceLazy;
             _memoryCacheLazy = memoryCacheLazy;
+            _fileWatcherHandlerLazy = fileWatcherHandlerLazy;
             _logger = logger;
         }
         [HttpGet("configuration")]
@@ -154,7 +161,7 @@ namespace DLNAServer.Controllers.Manage
                     return new
                     {
                         Id = (int)m,
-                        DlnaMime = $"{m}", 
+                        DlnaMime = $"{m}",
                         ContentType = m.ToMimeString(),
                         MimeDescription = m.ToMimeDescription(),
                         DlnaMedia = $"{m.ToDlnaMedia()}",
@@ -232,7 +239,7 @@ namespace DLNAServer.Controllers.Manage
                 {
                     memoryCache.Clear();
 
-                    _logger.LogError(ex, ex.Message);
+                    _logger.LogGeneralErrorMessage(ex);
                 }
 
                 GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
@@ -270,7 +277,7 @@ namespace DLNAServer.Controllers.Manage
                 hostApplicationLifetime.StopApplication();
 
                 return Ok("restarting");
-            };
+            }
         }
         [HttpGet("clearAllMetadata")]
         public async Task<IActionResult> GetClearAllMetadataAsync()
@@ -300,47 +307,81 @@ namespace DLNAServer.Controllers.Manage
 
             try
             {
-                using (_logger.BeginScope($"{DateTime.Now} Start recreating all files info"))
+                using (ScopeRecreatingFilesInfo(_logger))
                 {
-                    const int maxChunkSize = 100;
+                    FileWatcherHandler.EnableRaisingEvents(false);
 
-                    long fileCountAll = await FileRepository.GetCountAsync();
-                    long chunksCount = (long)Math.Round((double)fileCountAll / maxChunkSize, 0, MidpointRounding.ToPositiveInfinity);
+                    {
+                        using (var scope = _serviceScopeFactory.CreateScope())
+                        {
+                            var contentExplorerManager = scope.ServiceProvider.GetRequiredService<IContentExplorerManager>();
+
+                            var directoryRepository = scope.ServiceProvider.GetRequiredService<IDirectoryRepository>();
+                            DirectoryEntity[] directories = await directoryRepository.GetAllAsync(useCachedResult: false);
+                            _ = await contentExplorerManager.CheckDirectoriesExistingAsync(directories);
+
+                            var fileRepository = scope.ServiceProvider.GetRequiredService<IFileRepository>();
+                            FileEntity[] files = await fileRepository.GetAllAsync(useCachedResult: false);
+                            _ = await contentExplorerManager.CheckFilesExistingAsync(files);
+                        }
+
+                        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+                        GC.Collect();
+                    }
+
+                    const int maxChunkSize = 50;
+                    long fileCountAll;
+                    using (var scope = _serviceScopeFactory.CreateScope())
+                    {
+                        var fileRepository = scope.ServiceProvider.GetRequiredService<IFileRepository>();
+                        fileCountAll = await fileRepository.GetCountAsync();
+                    }
+                    int chunksCount = (int)Math.Round((double)fileCountAll / maxChunkSize, 0, MidpointRounding.ToPositiveInfinity);
 
                     for (int chunkIndex = 0; chunkIndex < chunksCount; chunkIndex++)
                     {
-                        Guid[] filesId = GC.AllocateUninitializedArray<Guid>(maxChunkSize, pinned: false);
-                        FileEntity[] files = GC.AllocateUninitializedArray<FileEntity>(maxChunkSize, pinned: false);
+                        Guid[] filesId;
+                        FileEntity[] files;
 
-                        _logger.LogInformation($"{DateTime.Now:dd/MM/yyyy HH:mm:ss:fff} - Start refreshing info for chunk {chunkIndex + 1} of {chunksCount}, total files = {fileCountAll}");
+                        InformationStartRefreshingInfoChunk(chunkIndex + 1, chunksCount, fileCountAll);
 
-                        ApiBlockerService.BlockApi(true, $"Recreate all file info. Progress {chunkIndex + 1} from {chunksCount}.");
+                        ApiBlockerService.BlockApi(true, string.Format("Recreate all file info. Progress {0} from {1}.", [chunkIndex + 1, chunksCount]));
 
-                        using (_logger.BeginScope($"{DateTime.Now} Start clearing info"))
+                        using (ScopeClearingInfoChunk(_logger))
+                        using (var scope = _serviceScopeFactory.CreateScope())
                         {
-                            _logger.LogDebug($"Start clearing info for chunk {chunkIndex + 1} of {chunksCount}, total files = {fileCountAll}");
+                            var fileRepository = scope.ServiceProvider.GetRequiredService<IFileRepository>();
+                            var contentExplorerManager = scope.ServiceProvider.GetRequiredService<IContentExplorerManager>();
 
-                            files = (await FileRepository.GetAllAsync(chunkIndex * maxChunkSize, maxChunkSize, useCachedResult: false)).ToArray();
+                            DebugStartClearigInfoChunk(chunkIndex + 1, chunksCount, fileCountAll);
+
+                            files = (await fileRepository.GetAllAsync(chunkIndex * maxChunkSize, maxChunkSize, useCachedResult: false)).ToArray();
 
                             filesId = files.Select(static (f) => f.Id).ToArray();
 
-                            var task1 = ContentExplorerManager.ClearMetadataAsync(files);
-                            var task2 = ContentExplorerManager.ClearThumbnailsAsync(files);
+                            var task1 = contentExplorerManager.ClearMetadataAsync(files);
+                            var task2 = contentExplorerManager.ClearThumbnailsAsync(files);
                             await Task.WhenAll([task1, task2]);
 
-                            _logger.LogDebug($"Clearing info done for chunk {chunkIndex + 1} of {chunksCount}");
+                            DebugDoneClearingInfoChunk(chunkIndex + 1, chunksCount);
                         }
 
-                        using (_logger.BeginScope($"{DateTime.Now} Start recreating info"))
+                        using (ScopeRecreatingFilesInfoChunk(_logger))
+                        using (var scope = _serviceScopeFactory.CreateScope())
                         {
-                            _logger.LogDebug($"Start recreating info for chunk {chunkIndex + 1} of {chunksCount}, total files = {fileCountAll}");
+                            var fileRepository = scope.ServiceProvider.GetRequiredService<IFileRepository>();
+                            var mediaProcessingService = scope.ServiceProvider.GetRequiredService<IMediaProcessingService>();
 
-                            files = (await FileRepository.GetAllByIdsAsync(filesId, useCachedResult: false)).ToArray();
+                            DebugStartRecreatingInfoChunk(chunkIndex + 1, chunksCount, fileCountAll);
 
-                            await MediaProcessingService.FillEmptyMetadataAsync(files, setCheckedForFailed: false);
-                            await MediaProcessingService.FillEmptyThumbnailsAsync(files, setCheckedForFailed: false);
+                            files = (await fileRepository.GetAllByIdsAsync(filesId, useCachedResult: false)).ToArray();
 
-                            _logger.LogDebug($"Recreate info done for chunk {chunkIndex + 1} of {chunksCount}");
+                            await mediaProcessingService.FillEmptyMetadataAsync(files, setCheckedForFailed: false);
+                            await mediaProcessingService.FillEmptyThumbnailsAsync(files, setCheckedForFailed: false);
+
+                            DebugDoneRecreatingInfoChunk(chunkIndex + 1, chunksCount);
                         }
 
                         await Task.Delay(1000); // 1sec delay for cool down hardware system resources
@@ -351,14 +392,15 @@ namespace DLNAServer.Controllers.Manage
                         GC.Collect();
                     }
 
-                    _logger.LogInformation($"Recreate info done");
+                    InformationDoneRecreatingInfo();
 
                     GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
 
+                    await ContentExplorerManager.InitializeAsync();
                     ApiBlockerService.BlockApi(false);
 
                     return Ok("recreated");
-                };
+                }
             }
             catch (Exception ex)
             {
@@ -367,6 +409,7 @@ namespace DLNAServer.Controllers.Manage
             }
             finally
             {
+                FileWatcherHandler.EnableRaisingEvents(true);
                 IsGetRecreateAllFilesInfoAsyncActive = false;
             }
         }

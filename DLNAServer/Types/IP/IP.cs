@@ -7,8 +7,10 @@ namespace DLNAServer.Types.IP
 {
     public class IP : IIP
     {
-        public IP()
+        public readonly ILogger _logger;
+        public IP(ILogger<IP> logger)
         {
+            _logger = logger;
         }
         public IEnumerable<IPAddress> AllIPAddresses => _allIPAddresses.Value;
 
@@ -44,8 +46,7 @@ namespace DLNAServer.Types.IP
                 .Select(static (ni) => ni.GetIPProperties())
                 .Where(static (ipProperties) => ipProperties
                     .GatewayAddresses
-                    .Where(static (ga) => !ga.Address.Equals(IPAddress.Any))
-                    .Any())
+                    .Any(static (ga) => !ga.Address.Equals(IPAddress.Any)))
                 .SelectMany(static (ipProperties) => ipProperties
                     .UnicastAddresses
                     .Where(static (uniInfo) => uniInfo.Address.AddressFamily == AddressFamily.InterNetwork)

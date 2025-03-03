@@ -5,11 +5,12 @@ using DLNAServer.Features.Cache.Interfaces;
 using DLNAServer.Features.FileWatcher.Interfaces;
 using DLNAServer.Features.MediaContent.Interfaces;
 using DLNAServer.Features.MediaProcessors.Interfaces;
+using DLNAServer.Helpers.Logger;
 using DLNAServer.Types.DLNA;
 
 namespace DLNAServer.Features.FileWatcher
 {
-    public class FileWatcherManager : IFileWatcherManager
+    public partial class FileWatcherManager : IFileWatcherManager
     {
         private readonly Lazy<IFileWatcherHandler> _fileWatcherServiceLazy;
         private readonly IServiceScopeFactory _serviceScopeFactory;
@@ -45,16 +46,16 @@ namespace DLNAServer.Features.FileWatcher
         public async Task InitializeAsync()
         {
             await InitWatchingFilesAtSourceFoldersAsync();
-            _logger.LogInformation($"Started watching files at source folders");
+            InformationStartedWatchingSourceFolders();
         }
-        public async Task TerminateAsync()
+        public Task TerminateAsync()
         {
             _areFileWatcherEventsAdded = false;
             _updatesCount = 0;
 
-            await Task.CompletedTask;
+            return Task.CompletedTask;
         }
-        private async Task InitWatchingFilesAtSourceFoldersAsync()
+        private Task InitWatchingFilesAtSourceFoldersAsync()
         {
             if (!_areFileWatcherEventsAdded)
             {
@@ -66,14 +67,14 @@ namespace DLNAServer.Features.FileWatcher
                 _areFileWatcherEventsAdded = true;
             }
 
-            await Task.CompletedTask;
+            return Task.CompletedTask;
         }
         public async Task HandleFileCreatedChanged(string fileFullPath, WatcherChangeTypes eventAction, DateTime eventTimestamp)
         {
             FileInfo fileInfo = new(fileFullPath);
             if (!fileInfo.Exists)
             {
-                _logger.LogWarning($"{DateTime.Now} - File event '{eventAction}' for {fileFullPath}, File not exists");
+                WarningFileNotExists(eventAction, fileFullPath);
                 await HandleFileRemove(fileFullPath, WatcherChangeTypes.Deleted, eventTimestamp);
                 return;
             }
@@ -86,7 +87,7 @@ namespace DLNAServer.Features.FileWatcher
                 var fileEntities = await fileRepository.GetAllByPathFullNameAsync(fileFullPath, false);
                 if (fileEntities == null || !fileEntities.Any())
                 {
-                    _logger.LogDebug($"{DateTime.Now} - File event '{eventAction}' started adding to database, exists already in database {fileEntities == null}/{!fileEntities?.Any()}, file full path = {fileFullPath}");
+                    DebugAddToDatabase(eventAction, fileFullPath);
 
                     var dlnaMime = GetConfiguredDlnaMimeFromFileExtension(fileInfo.Extension);
                     var inputFile = new Dictionary<DlnaMime, IEnumerable<string>> { { dlnaMime, [fileFullPath] } };
@@ -95,18 +96,18 @@ namespace DLNAServer.Features.FileWatcher
                 }
                 else
                 {
-                    _logger.LogDebug($"{DateTime.Now} - File event '{eventAction}' skipped, exists in database {fileEntities == null}/{!fileEntities?.Any()}, file full path = {fileFullPath}");
+                    DebugExistsInDatabase(eventAction, fileFullPath);
                 }
                 if (_serverConfig.GenerateMetadataAndThumbnailsAfterAdding)
                 {
                     var newFileEntities = await fileRepository.GetAllByPathFullNameAsync(fileFullPath, false) ?? throw new NullReferenceException();
                     if (!newFileEntities.Any())
                     {
-                        _logger.LogWarning($"{DateTime.Now} - File record not created in database! File path: '{fileFullPath}'");
+                        WarningFileRecordNotCreated(eventAction, fileFullPath);
                     }
-                    else if (newFileEntities.Count() != 1)
+                    else if (newFileEntities.Length != 1)
                     {
-                        _logger.LogWarning($"{DateTime.Now} - More file record was created in database! File path: '{fileFullPath}'");
+                        WarningFileRecordMultiple(eventAction, fileFullPath);
                     }
                     else
                     {
@@ -123,7 +124,7 @@ namespace DLNAServer.Features.FileWatcher
             FileInfo fileInfo = new(newFileFullPath);
             if (!fileInfo.Exists)
             {
-                _logger.LogWarning($"{DateTime.Now} - File event '{eventAction}' for {newFileFullPath}, File not exists");
+                WarningFileNotExists(eventAction, newFileFullPath);
                 await HandleFileRemove(newFileFullPath, WatcherChangeTypes.Deleted, eventTimestamp);
                 return;
             }
@@ -139,10 +140,14 @@ namespace DLNAServer.Features.FileWatcher
                 }
 
                 var existingOldFiles = await fileRepository.GetAllByPathFullNameAsync(oldFileFullPath, useCachedResult: false);
-                if (!existingOldFiles.Any())
+                if (existingOldFiles.Length == 0)
                 {
                     var dlnaMime = GetConfiguredDlnaMimeFromFileExtension(fileInfo.Extension);
-                    var inputFile = new Dictionary<DlnaMime, IEnumerable<string>> { { dlnaMime, [newFileFullPath] } };
+                    if (dlnaMime == DlnaMime.Undefined)
+                    {
+                        WarningFileExtensionUndefined(eventAction, fileInfo.Extension, fileInfo.FullName);
+                    }
+                    Dictionary<DlnaMime, IEnumerable<string>> inputFile = new() { { dlnaMime, [newFileFullPath] } };
 
                     var contentExplorerManager = scope.ServiceProvider.GetRequiredService<IContentExplorerManager>();
                     await contentExplorerManager.RefreshFoundFilesAsync(inputFile, true);
@@ -163,7 +168,7 @@ namespace DLNAServer.Features.FileWatcher
                 var fileRepository = scope.ServiceProvider.GetRequiredService<IFileRepository>();
                 var thumbnailRepository = scope.ServiceProvider.GetRequiredService<IThumbnailRepository>();
 
-                _logger.LogDebug($"File remove - {fileFullPath}");
+                DebugFileRemove(eventAction, fileFullPath);
                 var files = await fileRepository.GetAllByPathFullNameAsync(fileFullPath, false);
                 if (files == null || !files.Any())
                 {
@@ -177,7 +182,7 @@ namespace DLNAServer.Features.FileWatcher
                 var fileMemoryCache = scope.ServiceProvider.GetRequiredService<IFileMemoryCacheManager>();
                 fileMemoryCache.EvictSingleFile(fileFullPath);
 
-                _logger.LogDebug($"file remove done - {fileFullPath}");
+                DebugFileRemoveDone(eventAction, fileFullPath);
 
             }, eventAction, fileFullPath, eventTimestamp);
         }
@@ -190,8 +195,8 @@ namespace DLNAServer.Features.FileWatcher
             }
 
             var thumbnailEntitiesIds = files
-                .Where(f => f.ThumbnailId.HasValue)
-                .Select(f => f.ThumbnailId!.Value)
+                .Where(static (f) => f.ThumbnailId.HasValue)
+                .Select(static (f) => f.ThumbnailId!.Value)
                 .ToArray();
 
             if (thumbnailEntitiesIds.Length > 0)
@@ -200,7 +205,7 @@ namespace DLNAServer.Features.FileWatcher
 
                 if (thumbnailEntities.Any())
                 {
-                    DeleteThumbnailsIfExists(thumbnailEntities);
+                    DeleteThumbnailsIfExists(ref thumbnailEntities);
                     foreach (var thumbnailEntity in thumbnailEntities.ToList())
                     {
                         thumbnailRepository.MarkForDelete(thumbnailEntity.ThumbnailData);
@@ -256,10 +261,9 @@ namespace DLNAServer.Features.FileWatcher
 
         public async Task HandleDirectoryRenamed(string newDirectoryFullPath, string oldDirectoryFullPath, WatcherChangeTypes eventAction, DateTime eventTimestamp)
         {
-            DirectoryInfo directoryInfo = new(newDirectoryFullPath);
-            if (!directoryInfo.Exists)
+            if (!Directory.Exists(newDirectoryFullPath))
             {
-                _logger.LogWarning($"{DateTime.Now} - Directory event '{eventAction}' for {newDirectoryFullPath}, Directory not exists");
+                WarningDirectoryNotExists(eventAction, newDirectoryFullPath);
                 return;
             }
 
@@ -283,8 +287,8 @@ namespace DLNAServer.Features.FileWatcher
 
                 var existingDirectoryEntities = await directoryRepository.GetAllAsync(useCachedResult: false);
 
-                FillParentDirectoriesAsync(existingDirectoryEntities, directories);
-                FillParentDirectoriesAsync(existingDirectoryEntities, files, directories);
+                FillParentDirectoriesAsync(ref existingDirectoryEntities, directories);
+                FillParentDirectoriesAsync(ref existingDirectoryEntities, ref files, directories);
 
                 _ = await directoryRepository.SaveChangesAsync();
                 _ = await fileRepository.SaveChangesAsync();
@@ -327,7 +331,8 @@ namespace DLNAServer.Features.FileWatcher
 
                 if (thumbnailEntity != null)
                 {
-                    DeleteThumbnailsIfExists([thumbnailEntity]);
+                    ThumbnailEntity[] thumbnailEntities = [thumbnailEntity];
+                    DeleteThumbnailsIfExists(ref thumbnailEntities);
                     fileRepository.MarkForDelete(file.Thumbnail);
                     thumbnailRepository.MarkForDelete(thumbnailEntity.ThumbnailData);
                     file.IsThumbnailChecked = false;
@@ -339,8 +344,9 @@ namespace DLNAServer.Features.FileWatcher
             var newDirectoryEntities = await contentExplorerManager.GetNewDirectoryEntities([fileInfo.Directory!.FullName]);
             var existingDirectoryEntities = await directoryRepository.GetAllAsync(useCachedResult: false);
 
-            FillParentDirectoriesAsync(existingDirectoryEntities, newDirectoryEntities);
-            FillParentDirectoriesAsync(existingDirectoryEntities, [file], newDirectoryEntities);
+            FileEntity[] fileEntities = [file];
+            FillParentDirectoriesAsync(ref existingDirectoryEntities, newDirectoryEntities);
+            FillParentDirectoriesAsync(ref existingDirectoryEntities, ref fileEntities, newDirectoryEntities);
 
             await PrepareToRemoveEntity(fileRepository, thumbnailRepository, filesToRemove);
 
@@ -389,10 +395,11 @@ namespace DLNAServer.Features.FileWatcher
         private DlnaMime GetConfiguredDlnaMimeFromFileExtension(string fileExtension) =>
             _serverConfig
                 .MediaFileExtensions
-                .FirstOrDefault(ex => ex.Key.EndsWith(fileExtension, StringComparison.OrdinalIgnoreCase))
+                // Contains() as Linux is adding for example ".jpg[1]" to the end of file, if file is exists there
+                .FirstOrDefault(ex => fileExtension.Contains(ex.Key, StringComparison.OrdinalIgnoreCase))
                 .Value
                 .Key;
-        private static void DeleteThumbnailsIfExists(IEnumerable<ThumbnailEntity> thumbnails)
+        private static void DeleteThumbnailsIfExists(ref ThumbnailEntity[] thumbnails)
         {
             FileInfo thumbnailInfo;
             foreach (var thumbnail in thumbnails.ToList())
@@ -426,21 +433,24 @@ namespace DLNAServer.Features.FileWatcher
             {
                 _logger = scope.ServiceProvider.GetRequiredService<ILogger<FileWatcherManager>>();
 
+                Guid guid = Guid.NewGuid();
+
                 try
                 {
-                    _logger.LogDebug($"{DateTime.Now} - File event '{action}' {filePath}, Started, eventTimestamp = {eventTimestamp}");
+                    DebugEventStarted(action, guid, eventTimestamp);
                     await fileOperation(scope);
-                    _logger.LogDebug($"{DateTime.Now} - File event '{action}' {filePath}, Sucessful, eventTimestamp = {eventTimestamp}");
+                    DebugEventSuccessful(action, guid, eventTimestamp);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, $"Error during file '{action}' - {filePath}, eventTimestamp = {eventTimestamp}", [filePath]);
+                    WarningEventFailed(action, guid, eventTimestamp);
+                    LoggerHelper.LogGeneralErrorMessage(_logger, ex);
                 }
 
                 _updatesCount++;
-            };
+            }
         }
-        private static void FillParentDirectoriesAsync(IEnumerable<DirectoryEntity> existingDirectoryEntities, IEnumerable<FileEntity> fileEntities, IEnumerable<DirectoryEntity> directoryEntities)
+        private static void FillParentDirectoriesAsync(ref DirectoryEntity[] existingDirectoryEntities, ref FileEntity[] fileEntities, IEnumerable<DirectoryEntity> directoryEntities)
         {
             foreach (var file in fileEntities.ToList())
             {
@@ -449,7 +459,7 @@ namespace DLNAServer.Features.FileWatcher
             }
         }
 
-        private static void FillParentDirectoriesAsync(IEnumerable<DirectoryEntity> existingDirectoryEntities, IEnumerable<DirectoryEntity> directoryEntities)
+        private static void FillParentDirectoriesAsync(ref DirectoryEntity[] existingDirectoryEntities, IEnumerable<DirectoryEntity> directoryEntities)
         {
             foreach (var directoryEntity in directoryEntities.ToList())
             {

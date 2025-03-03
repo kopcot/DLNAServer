@@ -27,12 +27,12 @@ namespace DLNAServer.Database
                     using (var transaction = connection.BeginTransaction())
                     using (var command = connection.CreateCommand())
                     {
-                        OpenedCommands(connection, command);
+                        OpenedCommands(ref connection, command);
 
                         _ = command.ExecuteNonQuery();
 
                         transaction.Commit();
-                    };
+                    }
                 }
             }
             catch { }
@@ -49,12 +49,12 @@ namespace DLNAServer.Database
                     using (var transaction = connection.BeginTransaction())
                     await using (var command = connection.CreateCommand())
                     {
-                        OpenedCommands(connection, command);
+                        OpenedCommands(ref connection, command);
 
                         _ = await command.ExecuteNonQueryAsync(cancellationToken);
 
                         await transaction.CommitAsync(cancellationToken);
-                    };
+                    }
                 }
             }
             catch { }
@@ -62,7 +62,7 @@ namespace DLNAServer.Database
             await base.ConnectionOpenedAsync(connection, eventData, cancellationToken);
         }
 
-        private void OpenedCommands(DbConnection connection, DbCommand command)
+        private void OpenedCommands(ref readonly DbConnection connection, in DbCommand command)
         {
             command.CommandText = string.Empty;
 
@@ -125,7 +125,7 @@ namespace DLNAServer.Database
                         _ = command.ExecuteNonQuery();
 
                         transaction.Commit();
-                    };
+                    }
                 }
             }
             catch { }
@@ -148,14 +148,14 @@ namespace DLNAServer.Database
                         _ = await command.ExecuteNonQueryAsync();
 
                         await transaction.CommitAsync();
-                    };
+                    }
                 }
             }
             catch { }
 
             return await base.ConnectionClosingAsync(connection, eventData, result);
         }
-        private static void ClosingCommands(DbCommand command)
+        private static void ClosingCommands(in DbCommand command)
         {
             command.CommandText = string.Empty;
 
@@ -183,11 +183,11 @@ namespace DLNAServer.Database
 
             return base.ConnectionDisposing(connection, eventData, result);
         }
-        public override async ValueTask<InterceptionResult> ConnectionDisposingAsync(DbConnection connection, ConnectionEventData eventData, InterceptionResult result)
+        public override ValueTask<InterceptionResult> ConnectionDisposingAsync(DbConnection connection, ConnectionEventData eventData, InterceptionResult result)
         {
             _ = _lastUsedConnectionId_ConnectionOpened.TryRemove(eventData.ConnectionId, out _);
 
-            return await base.ConnectionDisposingAsync(connection, eventData, result);
+            return base.ConnectionDisposingAsync(connection, eventData, result);
         }
         #endregion Disposing 
     }

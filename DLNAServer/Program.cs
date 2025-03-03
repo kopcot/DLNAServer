@@ -1,3 +1,4 @@
+using DLNAServer.Common;
 using DLNAServer.Configuration;
 using DLNAServer.Database;
 using DLNAServer.Database.Repositories;
@@ -17,6 +18,7 @@ using DLNAServer.Features.Subscriptions.Interfaces;
 using DLNAServer.FileServer;
 using DLNAServer.Middleware;
 using DLNAServer.SOAP;
+using DLNAServer.SOAP.Constants;
 using DLNAServer.SOAP.Endpoints;
 using DLNAServer.SOAP.Endpoints.Interfaces;
 using DLNAServer.SSDP;
@@ -58,7 +60,7 @@ namespace DLNAServer
                         await app.RunAsync(cancellationToken);
 
                         dlnaServerExit = (cancellationToken.IsCancellationRequested && !ServerConfig.DlnaServerRestart);
-                    };
+                    }
                     GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
                     GC.Collect();
                     GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
@@ -105,11 +107,17 @@ namespace DLNAServer
                         _ = logging.AddConfiguration(builder.Configuration.GetSection("Logging"));
                         _ = logging.AddSimpleConsole();
 
+                        if (ServerConfig.Instance.ServerDebugMode)
+                        {
+                            _ = logging.SetMinimumLevel(LogLevel.Trace);
+                        }
                         // Serilog
                         var logLevels = builder.Configuration.GetSection("Logging:LogLevel").Get<Dictionary<string, string>>() ?? [];
                         var serilogConfig = new LoggerConfiguration()
                             .MinimumLevel.ControlledBy(new LoggingLevelSwitch(
-                                builder.Configuration.GetValue("Logging:LogLevel:Default", defaultValue: LogEventLevel.Information)));
+                                ServerConfig.Instance.ServerDebugMode
+                                ? LogEventLevel.Verbose
+                                : builder.Configuration.GetValue("Logging:LogLevel:Default", defaultValue: LogEventLevel.Information)));
                         foreach (var (category, level) in logLevels)
                         {
                             if (Enum.TryParse(level, true, out LogEventLevel logEventLevel))
@@ -120,7 +128,7 @@ namespace DLNAServer
                         _ = serilogConfig.WriteTo.File(
                                 path: "logs/appLog.txt",
                                 rollingInterval: RollingInterval.Day,
-                                retainedFileTimeLimit: TimeSpan.FromDays(7),
+                                retainedFileTimeLimit: TimeSpanValues.Time7days,
                                 outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss:fff} {Level:u3}] [{SourceContext}] {Message}{NewLine}{Exception}");
                         _ = logging.AddSerilog(serilogConfig.CreateLogger());
 
@@ -135,47 +143,56 @@ namespace DLNAServer
                 }
             }
 
-            if (ServerConfig.Instance.DlnaServerDebugMode)
-            {
-                _ = builder.Logging.SetMinimumLevel(LogLevel.Trace);
-            }
 
             _ = builder.Services.AddControllers();
             _ = builder.Services.AddHttpContextAccessor();
             _ = builder.Services.AddResponseCompression(options =>
-                {
-                    options.Providers.Add(
-                        new GzipCompressionProvider(
-                            new GzipCompressionProviderOptions()
-                            {
-                                Level = System.IO.Compression.CompressionLevel.SmallestSize
-                            }));
-                    options.Providers.Add(
-                        new BrotliCompressionProvider(
-                            new BrotliCompressionProviderOptions()
-                            {
-                                Level = System.IO.Compression.CompressionLevel.SmallestSize
-                            }));
-                    options.EnableForHttps = true;
-                });
+            {
+                options.Providers.Add(
+                    new GzipCompressionProvider(
+                        new GzipCompressionProviderOptions()
+                        {
+                            Level = System.IO.Compression.CompressionLevel.SmallestSize
+                        }));
+                options.Providers.Add(
+                    new BrotliCompressionProvider(
+                        new BrotliCompressionProviderOptions()
+                        {
+                            Level = System.IO.Compression.CompressionLevel.SmallestSize
+                        }));
+                options.EnableForHttps = true;
+            });
 
             _ = builder.Services.AddDbContextPool<DlnaDbContext>((serviceProvider, options) =>
-                {
-                    options
-                        .UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"))
-                        .AddInterceptors([serviceProvider.GetRequiredService<SQLitePragmaInterceptor>()])
-                        .ConfigureWarnings(static (b) => b.Log(
-                            [
-                                (RelationalEventId.ConnectionCreated, LogLevel.Information),
+            {
+                var sqliteLogger = new LoggerConfiguration()
+                    .WriteTo.File(
+                            path: "logs/sqliteLog.txt",
+                            rollingInterval: RollingInterval.Day,
+                            retainedFileTimeLimit: TimeSpanValues.Time7days)
+                    .CreateLogger();
+                _ = options
+                    .UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"))
+                    .AddInterceptors([serviceProvider.GetRequiredService<SQLitePragmaInterceptor>()])
+                    .ConfigureWarnings(static (b) => b.Log(
+                        [
+                            (RelationalEventId.ConnectionCreated, LogLevel.Information),
                                 (RelationalEventId.ConnectionDisposed, LogLevel.Information),
                                 (RelationalEventId.ConnectionOpened, LogLevel.Debug),
                                 (RelationalEventId.ConnectionClosed, LogLevel.Debug),
                                 (RelationalEventId.CommandExecuting, LogLevel.Debug),
                                 (RelationalEventId.CommandExecuted, LogLevel.Debug)
-                            ]))
-                        .EnableSensitiveDataLogging(true)
-                        .LogTo((_) => { }, LogLevel.None);
-                }, poolSize: 64);
+                        ]))
+                    .EnableSensitiveDataLogging(true)
+                    .LogTo(message =>
+                    {
+                        if (ServerConfig.Instance.ServerLogAllDatabaseMessages)
+                        {
+                            sqliteLogger.Information(message);
+                        }
+                    }
+                        , LogLevel.Debug);
+            }, poolSize: 64);
             _ = builder.Services.AddSingleton<SQLitePragmaInterceptor>();
             _ = builder.Services.AddScopedLazyService<IFileRepository, FileRepository>();
             _ = builder.Services.AddScopedLazyService<IDirectoryRepository, DirectoryRepository>();
@@ -187,12 +204,12 @@ namespace DLNAServer
             _ = builder.Services.AddScopedLazyService<IThumbnailDataRepository, ThumbnailDataRepository>();
 
             _ = builder.Services.AddMemoryCache(option =>
-                {
-                    // Max half of memory or from config
-                    option.SizeLimit = Math.Min(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 2, (long)ServerConfig.Instance.MaxUseMemoryCacheInMBytes * 1024 * 1024);
-                    option.Clock = new Microsoft.Extensions.Internal.SystemClock();
-                    option.ExpirationScanFrequency = TimeSpan.FromSeconds(0.5);
-                });
+            {
+                // Max half of memory or from config
+                option.SizeLimit = Math.Min(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 2, (long)ServerConfig.Instance.MaxUseMemoryCacheInMBytes * 1024 * 1024);
+                option.Clock = new Microsoft.Extensions.Internal.SystemClock();
+                option.ExpirationScanFrequency = TimeSpanValues.Time50ms;
+            });
             _ = builder.Services.AddSoapCore<CustomEnvelopeMessage>();
 
             _ = builder.Services.AddSingletonLazyService<IApiBlockerService, ApiBlockerService>();
@@ -285,7 +302,7 @@ namespace DLNAServer
         private static Action<SoapCoreOptions> SetSoapOptions(string path)
         {
             return (soapCoreOptions) =>
-            { 
+            {
                 soapCoreOptions.StandAloneAttribute = true;
                 soapCoreOptions.Path = path;
                 soapCoreOptions.EncoderOptions =

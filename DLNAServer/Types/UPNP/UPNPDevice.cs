@@ -21,18 +21,18 @@ namespace DLNAServer.Types.UPNP
             Address = _address;
             Port = _port;
             Descriptor = _descriptor;
-            Type = _type;
+            Type = string.Intern(_type);
             UUID = _uuid;
 
             Endpoint = new IPEndPoint(Address, (int)Port);
 
             if (Type.StartsWith("uuid:", StringComparison.Ordinal))
             {
-                USN = Type;
+                USN = string.Intern(Type);
             }
             else
             {
-                USN = $"uuid:{UUID}::{Type}";
+                USN = string.Intern($"uuid:{UUID}::{Type}");
             }
         }
     }

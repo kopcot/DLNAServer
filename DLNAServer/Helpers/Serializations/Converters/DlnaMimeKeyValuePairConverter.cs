@@ -15,10 +15,10 @@ namespace DLNAServer.Helpers.Serializations.Converters
 
             foreach (var property in obj)
             {
-                if (Enum.TryParse(typeof(DlnaMime), property.Name, out var key))
+                if (Enum.TryParse<DlnaMime>(property.Name, out DlnaMime key))
                 {
                     var value = property.Value.GetString(); // Get the value as string
-                    return new KeyValuePair<DlnaMime, string?>((DlnaMime)key, value);  // Return as KeyValuePair
+                    return new KeyValuePair<DlnaMime, string?>(key, value);  // Return as KeyValuePair
                 }
             }
 
@@ -28,7 +28,10 @@ namespace DLNAServer.Helpers.Serializations.Converters
         public override void Write(Utf8JsonWriter writer, KeyValuePair<DlnaMime, string?> value, JsonSerializerOptions options)
         {
             writer.WriteStartObject();
-            writer.WriteString($"{value.Key}", value.Value);
+            writer.WriteString(
+                propertyName: string.Format("{0}", [value.Key]),
+                value: value.Value
+                );
             writer.WriteEndObject();
         }
     }

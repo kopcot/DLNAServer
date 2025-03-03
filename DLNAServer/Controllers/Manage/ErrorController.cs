@@ -1,4 +1,5 @@
 ﻿using DLNAServer.Helpers.Attributes;
+using DLNAServer.Helpers.Logger;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DLNAServer.Controllers.Manage
@@ -15,46 +16,102 @@ namespace DLNAServer.Controllers.Manage
         [HttpGet]
         public IActionResult Handle404Get()
         {
-            _logger.LogWarning($"{nameof(Handle404Get)} - path: '{ControllerContext.HttpContext.Request.Path.Value}',  method: '{HttpContext.Request.Method}'");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(Handle404Get),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
             return NotFoundFallback();
         }
 
         [HttpPost]
         public IActionResult Handle404Post()
         {
-            _logger.LogWarning($"{nameof(Handle404Post)} - path: '{ControllerContext.HttpContext.Request.Path.Value}',  method: '{HttpContext.Request.Method}'");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(Handle404Post),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
             return NotFoundFallback();
         }
 
         [HttpPut]
         public IActionResult Handle404Put()
         {
-            _logger.LogWarning($"{nameof(Handle404Put)} - path: '{ControllerContext.HttpContext.Request.Path.Value}',  method: '{HttpContext.Request.Method}'");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(Handle404Put),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
             return NotFoundFallback();
         }
 
         [HttpDelete]
         public IActionResult Handle404Delete()
         {
-            _logger.LogWarning($"{nameof(Handle404Delete)} - path: '{ControllerContext.HttpContext.Request.Path.Value}',  method: '{HttpContext.Request.Method}'");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(Handle404Delete),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
             return NotFoundFallback();
         }
         [HttpSubscribe]
         public IActionResult Handle404Subscribe()
         {
-            _logger.LogWarning($"{nameof(Handle404Delete)} - path: '{ControllerContext.HttpContext.Request.Path.Value}',  method: '{HttpContext.Request.Method}'");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(Handle404Subscribe),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
             return NotFoundFallback();
         }
         [Route("[controller]/NotFoundFallback")]
         public IActionResult NotFoundFallback()
         {
-            _logger.LogWarning($"{nameof(NotFoundFallback)} - path: '{ControllerContext.HttpContext.Request.Path.Value}',  method: '{HttpContext.Request.Method}'");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(NotFoundFallback),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
             return StatusCode(StatusCodes.Status500InternalServerError);
         }
         [Route("[controller]/Error")]
         public IActionResult HandleError()
         {
-            _logger.LogWarning($"{nameof(NotFoundFallback)} - path: '{ControllerContext.HttpContext.Request.Path.Value}',  method: '{HttpContext.Request.Method}'");
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(HandleError),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
             return Problem();
         }
     }

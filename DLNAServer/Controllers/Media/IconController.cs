@@ -1,4 +1,7 @@
-﻿using DLNAServer.Features.Cache.Interfaces;
+﻿using CommunityToolkit.HighPerformance;
+using DLNAServer.Common;
+using DLNAServer.Features.Cache.Interfaces;
+using DLNAServer.Helpers.Logger;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
 
@@ -6,7 +9,7 @@ namespace DLNAServer.Controllers.Media
 {
     [Route("[controller]")]
     [ApiController]
-    public class IconController : Controller
+    public partial class IconController : Controller
     {
         private readonly ILogger<IconController> _logger;
         private readonly Lazy<IFileMemoryCacheManager> _fileMemoryCacheLazy;
@@ -21,6 +24,15 @@ namespace DLNAServer.Controllers.Media
         [HttpGet("{fileName}")]
         public async Task<IActionResult> GetIconFile(string fileName)
         {
+            LoggerHelper.LogDebugConnectionInformation(
+                _logger,
+                nameof(GetIconFile),
+                this.HttpContext.Connection.RemoteIpAddress,
+                this.HttpContext.Connection.RemotePort,
+                this.HttpContext.Connection.LocalIpAddress,
+                this.HttpContext.Connection.LocalPort,
+                this.HttpContext.Request.Path.Value,
+                this.HttpContext.Request.Method);
             try
             {
                 FileExtensionContentTypeProvider provider = new();
@@ -31,23 +43,22 @@ namespace DLNAServer.Controllers.Media
 
                 string filePath = Path.Combine([Directory.GetCurrentDirectory(), "Resources", "images", "icons", fileName]);
 
-                (var isCachedSuccessful, var fileMemoryByteMemory) = await FileMemoryCache.CacheFileAndReturnAsync(filePath, TimeSpan.FromDays(1), checkExistingInCache: true);
-                if (isCachedSuccessful
-                    && fileMemoryByteMemory != null
-                    && fileMemoryByteMemory.HasValue)
+                (var isCachedSuccessful, var fileMemoryByteMemory) = await FileMemoryCache.CacheFileAndReturnAsync(filePath, TimeSpanValues.Time1day, checkExistingInCache: true);
+                if (isCachedSuccessful)
                 {
-                    return File(fileMemoryByteMemory.Value.ToArray(), mimeType, enableRangeProcessing: true);
+                    return File(fileMemoryByteMemory.AsStream(), mimeType, enableRangeProcessing: true);
                 }
 
                 if (!System.IO.File.Exists(filePath))
                 {
-                    _logger.LogWarning($"{DateTime.Now}: File not found, {filePath}");
+                    WarningFileNotFound(filePath);
                     return NotFound("File not found");
                 }
                 return PhysicalFile(filePath, mimeType, enableRangeProcessing: false);
             }
             catch (OperationCanceledException)
             {
+                LoggerHelper.LogWarningOperationCanceled(_logger);
                 return StatusCode(StatusCodes.Status499ClientClosedRequest, "Client Closed Request"); // Custom status code for client cancellation
             }
             catch (Exception ex)
