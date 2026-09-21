@@ -166,9 +166,3 @@ dotnet run --project src\DlnaServer.Host                                        
 - **Every entity has `int Id` and `Guid PublicId`.** `Id` is the surrogate key every foreign key and index is built on and never leaves persistence. `PublicId` is the external identifier - DTOs, DIDL-Lite ObjectIDs and admin URLs all carry it. Repositories take and return `PublicId` and translate to the integer key internally.
 - **Architecture rules are tested**, not just documented - `tests/DlnaServer.ArchitectureTests` fails the build if Core gains an EF or ASP.NET dependency, if `Upnp`/`Media` reach into persistence, if an entity turns public or appears on a public signature, or if a DTO gains a settable property.
 - **Reads project straight into DTOs** (`.Select(e => new FooDto { ... })`), so the emitted SQL fetches only the DTO's columns and no entity is materialised. Note that `is null` is a compile error inside an expression tree - use `!= null` in projections.
-
-## External reference — `C:\Repositories\flyt-platform` (READ-ONLY)
-
-`C:\Repositories\flyt-platform` may be read as reference material, primarily `C:\Repositories\flyt-platform\docs`. It also carries its own skills and agents that can be consulted.
-
-**NEVER write anything into that tree** — no file creation, edit, delete, move, or generated output, anywhere under `C:\Repositories\flyt-platform`, including `docs/`, `.claude/`, and any scratch or output path. It is another repository, unrelated to this one; anything produced from reading it belongs in this repo or the scratchpad.
