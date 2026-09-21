@@ -24,5 +24,4 @@ config.json.saved-*
 .env
 
 # Local media used for manual testing, and the knowledge graph, which is generated.
-media/
 graphify-out/
