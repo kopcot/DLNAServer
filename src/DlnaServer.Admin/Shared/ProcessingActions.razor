@@ -1,0 +1,131 @@
+@* The bulk actions a page offers over a scope - one file, or one folder with or without its tree.
+   Mostly ways to discard produced data, plus one that restores rather than discards.
+
+   Its own component because the preview page and the library both offer them, and the wording is the part
+   worth keeping in one place: clearing and recreating both delete what is there, and only the suppression
+   flag the repository sets afterwards decides whether the background pass makes it again. See PLAN.md
+   section 7, "Clearing versus recreating". *@
+
+@inject IMediaFileRepository Files
+@inject IAdminOperationGate Gate
+
+@* Shut to begin with, on both pages that host it. A row of buttons that throw stored work away is not what
+   either page is for - the preview page is for looking at the file and the library page for walking the
+   tree - and open by default they sat between the operator and that. Nothing is lost while it is folded:
+   the heading names the scope, and one click brings the buttons back. *@
+<CollapsiblePanel Heading="@Heading" StartCollapsed="true">
+    <p class="muted">
+        <em>Clear</em> throws away what is stored and leaves it gone. <em>Rebuild</em> throws it away and
+        makes it again. <em>Allow in memory again</em> throws nothing away - it lets a file the server
+        once failed to read be kept in memory again.
+    </p>
+    @ChildContent
+    <div class="actions">
+        <button @onclick="() => RunAsync(ProcessingAction.ClearMetadata)" disabled="@_busy">Clear file details</button>
+        <button @onclick="() => RunAsync(ProcessingAction.RecreateMetadata)" disabled="@_busy">Rebuild file details</button>
+        <button @onclick="() => RunAsync(ProcessingAction.ClearThumbnails)" disabled="@_busy">Clear previews</button>
+        <button @onclick="() => RunAsync(ProcessingAction.RecreateThumbnails)" disabled="@_busy">Rebuild previews</button>
+        <button @onclick="() => RunAsync(ProcessingAction.ClearTags)" disabled="@_busy">Clear all metadata</button>
+        <button @onclick="() => RunAsync(ProcessingAction.RecreateTags)" disabled="@_busy">Rebuild all metadata</button>
+        <button @onclick="() => RunAsync(ProcessingAction.ResetCacheExclusion)" disabled="@_busy">Allow in memory again</button>
+    </div>
+    <Notice Message="@_message" />
+</CollapsiblePanel>
+
+@code {
+    /// <summary>
+    /// Which files the buttons act on. Re-read on every render, so a caller may rebuild it from a control
+    /// of its own - the library's "include every subfolder" switch does exactly that.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public MediaFileScope Scope { get; set; } = null!;
+
+    [Parameter]
+    public string Heading { get; set; } = "Details and previews";
+
+    /// <summary>
+    /// Extra controls for the panel, rendered above the buttons.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Raised once an action has finished, so the caller can re-read what it is showing.
+    /// </summary>
+    /// <remarks>
+    /// Worth handling: a page showing thumbnails is holding identifiers that may have just been deleted,
+    /// and those images 404 until it reloads.
+    /// </remarks>
+    [Parameter]
+    public EventCallback OnCompleted { get; set; }
+
+    private string? _message;
+    private bool _busy;
+
+    private enum ProcessingAction
+    {
+        ClearMetadata = 1,
+        RecreateMetadata = 2,
+        ClearThumbnails = 3,
+        RecreateThumbnails = 4,
+        ClearTags = 5,
+        RecreateTags = 6,
+        ResetCacheExclusion = 7,
+    }
+
+    private async Task RunAsync(ProcessingAction action)
+    {
+        _busy = true;
+
+        try
+        {
+            // Gated: _busy disables this component's own buttons but not the page's navigation, so a
+            // folder click during a long recreate would issue a second operation on the circuit's shared
+            // DbContext and take the whole circuit down.
+            var affected = await Gate.RunAsync(
+                token => action switch
+                {
+                    ProcessingAction.ClearMetadata => Files.ClearMetadataAsync(Scope, token),
+                    ProcessingAction.RecreateMetadata => Files.RecreateMetadataAsync(Scope, token),
+                    ProcessingAction.ClearThumbnails => Files.ClearThumbnailsAsync(Scope, token),
+                    ProcessingAction.RecreateThumbnails => Files.RecreateThumbnailsAsync(Scope, token),
+                    ProcessingAction.ClearTags => Files.ClearTagsAsync(Scope, token),
+                    ProcessingAction.RecreateTags => Files.RecreateTagsAsync(Scope, token),
+                    ProcessingAction.ResetCacheExclusion => Files.ResetCacheExclusionAsync(Scope, token),
+                    _ => throw new ArgumentOutOfRangeException(nameof(action), action, null),
+                },
+                CancellationToken.None);
+
+            _message = Describe(action, affected);
+
+            await OnCompleted.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Describe(ProcessingAction action, int affected)
+    {
+        return action switch
+        {
+            ProcessingAction.ClearMetadata =>
+                $"Cleared the details of {affected} file(s). They will not be read again until you rebuild them.",
+            ProcessingAction.RecreateMetadata =>
+                $"{affected} file(s) will have their details read again shortly.",
+            ProcessingAction.ClearThumbnails =>
+                $"Cleared the previews of {affected} file(s). They will not be made again until you rebuild them.",
+            ProcessingAction.RecreateThumbnails =>
+                $"{affected} file(s) will have their previews made again shortly.",
+            ProcessingAction.ClearTags =>
+                $"Deleted {affected} stored tag(s). They will not be read again until you rebuild them.",
+            ProcessingAction.RecreateTags =>
+                $"{affected} file(s) will be read again shortly, details and tags together.",
+            ProcessingAction.ResetCacheExclusion =>
+                $"{affected} file(s) may be kept in memory again. Files that were already allowed are not counted.",
+            _ => throw new ArgumentOutOfRangeException(nameof(action), action, null),
+        };
+    }
+}

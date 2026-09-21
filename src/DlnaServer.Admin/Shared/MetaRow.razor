@@ -1,0 +1,20 @@
+@* One label-and-value pair inside a MetaList. Fifteen hand-written <dt>/<dd> pairs existed across the
+   preview page, the file facts panel and the maintenance page. *@
+
+<dt>@Label</dt>
+<dd><Provenance Source="@Source">@ChildContent</Provenance></dd>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Where the value comes from, shown on hover while technical tooltips are on.
+    /// </summary>
+    [Parameter]
+    public string? Source { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

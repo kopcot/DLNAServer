@@ -1,0 +1,64 @@
+@* A grid of thumbnail cards. The symmetric sibling of FolderList, which the folder listings have had all
+   along while the file listings kept three copies of the loop.
+
+   The three copies had drifted in three ways, and one component settles all of them: only one wrapped the
+   grid in a scroller, only one rendered an empty state, and none of them keyed the loop - so inserting or
+   removing a tile re-diffed every tile after it, while FolderList and the file-cache table both key. *@
+
+@inject IAdminUrls Urls
+
+@if (Files.Count == 0)
+{
+    @if (EmptyMessage is not null)
+    {
+        <Panel>@EmptyMessage</Panel>
+    }
+}
+else if (Scrolling)
+{
+    <Scroller>
+        @Tiles
+    </Scroller>
+}
+else
+{
+    @Tiles
+}
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public IReadOnlyList<MediaFileDto> Files { get; set; } = [];
+
+    /// <summary>
+    /// The folder the tiles were opened from, carried into each preview link so the preview page can step
+    /// to siblings and offer a way back. Left unset by a listing that is not a folder, such as the
+    /// recently-added strip.
+    /// </summary>
+    [Parameter]
+    public Guid? DirectoryId { get; set; }
+
+    /// <summary>
+    /// Keeps the grid inside its own scrolling box rather than letting it grow the page.
+    /// </summary>
+    /// <remarks>
+    /// Needed wherever a pinned panel sits above the grid: without it a long result set pushed the pinned
+    /// filters off the top of the viewport.
+    /// </remarks>
+    [Parameter]
+    public bool Scrolling { get; set; }
+
+    /// <summary>
+    /// Shown in place of the grid when there is nothing to show. Left unset by a page that renders its own
+    /// empty state across several listings at once.
+    /// </summary>
+    [Parameter]
+    public string? EmptyMessage { get; set; }
+
+    private RenderFragment Tiles => @<div class="tiles">
+        @foreach (var file in Files)
+        {
+            <MediaTile @key="file.PublicId" File="file" Href="@Urls.Preview(DirectoryId, file.PublicId)" />
+        }
+    </div>;
+}

@@ -1,0 +1,776 @@
+/*
+    Palette sampled from the server's own device icon (Resources/images/icons/large.png), so the admin UI
+    and the icon a television shows for this server are recognisably the same product. The icon is
+    overwhelmingly #b9e1fa - a light blue - with #9cd4f9 as its saturated edge and #f9f8f6 as its warm
+    white. Those three are the whole basis of what follows.
+*/
+:root {
+    color-scheme: light dark;
+
+    --sky: #b9e1fa;
+    --sky-deep: #9cd4f9;
+
+    --ink: #17303d;
+    --muted: #5a7688;
+    --line: #cde5f4;
+    --panel: #ffffff;
+    --ground: #eef6fc;
+    --accent: #1a7fbe;
+    --warn: #a4520c;
+
+    /* Go and stop, for a pair of buttons where one commits to something irreversible and one backs out. */
+    --go: #1f7a3d;
+    --stop: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ink: #dfeaf2;
+        --muted: #8ba3b4;
+        --line: #24333f;
+        --panel: #151e26;
+        --ground: #0e151b;
+
+        /* The icon's own light blue becomes the accent here: on a dark ground it is the readable one. */
+        --accent: var(--sky-deep);
+        --warn: #e2954f;
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.layout { display: flex; min-height: 100vh; }
+
+.sidebar {
+    width: 220px;
+    flex: 0 0 220px;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding: 20px 0;
+
+    /*
+        Stays put while the content scrolls. Sticky rather than fixed, so the column still occupies its
+        place in the flex row and the content needs no compensating offset.
+        align-self is what makes it work here: a flex item is stretched to the row's height by default,
+        and a stretched item cannot stick.
+        Its own overflow is auto, not scroll - so the menu scrolls only when the viewport is too short to
+        show all of it, and shows no scrollbar the rest of the time.
+    */
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    overflow-y: auto;
+
+    /* A column, so the menu can take the slack and hold the copyright line at the foot of it. */
+    display: flex;
+    flex-direction: column;
+}
+
+.brand {
+    font-weight: 600;
+    padding: 0 20px 16px;
+    letter-spacing: .02em;
+    color: var(--accent);
+}
+
+.brand::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 8px;
+    border-radius: 2px;
+    background: var(--sky);
+    box-shadow: 0 3px 0 var(--sky-deep);
+    vertical-align: baseline;
+}
+
+/* flex:1 is what pushes .sitefoot down: the menu claims the column's spare height rather than the footer
+   sitting directly under the last item halfway up the screen. */
+.nav { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; }
+.nav a {
+    display: block;
+    padding: 9px 20px;
+    color: var(--ink);
+    text-decoration: none;
+    border-left: 3px solid transparent;
+}
+.nav a:hover { background: var(--ground); }
+.nav li.sub a { padding-left: 36px; font-size: 14px; color: var(--muted); }
+.nav li.sub a:hover { color: var(--accent); }
+
+/* The copyright line at the foot of the sidebar. flex-shrink:0 so a menu longer than the viewport pushes
+   it out of view rather than squashing it into an unreadable strip. */
+.sitefoot {
+    flex: 0 0 auto;
+    margin-top: 16px;
+    padding: 12px 20px 0;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.nav a.active {
+    border-left-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+    background: color-mix(in srgb, var(--sky) 28%, transparent);
+}
+
+.content { flex: 1 1 auto; padding: 28px 32px; max-width: 1100px; }
+
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 28px 0 10px; }
+.lede { color: var(--muted); margin: 0 0 24px; }
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+
+    /* A table or a tile grid wider than the panel scrolls inside it rather than widening the page. */
+    overflow-x: auto;
+}
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+
+/*
+    Pins a page's controls at the top of the viewport so the list below scrolls under them instead of
+    taking them off the screen. The page's own scroll does the work - a scroller inside the panel would
+    need a guessed height and would swallow the wheel. Desktop only: on a phone a pinned block this tall
+    would leave almost nothing left to scroll.
+*/
+@media (min-width: 761px) {
+    .panel.pinned {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+}
+
+/*
+    Where a value came from, shown on hover and on keyboard focus while the period on the Temporary
+    settings page is running. Pure CSS: this project ships no JavaScript, and the title attribute - the
+    other no-script option - cannot be styled, waits a second before appearing and never appears at all on
+    a touch screen.
+
+    position: FIXED rather than absolute, and deliberately. A panel is `overflow-x: auto`, which makes the
+    other axis scrollable too, so an absolutely positioned bubble would be clipped by its own panel and
+    would put a scrollbar on it. A fixed box with auto offsets is laid out at its static position and is
+    not clipped by any overflow ancestor, so the margin below is what moves it off the line it belongs to.
+*/
+.tech {
+    border-bottom: 1px dotted var(--muted);
+    cursor: help;
+}
+
+.tech::after {
+    content: attr(data-tech);
+    position: fixed;
+    z-index: 5;
+    display: none;
+    margin: 20px 0 0 -6px;
+    width: max-content;
+    max-width: 320px;
+    padding: 6px 9px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 400;
+    font-variant-numeric: normal;
+    letter-spacing: normal;
+    line-height: 1.35;
+    text-align: left;
+    text-transform: none;
+    white-space: normal;
+    box-shadow: 0 2px 10px rgb(0 0 0 / 22%);
+}
+
+.tech:hover::after,
+.tech:focus::after { display: block; }
+
+.stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+.stat .value { font-size: 24px; font-variant-numeric: tabular-nums; }
+.stat .value.over { color: var(--warn); }
+
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: none; }
+
+button, .button {
+    font: inherit;
+    padding: 7px 14px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+}
+button:hover, .button:hover { border-color: var(--accent); color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tile img, .tile .noimg { border-bottom: 1px solid var(--line); }
+button.danger:hover { border-color: var(--warn); color: var(--warn); }
+
+/*
+    Filled rather than outlined, so the pair reads at a glance without being compared. Used where the two
+    buttons are a decision - confirm or back out - rather than two ordinary actions.
+*/
+button.go { background: var(--go); border-color: var(--go); color: #fff; }
+button.stop { background: var(--stop); border-color: var(--stop); color: #fff; }
+/* The three filled buttons darken identically on hover; outlined buttons recolour their border instead. */
+button.primary:hover, button.go:hover, button.stop:hover { opacity: .9; color: #fff; }
+button:disabled { opacity: .5; cursor: default; }
+
+.actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* A row of buttons standing on its own between panels, rather than inside one, needs a panel's own gap
+   below it - without this the preview page's Previous/Next row sat flush against the panel underneath
+   while every panel around it was spaced. Scoped to a direct child of the page so the rows that live
+   INSIDE a panel, which are spaced by their own container, are left alone. */
+.content > .actions { margin-bottom: 18px; }
+
+.field { margin-bottom: 18px; }
+.field label { display: block; font-weight: 600; margin-bottom: 3px; }
+/* Both sit under the control now, so the spacing is above them rather than below. */
+.field .hint { color: var(--muted); font-size: 13px; margin-top: 5px; }
+.field .restart { color: var(--warn); font-size: 12px; margin-top: 4px; }
+.field .error { color: var(--warn); font-size: 13px; font-weight: 600; margin-top: 5px; }
+/* Stands in for a control that has nothing to offer, so the field still occupies its cell in the grid
+   and the hint underneath can say why. */
+.field .empty { color: var(--muted); font-style: italic; margin: 0; }
+/* Date is styled with the rest so it is the same height: left native it sat two pixels off its row. */
+.field input[type=text], .field input[type=number], .field input[type=date], .field textarea, .field select {
+    font: inherit;
+    padding: 6px 9px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--ground);
+    color: var(--ink);
+    width: min(320px, 100%);
+}
+
+.field textarea { width: 100%; }
+
+/*
+    A file input is two controls in one - the browser's own button and the "no file chosen" text beside it
+    - and neither inherits anything, so it arrived looking like nothing else on the page. The outer box is
+    given the field treatment and the button inside it the button treatment, so the pair matches the form
+    it sits in. ::file-selector-button is the standard selector; the -webkit- one is the same rule for
+    older WebKit builds, and it has to be a separate block because an unknown selector invalidates the
+    whole list.
+*/
+.field input[type=file] {
+    font: inherit;
+    padding: 6px 9px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--ground);
+    color: var(--ink);
+    width: 100%;
+    cursor: pointer;
+}
+
+.field input[type=file]::file-selector-button {
+    font: inherit;
+    margin: 0 10px 0 0;
+    padding: 5px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+}
+
+.field input[type=file]::-webkit-file-upload-button {
+    font: inherit;
+    margin: 0 10px 0 0;
+    padding: 5px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--ink);
+    cursor: pointer;
+}
+
+.field input[type=file]:hover::file-selector-button { border-color: var(--accent); color: var(--accent); }
+.field input[type=file]:hover::-webkit-file-upload-button { border-color: var(--accent); color: var(--accent); }
+
+/* Two columns of filters on a wide screen, one on a narrow one - the fields are short, so a single
+   column would leave the form scrolling for no reason. */
+.searchform {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0 24px;
+}
+
+.searchform .field { margin-bottom: 14px; }
+
+/*
+    The heading of a collapsible panel is a button, so it is reachable by keyboard and reads as something
+    that can be operated. It has to shed the global button styling to look like the heading it replaces.
+*/
+.collapsible > h2 { margin: 0; }
+.collapse-toggle {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    margin: 0;
+    padding: 0 0 12px;
+    border: none;
+    border-radius: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+}
+.collapse-toggle:hover { border-color: transparent; color: var(--accent); }
+.collapse-toggle .chevron { font-size: 11px; color: var(--muted); }
+.collapse-toggle .collapse-summary { font-size: 13px; font-weight: 400; }
+
+/* Shut, the panel is just its heading - so the rule below it would be a line under nothing. */
+.collapsible.is-collapsed > h2 .collapse-toggle { padding-bottom: 0; }
+.collapsible.is-collapsed .actions { margin-top: 12px; }
+
+/* Separates the settings an operator is expected to touch from the ones below, which are folded away.
+   A rule rather than a panel of its own: it is a divider in the page, not another box in the stack. */
+.advanced-heading {
+    margin: 40px 0 4px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+}
+
+.advanced-heading + .muted { margin: 0 0 16px; max-width: 70ch; }
+
+/*
+    A pair of related filters keeps its two halves together. It claims a whole row - 1 / -1 works whatever
+    the auto-fit column count turns out to be, where a span of 2 would force a second column into existence
+    on a form only wide enough for one - and splits that row itself. So the two sit side by side when there
+    is room and stack when there is not, and neither case can put them in different rows.
+*/
+.fieldpair {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0 24px;
+}
+
+/*
+    Subgrid puts the pair's two halves on the form's own column tracks, so they are exactly as wide as
+    every other field. The rule above is the fallback, and it splits the row evenly instead - the pair
+    still holds together, its two fields are just wider than their neighbours.
+*/
+@supports (grid-template-columns: subgrid) {
+    .fieldpair { grid-template-columns: subgrid; }
+}
+
+/*
+    The check button sits beside its box rather than under it, so it reads as belonging to that one field
+    instead of to the form. The textarea's own width:100% has to be overridden or it would size itself to
+    the whole row and push the button out of it.
+*/
+.checkrow { display: flex; align-items: flex-start; gap: 10px; }
+.checkrow textarea, .checkrow input[type=text] { flex: 1 1 auto; width: auto; min-width: 0; }
+.checkrow button { flex: 0 0 auto; }
+
+/*
+    The compact facts line under a tile caption. Wraps rather than clipping, because a long duration on a
+    narrow tile would otherwise push the date out of sight.
+*/
+.facts { display: flex; flex-wrap: wrap; gap: 0 5px; font-size: 12px; }
+
+/*
+    A multiple-selection list. It needs its own height rule because .field select is sized for a single-row
+    dropdown, which would clip a list showing several options at once.
+*/
+.field select.multi { height: auto; padding: 4px; }
+
+.checks { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; }
+.checks li { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.checks li:last-child { border-bottom: none; }
+.checks .verdict { color: var(--warn); }
+.checks li.ok .verdict { color: var(--accent); }
+
+.notice { padding: 10px 14px; border-radius: 6px; border: 1px solid var(--line); margin-bottom: 16px; }
+.notice.ok { border-color: var(--accent); color: var(--accent); }
+.notice.bad { border-color: var(--warn); color: var(--warn); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+
+/*
+    A tile and its actions. The buttons cannot live inside the tile, which is an anchor, so the cell wraps
+    the two and the grid lays out cells rather than tiles.
+*/
+.tilecell { display: flex; flex-direction: column; }
+.tilecell .tile { flex: 1 1 auto; }
+/*
+    A fixed three-column grid rather than a wrapping row: laid out as a row the six controls broke wherever
+    the tile happened to end, and a "Thumb" label could finish a line with its two buttons on the next one,
+    reading as though they belonged to "Meta". Each kind now always owns one row.
+*/
+.tileactions {
+    display: grid;
+    grid-template-columns: max-content auto auto;
+    align-items: center;
+    justify-content: start;
+    gap: 4px 6px;
+    padding: 6px 2px 0;
+    font-size: 11px;
+}
+.tileactions button { padding: 2px 7px; font-size: 11px; }
+.tile {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    text-decoration: none;
+    color: var(--ink);
+    display: block;
+
+    /* The kind badge is positioned against this. Without it the badge escapes to the viewport, since
+       nothing between here and the body establishes a containing block. */
+    position: relative;
+}
+.tile:hover { border-color: var(--accent); }
+.tile img { width: 100%; height: 118px; object-fit: cover; display: block; background: var(--ground); }
+.tile .noimg {
+    height: 118px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 12px;
+    background: var(--ground);
+}
+.tile .caption { padding: 8px 10px; font-size: 13px; word-break: break-word; }
+
+/* A stand-in icon is a symbol, not a photograph: contained and inset so it is not cropped to a strip
+   by the cover-fit rule above, and on the same ground as the .noimg box it replaced. */
+.tile img.kindicon { object-fit: contain; padding: 18px; background: var(--ground); }
+
+.tile .kindbadge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--line);
+
+    /* Readable over an arbitrary photograph, which the panel colour alone is not. */
+    opacity: .92;
+}
+.tile .kindbadge svg { width: 12px; height: 12px; display: block; fill: currentColor; }
+
+.divider {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 30px 0 4px;
+}
+
+/*
+    The scroll container a <Virtualize> list needs. It only renders the rows inside the visible region, and
+    it works out which those are from an intersection observer on spacer elements - so it needs a box with
+    a real height to observe against, which the page's own scroll does not give it.
+
+    Every rule below is a Virtualize requirement rather than a preference, and the list breaks quietly if
+    one is dropped: rows must all be exactly ItemSize tall, so they may not wrap; the container's display
+    must stay block or table-row-group; and tabindex is what makes keyboard scrolling work at all in
+    Chromium.
+*/
+.scroller { max-height: 60vh; overflow-y: auto; overscroll-behavior: contain; }
+.scroller .folders a, .scroller table.paths td {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.folders { list-style: none; margin: 0 0 6px; padding: 0; }
+/* Virtualize stacks content rows vertically, which needs block rather than list-item. */
+.folders li { display: block; }
+
+/*
+    The rule sits on the link, not on the row. Virtualize renders its spacers as <li> too, so a border on
+    the row drew a stray empty line above and below the list - one under the heading and one under the
+    last folder. Only a real row has a link inside it.
+*/
+.folders a {
+    display: block;
+    padding: 9px 2px;
+    border-bottom: 1px solid var(--line);
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    word-break: break-word;
+}
+
+/*
+    The list ends without a rule. The last row's border sat a clear gap above whatever followed - the
+    section divider on the library root - and the two lines with space between them read as an empty row.
+
+    Transparent rather than none: <Virtualize> positions rows by one fixed ItemSize, so the last row has to
+    stay exactly as tall as the others. The selector is "an item with no later item that has a link", which
+    is the last real row - the trailing spacer has no link of its own to match.
+*/
+.folders li:not(:has(~ li a)) > a { border-bottom-color: transparent; }
+
+.folders a:hover { text-decoration: underline; }
+
+.crumbs { color: var(--muted); font-size: 13px; margin-bottom: 14px; word-break: break-all; }
+.crumbs a { color: var(--accent); }
+
+/*
+    Video is capped in height so the controls stay on screen; a video element letterboxes inside its box,
+    so that cannot distort it. An image must not be capped the same way: width:100% with a max-height
+    fixes the width and then clamps the height alone, which squashes the picture. Height stays auto so
+    the ratio is the file's own, and the width is simply the page.
+
+    The image bounds are therefore all maxima and never fixed sizes. Given only maxima the browser scales
+    the picture down to fit inside both, in proportion, so the ratio survives while the same 62vh cap
+    keeps the controls on screen - and a picture smaller than the panel is left at its own size instead
+    of being blown up past it, which is what width:100% alone did.
+*/
+.player video { width: 100%; max-height: 62vh; background: #000; border-radius: 8px; display: block; }
+.player img { max-width: 100%; max-height: 62vh; width: auto; height: auto; border-radius: 8px; display: block; margin-inline: auto; }
+.player audio { width: 100%; }
+
+/* Capped well below the image viewer's limit: a cover accompanies the controls, it is not the subject
+   of the page the way a photograph is. */
+.player img.cover { max-height: 320px; margin-bottom: 12px; }
+
+/*
+    A photograph is clickable, and which "larger" a click leads to is decided here rather than on the
+    server. The button covers the picture on a desktop, so it takes the click and opens the overlay; on a
+    phone it is gone and the tap lands on the link underneath, which leads to the picture's own page.
+
+    The wrapper shrink-wraps the image so the button matches the picture's box and not the panel's - a
+    landscape photograph in a tall panel would otherwise be clickable well outside itself. fit-content plus
+    auto margins is what keeps .player img's own centring.
+*/
+.photo { position: relative; width: fit-content; margin-inline: auto; }
+.photo > a { display: block; }
+
+.photozoom {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    cursor: zoom-in;
+}
+
+/*
+    The photo viewer. Fixed rather than a <dialog> or a panel in the flow: the sidebar is sticky and the
+    filter panels are sticky, so anything less than an overlay out of the flow ends up underneath one of
+    them. z-index clears the sidebar's 5.
+*/
+.lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+}
+
+.lightboxbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+}
+
+/*
+    The page behind must not scroll while the overlay is up: the overlay is fixed, so a wheel over a
+    picture that does not overflow scrolls the page underneath instead, and closing then lands the operator
+    somewhere they never chose. :has is what reaches upward from the overlay to the root scroller - the
+    same selector the folder list already depends on.
+*/
+html:has(.lightbox) { overflow: hidden; }
+
+/* The file name gives way first - the controls either side of it are the part that has to stay. */
+.lightboxtitle { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Wide enough for "Fitting", so the zoom buttons do not shuffle as the readout swaps between the word and
+   a level - tabular figures do the same job for 25% against 400%. */
+.lightboxbar .zoomlevel { font-variant-numeric: tabular-nums; min-width: 7ch; text-align: center; }
+.lightboxclose { flex: 0 0 auto; }
+
+/*
+    The picture's own box scrolls, so zooming past the screen pans instead of stretching the overlay. It
+    carries the focus as well, which is what lets the arrow keys pan it without a handler - so its focus
+    ring is suppressed, since the ring would frame the whole screen and say nothing.
+*/
+.lightboxstage { flex: 1 1 auto; overflow: auto; }
+.lightboxstage:focus { outline: none; }
+
+/*
+    Two modes, and never both at once. Fitted is what the viewer opens at and what `Fit to screen` returns
+    to: `max-width` alone, so the picture is its own size and is brought down only if it is wider than the
+    stage. Any change of level leaves that mode for `zoom` alone - a percentage of the file's own pixels
+    with nothing capping the width, so the stage scrolls and the panning is the browser's. Setting both,
+    which is what this did until 2026-09-14, moved the cap with the level and so squashed the picture as it
+    grew. `zoom` and not `transform: scale()`, which leaves the layout box behind and would cost the stage
+    its scrollbars and the arrow-key panning that comes with them.
+
+    Height stays auto so the ratio is the file's own - the same rule .player img follows, and for the same
+    reason.
+*/
+.lightboxstage img {
+    display: block;
+    height: auto;
+    margin-inline: auto;
+}
+
+.lightboxstage img.fitted { max-width: var(--zoom, 100%); }
+.lightboxstage img:not(.fitted) { zoom: var(--zoom, 100%); }
+
+/* The phone's destination for a tapped photograph: the picture, the width of the column, uncapped. A
+   max-height here is exactly what squashes a photograph, and pinch-zoom is the browser's job. */
+.photopage { display: block; width: 100%; height: auto; border-radius: 8px; }
+
+/* The tag dump. A lyrics tag is a whole song, so the value column wraps and keeps the line breaks the
+   file stored, and the block scrolls rather than pushing the page to any length. */
+.tagdump > summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 2px 0; }
+.tagdump > summary:hover { color: var(--ink); }
+.tagdump[open] > summary { margin-bottom: 8px; }
+.tagdump td.tagvalue {
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-width: 640px;
+    max-height: 220px;
+    overflow-y: auto;
+    display: block;
+}
+
+dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: 4px 18px; margin: 0; }
+dl.meta dt { color: var(--muted); }
+dl.meta dd { margin: 0; word-break: break-all; }
+
+.muted { color: var(--muted); }
+.paths { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+/*
+    Phones and narrow windows. The desktop layout is a fixed 220px sidebar beside the content, which on a
+    phone leaves a column too narrow to read - so the sidebar becomes a scrollable top bar and everything
+    that was sized for a wide viewport is resized rather than merely reflowed.
+*/
+@media (max-width: 760px) {
+    .layout { flex-direction: column; }
+
+    .sidebar {
+        width: auto;
+        flex: 0 0 auto;
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+        padding: 12px 0 0;
+
+        /* Sticky, so navigation stays reachable while scrolling a long folder or the settings page. */
+        position: sticky;
+        top: 0;
+        z-index: 5;
+
+        /* Undo the desktop column: here the bar is as tall as its own content and scrolls sideways. */
+        align-self: auto;
+        height: auto;
+        overflow-y: visible;
+    }
+
+    .brand { padding: 0 16px 10px; }
+
+    /* Horizontal and scrollable: five items do not fit a phone's width, and wrapping them would push the
+       content down the screen on every page. */
+    .nav {
+        display: flex;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .nav::-webkit-scrollbar { display: none; }
+    .nav li { flex: 0 0 auto; }
+
+    /* No room for it across the top, and nowhere else here that reads as "the bottom of the page". The
+       About page shows the same notice. */
+    .sitefoot { display: none; }
+
+    .nav a {
+        padding: 10px 14px;
+        border-left: none;
+        border-bottom: 3px solid transparent;
+        white-space: nowrap;
+    }
+
+    .nav a.active {
+        border-left-color: transparent;
+        border-bottom-color: var(--accent);
+    }
+
+    .content { padding: 18px 14px; }
+
+    h1 { font-size: 19px; }
+    h2 { font-size: 16px; margin-top: 22px; }
+
+    .panel { padding: 14px; border-radius: 6px; }
+
+    .grid { grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); gap: 10px; }
+    .stat .value { font-size: 20px; }
+
+    /* Two tiles across a phone rather than one giant one. */
+    .tiles { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+    .tile img, .tile .noimg { height: 92px; }
+    .tile img.kindicon { padding: 12px; }
+    .tile .caption { padding: 7px 8px; font-size: 12px; }
+
+    /* Video shorter, so its controls and the next/previous buttons share the screen. An image keeps
+       height:auto - capping it is what distorted photos in the first place. */
+    .player video { max-height: 42vh; }
+
+    /* The overlay is not offered here: a toolbar costs height a phone has none of, and pinch-zoom on the
+       picture's own page does the same job better. Gone, the tap lands on the link underneath. */
+    .photozoom { display: none; }
+
+    /* Label above value: two grid columns cannot hold a long file path beside its label. */
+    dl.meta { grid-template-columns: 1fr; gap: 0; }
+
+    dl.meta dt {
+        margin-top: 10px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+
+    /* Full-width targets: a row of narrow buttons is hard to hit accurately. */
+    .actions { gap: 8px; }
+    .actions button, .actions .button { flex: 1 1 auto; text-align: center; min-height: 40px; }
+
+    th, td { padding: 6px 8px; }
+
+    .searchform, .fieldpair { grid-template-columns: 1fr; gap: 0; }
+    .field select { width: 100%; }
+    .nav li.sub a { padding-left: 14px; }
+}

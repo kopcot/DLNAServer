@@ -1,0 +1,13 @@
+@* A box that scrolls its own content instead of the page. Three copies existed.
+
+   tabindex="-1" is the part worth keeping in one place: without it the box cannot take keyboard focus, so
+   a long list could be scrolled with the mouse and not with the keyboard. *@
+
+<div class="scroller" tabindex="-1">
+    @ChildContent
+</div>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

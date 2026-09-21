@@ -1,0 +1,296 @@
+@page "/admin/library"
+@page "/admin/library/{DirectoryId:guid}"
+@rendermode InteractiveServer
+@inherits AdminPageBase
+@inject IMediaDirectoryRepository Directories
+@inject IMediaFileRepository Files
+@inject IOptionsMonitor<DlnaOptions> Options
+@inject IAdminUrls Urls
+
+@if (_directory is null)
+{
+    <PageHeader Title="Library">The configured source folders.</PageHeader>
+}
+else
+{
+    <PageHeader Title="Library" />
+
+    <div class="actions" style="margin-bottom:12px">
+        <a class="button" href="@ParentUrl()">&uarr; Up</a>
+        @if (!_directory.IsSourceRoot)
+        {
+            <a class="button" href="@Urls.LibraryRoot">Source folders</a>
+        }
+    </div>
+
+    <p class="crumbs">
+        <a href="@Urls.LibraryRoot">Source folders</a>
+        @foreach (var ancestor in _trail)
+        {
+            <text> / </text>
+            <a href="@Urls.Library(ancestor.PublicId)">@ancestor.Name</a>
+        }
+        <text> / </text>
+        <span>@_directory.Name</span>
+    </p>
+
+    @* Scope comes off _directory, not off the DirectoryId PARAMETER. ComponentBase always renders once
+       with new parameters and old state, and this markup is guarded on _directory - so reading the
+       parameter here threw "Nullable object must have a value" from inside BuildRenderTree the moment
+       the gate was contended: Gate.RunAsync returns an incomplete task before LoadAsync runs, the render
+       saw DirectoryId == null with _directory still set, and the circuit died on the very navigation the
+       gate exists to make safe. It only ever looked correct because an uncontended SemaphoreSlim.WaitAsync
+       completes synchronously. *@
+    <ProcessingActions Scope="MediaFileScope.ForDirectory(_directory.PublicId, _includeSubdirectories)"
+                       Heading="This folder" OnCompleted="OnParametersSetAsync">
+        <CheckField Label="Include every subfolder" @bind-Value="_includeSubdirectories" />
+    </ProcessingActions>
+}
+
+@* Each listing folds away. Only the whole section folds, never an individual row: FolderList positions
+   its rows by a fixed ItemSize and a row that changed height would misplace every row below it without
+   erroring. The fold is the panel's own state, so a section shut here stays shut while you walk the
+   folder tree. *@
+@if (_folders.Count > 0)
+{
+    @* Text links rather than tiles: a folder has no image to show, so a thumbnail-sized card gave a
+       placeholder the same visual weight as a real preview and pushed the files off the screen. *@
+    <CollapsiblePanel Heading="Folders">
+        <Summary>@_folderTotal folder(s)</Summary>
+        <ChildContent>
+            <FolderList Folders="_folders" EmptyMessage="No sub-folders." />
+            <ShowMore Shown="_folders.Count" Total="_folderTotal" Noun="folder(s)"
+                      Source="database Directories row count (this folder)"
+                      Disabled="_loading" OnMore="ShowMoreFoldersAsync" />
+        </ChildContent>
+    </CollapsiblePanel>
+}
+
+@if (_files.Count > 0)
+{
+    @* No per-file actions here: a single file is acted on from its own preview page, so a tile stays a
+       tile. The panel above covers the folder. *@
+    <CollapsiblePanel Heading="Files">
+        <Summary>@_fileTotal file(s)</Summary>
+        <ChildContent>
+            <FileList Files="_files" DirectoryId="DirectoryId" />
+            <ShowMore Shown="_files.Count" Total="_fileTotal" Noun="file(s)"
+                      Source="database Files row count (this folder)"
+                      Disabled="_loading" OnMore="ShowMoreFilesAsync" />
+        </ChildContent>
+    </CollapsiblePanel>
+}
+
+@if (_recent.Count > 0)
+{
+    @* A rule rather than just a heading: the tiles above are folders and these are files from anywhere
+       in the library, so the two grids need a visible boundary or they read as one listing. *@
+    <hr class="divider" />
+
+    <CollapsiblePanel Heading="Recently added">
+        <Summary>@_recent.Count file(s)</Summary>
+        <ChildContent>
+            <p class="muted">
+                The newest @_recent.Count file(s) anywhere in your library. Your televisions see this list
+                too. How many appear is set on the Settings page.
+            </p>
+            <FileList Files="_recent" />
+        </ChildContent>
+    </CollapsiblePanel>
+}
+
+@if (_folders.Count == 0 && _files.Count == 0 && _recent.Count == 0)
+{
+    <Panel>Nothing here yet.</Panel>
+}
+
+@code {
+    [Parameter]
+    public Guid? DirectoryId { get; set; }
+
+    /// <summary>
+    /// How far the ancestor walk will follow parents before giving up.
+    /// </summary>
+    /// <remarks>
+    /// A bound rather than a limit anyone should reach: the walk follows a parent identifier each step,
+    /// and a cycle in that data - which nothing enforces against - would otherwise spin forever while
+    /// rendering a page.
+    /// </remarks>
+    private const int MaxTrailDepth = 64;
+
+    /// <summary>
+    /// Rows fetched per page, for both listings.
+    /// </summary>
+    /// <remarks>
+    /// Both listings used to call the UNPAGED reads, so a folder's entire contents were materialised and
+    /// held server-side, per circuit, for the page's lifetime - about 600 bytes per DTO, so ~3 MB for a
+    /// 5,000-file folder, and past ~10,000 files the backing array lands on the large object heap by
+    /// itself. That is the pattern <c>GetByDirectoryPageAsync</c>'s own documentation says was taken out
+    /// of Browse for exactly this reason.
+    /// <para>
+    /// Paged with a Show more button rather than by handing <c>Virtualize</c> an <c>ItemsProvider</c>.
+    /// The files are a wrapping CSS tile grid, and <c>Virtualize</c> positions rows on a fixed
+    /// <c>ItemSize</c> assuming one item per row - it would misplace every tile, and PLAN.md section 7
+    /// warns that its constraints fail quietly. Paging the DATA is what bounds the memory; virtualizing
+    /// the RENDER only bounds the DOM, which was never the problem.
+    /// </para>
+    /// </remarks>
+    private const int PageSize = 200;
+
+    private MediaDirectoryDto? _directory;
+    private IReadOnlyList<MediaDirectoryDto> _trail = [];
+    // A List rather than the repository's IReadOnlyList: Virtualize binds Items to ICollection<T>.
+    private List<MediaDirectoryDto> _folders = [];
+    private List<MediaFileDto> _files = [];
+    private IReadOnlyList<MediaFileDto> _recent = [];
+    private bool _includeSubdirectories;
+    private int _folderTotal;
+    private int _fileTotal;
+    private bool _loading;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Gated: this runs on every navigation, including a folder click made while ProcessingActions is
+        // still awaiting a recreate on the same circuit's DbContext.
+        await RunGatedAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync(CancellationToken cancellationToken)
+    {
+        if (DirectoryId is { } id)
+        {
+            _directory = await Directories.GetByPublicIdAsync(id, cancellationToken);
+            _folderTotal = await Directories.CountChildrenAsync(id, cancellationToken);
+            _fileTotal = await Files.CountByDirectoryAsync(id, cancellationToken);
+
+            _folders = [.. await Directories.GetChildrenPageAsync(
+                id,
+                skip: 0,
+                take: PageSize,
+                sortByDate: false,
+                descending: false,
+                cancellationToken)];
+
+            _files = [.. await Files.GetByDirectoryPageAsync(
+                id,
+                skip: 0,
+                take: PageSize,
+                sortByDate: false,
+                descending: false,
+                cancellationToken)];
+
+            _trail = await BuildTrailAsync(_directory, cancellationToken);
+            _recent = [];
+        }
+        else
+        {
+            _directory = null;
+            _trail = [];
+
+            // Source roots are the configured folders - a handful, never a page's worth.
+            _folders = [.. await Directories.GetSourceRootsAsync(cancellationToken)];
+            _folderTotal = _folders.Count;
+            _files = [];
+            _fileTotal = 0;
+
+            // Only at the top: inside a folder the newest files of the whole library would be noise.
+            _recent = await Files.GetRecentlyAddedAsync(
+                Options.CurrentValue.Library.RecentlyAddedCount,
+                cancellationToken);
+        }
+    }
+
+    private Task ShowMoreFoldersAsync()
+    {
+        return AppendPageAsync(_folders, Directories.GetChildrenPageAsync);
+    }
+
+    private Task ShowMoreFilesAsync()
+    {
+        return AppendPageAsync(_files, Files.GetByDirectoryPageAsync);
+    }
+
+    /// <summary>
+    /// Appends the next page of one listing to what is already shown.
+    /// </summary>
+    /// <remarks>
+    /// The <c>_loading</c> flag is raised BEFORE the gate rather than inside it, and re-entry is refused
+    /// outright. Set inside the gated operation, it stayed false for as long as another operation held
+    /// the semaphore - so the button stayed enabled, and repeated clicks queued several appends that all
+    /// read from the same stale <c>target.Count</c> and appended the same page more than once.
+    /// </remarks>
+    private async Task AppendPageAsync<TItem>(
+        List<TItem> target,
+        Func<Guid, int, int, bool, bool, CancellationToken, Task<IReadOnlyList<TItem>>> fetchPage)
+    {
+        if (_loading || DirectoryId is not { } id)
+        {
+            return;
+        }
+
+        _loading = true;
+
+        try
+        {
+            await RunGatedAsync(async token => target.AddRange(await fetchPage(
+                id,
+                target.Count,
+                PageSize,
+                false,
+                false,
+                token)));
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>
+    /// The ancestors of the current directory, outermost first.
+    /// </summary>
+    /// <remarks>
+    /// Walked one parent at a time rather than derived from the path: the path is a string and splitting
+    /// it would not yield the identifiers a link needs. Each step is a single indexed lookup and folder
+    /// trees here are a few levels deep, so the cost is not worth a dedicated query.
+    /// </remarks>
+    private async Task<IReadOnlyList<MediaDirectoryDto>> BuildTrailAsync(
+        MediaDirectoryDto? directory,
+        CancellationToken cancellationToken)
+    {
+        if (directory is null)
+        {
+            return [];
+        }
+
+        var ancestors = new List<MediaDirectoryDto>();
+        var parentId = directory.ParentDirectoryPublicId;
+
+        while (parentId is { } id && ancestors.Count < MaxTrailDepth)
+        {
+            var parent = await Directories.GetByPublicIdAsync(id, cancellationToken);
+
+            if (parent is null)
+            {
+                break;
+            }
+
+            ancestors.Add(parent);
+            parentId = parent.ParentDirectoryPublicId;
+        }
+
+        ancestors.Reverse();
+
+        return ancestors;
+    }
+
+    /// <summary>
+    /// Where Up goes: the parent folder, or the source-folder list at the top of a tree.
+    /// </summary>
+    private string ParentUrl()
+    {
+        return _directory?.ParentDirectoryPublicId is { } parentId
+            ? Urls.Library(parentId)
+            : Urls.LibraryRoot;
+    }
+}

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="MetadataExtractor" />
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+    <PackageReference Include="Xabe.FFmpeg" />
+    <PackageReference Include="Xabe.FFmpeg.Downloader" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DlnaServer.Core\DlnaServer.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DlnaServer.UnitTests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,251 @@
+@* Puts files into a media folder from a browser - a phone, a laptop, whatever is to hand.
+
+   A plain HTML form posting to /admin/upload, and statically rendered: no controls need a circuit, and
+   the files must not travel over one. A circuit moves a body in 32 KB messages through this process's
+   memory, which is the wrong shape for a film. The form posts straight to the controller instead, which
+   streams each part to disc, and the browser shows its own upload progress while it does.
+
+   The fields are BEFORE the file input on purpose. A multipart body arrives in document order, so the
+   destination is known by the time the first byte of the first file does - otherwise the controller
+   would have to buffer every file before it could learn where to put them. *@
+
+@page "/admin/upload"
+@using Microsoft.AspNetCore.Http
+@inject IOptionsMonitor<DlnaOptions> Options
+@inject IUploadAvailability Availability
+@inject IUploadReportStore Reports
+@inject IUploadDeviceRepository Devices
+@inject IMediaFormatter Fmt
+
+<PageHeader Title="Add files">
+    Copy media from this device into one of your library folders.
+</PageHeader>
+
+@if (!Availability.IsAcceptingUploads)
+{
+    <Notice IsBad="true">
+        @if (Options.CurrentValue.Upload.Enabled)
+        {
+            <text>
+                Uploading is switched on in your settings but this server has not been restarted since,
+                so it is not accepting files yet. Restart it from the
+                <a href="/admin/maintenance">Maintenance</a> page.
+            </text>
+        }
+        else
+        {
+            <text>
+                Uploading is switched off. Turn on <em>Accept uploads</em> on the
+                <a href="/admin/settings">Settings</a> page, then restart the server.
+            </text>
+        }
+    </Notice>
+}
+else
+{
+    <Panel Heading="Choose the files">
+        @* No EditForm and no @onsubmit: this posts to a controller, not to a component. It posts to
+           /admin/upload/FILES rather than to this page's own address, because a Razor component endpoint
+           answers POST as well as GET - sharing the path made every upload an ambiguous match and a 500,
+           while the GET carried on working. *@
+        <form method="post" action="/admin/upload/files" enctype="multipart/form-data">
+            <FormField Label="Into this folder" For="root">
+                <ChildContent>
+                    @if (_roots.Count == 1)
+                    {
+                        <input type="hidden" name="root" value="@_roots[0]" />
+                        <p class="paths">@_roots[0]</p>
+                    }
+                    else
+                    {
+                        <select id="root" name="root">
+                            @foreach (var root in _roots)
+                            {
+                                <option value="@root" selected="@(root == _selectedRoot)">@root</option>
+                            }
+                        </select>
+                    }
+                </ChildContent>
+                <Hint>
+                    @if (_pinned)
+                    {
+                        <text>
+                            Uploads are restricted to this one folder by the <em>Upload folder</em>
+                            setting.
+                        </text>
+                    }
+                    else
+                    {
+                        <text>One of your source folders. Files land here and are indexed from here.</text>
+                    }
+                </Hint>
+            </FormField>
+
+            <FormField Label="Folder inside it (optional)" For="subFolder">
+                <ChildContent>
+                    <input id="subFolder" type="text" name="subFolder" value="@_selectedSubFolder"
+                           placeholder="Films/2026" />
+                </ChildContent>
+                <Hint>
+                    Created if it does not exist. Either kind of slash works, and it has to stay inside
+                    the folder above.
+                </Hint>
+            </FormField>
+
+            <FormField Label="If a file of that name is already there">
+                <ChildContent>
+                    <div class="checks">
+                        <label>
+                            <input type="radio" name="existing" value="skip" checked />
+                            Leave the one that is there
+                        </label>
+                        <label>
+                            <input type="radio" name="existing" value="overwrite" />
+                            Replace it with the one I am sending
+                        </label>
+                    </div>
+                </ChildContent>
+            </FormField>
+
+            <FormField Label="Files" For="files">
+                <ChildContent>
+                    <input id="files" type="file" name="files" multiple required />
+                </ChildContent>
+                <Hint>
+                    Only file types your library holds are accepted - the list is on the
+                    <a href="/admin/settings">Settings</a> page. Anything else is refused and named in the
+                    report. Largest single file: @_maxFileSizeInMegabytes MB.
+                </Hint>
+            </FormField>
+
+            <div class="actions">
+                <button class="primary" type="submit">Upload</button>
+            </div>
+        </form>
+
+        <p class="muted">
+            Nothing appears in the library until the files have finished arriving and the server has
+            looked through the folder, which it is asked to do as soon as the upload ends.
+        </p>
+    </Panel>
+}
+
+@if (_report is not null)
+{
+    <Panel>
+        <HeadingContent>
+            What was uploaded<span class="muted"> &middot; @_report.Files.Count file(s) into @_report.Destination</span>
+        </HeadingContent>
+        <ChildContent>
+            @* A native details, like the assembly list on About: this page is statically rendered, and a
+               fold that lived in server state would cost it a circuit. *@
+            <details class="tagdump" open>
+                <summary>Show every file and what happened to it</summary>
+                <DataTable>
+                    <Columns>
+                        <th>File</th><th class="num">Size</th><th>What happened</th><th>Why</th>
+                    </Columns>
+                    <ChildContent>
+                        @foreach (var file in _report.Files)
+                        {
+                            <tr>
+                                <td>@file.FileName</td>
+                                <td class="num">@Fmt.Megabytes(file.SizeInBytes)</td>
+                                <td>@Describe(file.Outcome)</td>
+                                <td class="tagvalue">@file.Reason</td>
+                            </tr>
+                        }
+                    </ChildContent>
+                </DataTable>
+            </details>
+            <p class="muted">
+                Every one of these is also written to <code>logs/uploadSecurity.log</code>, which keeps the
+                record after this page is gone.
+            </p>
+        </ChildContent>
+    </Panel>
+}
+
+@code {
+    private const string DestinationCookie = "dlna.upload.destination";
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    [SupplyParameterFromQuery(Name = "report")]
+    private Guid? ReportId { get; set; }
+
+    private IReadOnlyList<string> _roots = [];
+    private string? _selectedRoot;
+    private string? _selectedSubFolder;
+    private bool _pinned;
+    private int _maxFileSizeInMegabytes;
+    private UploadReport? _report;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var options = Options.CurrentValue;
+
+        _roots = UploadDestination.Roots(options);
+        _pinned = !string.IsNullOrWhiteSpace(options.Upload.DestinationFolder);
+        _maxFileSizeInMegabytes = options.Upload.MaxSizeInMegabytes;
+
+        if (ReportId is { } id)
+        {
+            _report = Reports.Find(id);
+        }
+
+        await PrefillAsync();
+    }
+
+    /// <remarks>
+    /// The cookie first because it costs nothing and is per browser; the database when it is gone, which
+    /// is what a cleared browser or a private window leaves behind. A remembered folder that is no longer
+    /// one of the roots is ignored rather than offered - the configuration may well have changed since.
+    /// </remarks>
+    private async Task PrefillAsync()
+    {
+        var remembered = HttpContext?.Request.Cookies[DestinationCookie];
+
+        if (string.IsNullOrWhiteSpace(remembered) && HttpContext is not null)
+        {
+            var fingerprint = UploadDeviceFingerprint.Create(
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                HttpContext.Request.Headers.UserAgent.ToString());
+
+            remembered = await Devices.GetLastDestinationAsync(fingerprint, HttpContext.RequestAborted);
+        }
+
+        _selectedRoot = _roots.Count > 0 ? _roots[0] : null;
+
+        if (string.IsNullOrWhiteSpace(remembered))
+        {
+            return;
+        }
+
+        foreach (var root in _roots)
+        {
+            if (!remembered.StartsWith(root, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            _selectedRoot = root;
+            _selectedSubFolder = remembered[root.Length..].Trim('/', '\\');
+
+            return;
+        }
+    }
+
+    private static string Describe(UploadOutcome outcome)
+    {
+        return outcome switch
+        {
+            UploadOutcome.Uploaded => "Uploaded",
+            UploadOutcome.Overwritten => "Replaced the one that was there",
+            UploadOutcome.Skipped => "Left alone",
+            UploadOutcome.Failed => "Not uploaded",
+            _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
+        };
+    }
+}

@@ -1,0 +1,10 @@
+@* A definition list of label-and-value facts. Holds MetaRow children. *@
+
+<dl class="meta">
+    @ChildContent
+</dl>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

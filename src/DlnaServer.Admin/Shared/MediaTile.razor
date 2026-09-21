@@ -1,0 +1,66 @@
+@* The thumbnail card for one media file. The same card is drawn by the library listing, the library's
+   recently-added strip and the file-search results, and the fallback rule below is why it is worth a
+   component rather than three copies: it is a decision, not decoration. *@
+
+@inject IAdminUrls Urls
+
+<a class="tile" href="@Href">
+    @if (File.ThumbnailPublicId is { } thumbnailId)
+    {
+        <img src="@Urls.Thumbnail(thumbnailId)" alt="" loading="lazy" />
+    }
+    else if (File.Mime.ToMedia() == DlnaMedia.Image)
+    {
+        @* A photo is its own preview, so a folder of images looks right before the thumbnail pass has
+           reached it. DidlMapper does the same for renderers. *@
+        <img src="@Urls.MediaFile(File.PublicId)" alt="" loading="lazy" />
+    }
+    else if (Urls.KindIcon(File.Mime.ToMedia()) is { } iconUrl)
+    {
+        @* The same stand-in a television is given. A tile used to print the bare word "audio" here,
+           which read as a caption rather than as "there is no preview". *@
+        <img class="kindicon" src="@iconUrl" alt="" loading="lazy" />
+    }
+    else
+    {
+        <div class="noimg">@File.Mime.ToMedia().ToString().ToLowerInvariant()</div>
+    }
+    <span class="kindbadge" title="@Kind" aria-label="@Kind">@KindIcon</span>
+    <div class="caption">
+        @File.Title
+        <MediaFileFacts File="File" Compact="true" />
+    </div>
+</a>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public MediaFileDto File { get; set; } = null!;
+
+    /// <summary>
+    /// Where the card leads - the preview page, with or without the folder it was opened from.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string Href { get; set; } = string.Empty;
+
+    // Driven by the kind of file, never by whether a preview exists: a music track with cover art is
+    // still a music track, and the badge has to say so on a tile that is showing the art.
+    private string Kind => File.Mime.ToMedia() switch
+    {
+        DlnaMedia.Video => "video",
+        DlnaMedia.Image => "photo",
+        DlnaMedia.Audio => "music",
+        _ => "file",
+    };
+
+    // Drawn rather than fetched: three shapes at 12px cost less than three more requests, and inheriting
+    // currentColor is what makes them legible in both themes without a second set of files.
+    private RenderFragment KindIcon => File.Mime.ToMedia() switch
+    {
+        DlnaMedia.Video => @<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 2l7 4-7 4z" /></svg>,
+        DlnaMedia.Image => @<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.5 2.5h9v7h-9z M3 8l2.5-3 2 2.5L9 6l1 2z" /></svg>,
+        DlnaMedia.Audio => @<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M10 1.5v6.2a1.8 1.8 0 11-1-1.6V3.4L5.5 4.2v4.6a1.8 1.8 0 11-1-1.6V3z" /></svg>,
+        _ => @<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5h4l2.5 2.5v7h-6.5z" /></svg>,
+    };
+}

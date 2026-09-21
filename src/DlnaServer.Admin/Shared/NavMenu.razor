@@ -1,0 +1,20 @@
+@inject IUploadAvailability Availability
+
+<ul class="nav">
+    <li><NavLink href="/admin" Match="NavLinkMatch.All">Dashboard</NavLink></li>
+    <li><NavLink href="/admin/library" Match="NavLinkMatch.All">Library</NavLink></li>
+    <li class="sub"><NavLink href="/admin/library/search/folders">Search folders</NavLink></li>
+    <li class="sub"><NavLink href="/admin/library/search/files">Search files</NavLink></li>
+    @if (Availability.IsAcceptingUploads)
+    {
+        <li><NavLink href="/admin/upload">Add files</NavLink></li>
+    }
+    <li><NavLink href="/admin/cache">Recently served</NavLink></li>
+    <li><NavLink href="/admin/settings" Match="NavLinkMatch.All">Settings</NavLink></li>
+    <li class="sub"><NavLink href="/admin/settings/temporary">Temporary</NavLink></li>
+    <li><NavLink href="/admin/maintenance">Maintenance</NavLink></li>
+    @* Last, and in this order: Help is reached when something is unclear, About only when someone wants to
+       know what this build is. Neither is a place work gets done, so neither belongs above Maintenance. *@
+    <li><NavLink href="/admin/help">Help</NavLink></li>
+    <li><NavLink href="/admin/about">About</NavLink></li>
+</ul>

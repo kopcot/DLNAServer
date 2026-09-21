@@ -1,0 +1,108 @@
+@* The facts about one media file. Its own component so the preview page, the search results and the
+   library listing state them identically instead of each growing a version that drifts.
+
+   Everything shown comes from MediaFileDto, which is what a listing already reads - including the running
+   time, so a tile can show it without a second query per file. *@
+
+@inject IMediaFormatter Fmt
+
+@if (Compact)
+{
+    <div class="muted facts">
+        <span><Provenance Source="database Files.SizeInBytes (MB)">@Fmt.Megabytes(File.SizeInBytes)</Provenance></span>
+        @if (File.Duration is not null)
+        {
+            <span>&middot;</span>
+            <span><Provenance Source="database Files.Duration">@Fmt.Duration(File.Duration)</Provenance></span>
+        }
+        <span>&middot;</span>
+        <span><Provenance Source="database Files.FileModifiedUtc">@Fmt.Day(File.FileModifiedUtc)</Provenance></span>
+        @if (MissingNote() is { } missing)
+        {
+            <span>&middot;</span>
+            <span>@missing</span>
+        }
+    </div>
+}
+else
+{
+    <Panel Heading="@Heading">
+        <MetaList>
+            <MetaRow Label="File type" Source="database Files.Mime">@File.Mime.ToMimeString()</MetaRow>
+            <MetaRow Label="Compatibility profile" Source="database Files.DlnaProfileName">@(File.DlnaProfileName ?? "standard for this type")</MetaRow>
+            <MetaRow Label="Kind" Source="database Files.UpnpClass">@Fmt.Kind(File.UpnpClass)</MetaRow>
+            <MetaRow Label="Size" Source="database Files.SizeInBytes (MB)">@Fmt.Megabytes(File.SizeInBytes)</MetaRow>
+            <MetaRow Label="Length" Source="database Files.Duration">@Fmt.Duration(File.Duration)</MetaRow>
+            <MetaRow Label="Modified" Source="database Files.FileModifiedUtc">@File.FileModifiedUtc.ToLocalTime()</MetaRow>
+            <MetaRow Label="Added to library" Source="database Files.CreatedUtc">@File.CreatedUtc.ToLocalTime()</MetaRow>
+            <MetaRow Label="Kept in memory" Source="database Files.IsExcludedFromCache">@(File.IsExcludedFromCache ? "no - this file could not be read last time" : "yes")</MetaRow>
+            <MetaRow Label="Details read" Source="database Files.MetadataStamp / .IsMetadataSuppressed / .MetadataFailureCount">@ProcessingState(File.MetadataStamp, File.IsMetadataSuppressed, File.MetadataFailureCount)</MetaRow>
+            <MetaRow Label="Preview made" Source="database Files.ThumbnailStamp / .IsThumbnailSuppressed / .ThumbnailFailureCount">@ProcessingState(File.ThumbnailStamp, File.IsThumbnailSuppressed, File.ThumbnailFailureCount)</MetaRow>
+        </MetaList>
+        @Actions
+    </Panel>
+}
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public MediaFileDto File { get; set; } = null!;
+
+    /// <summary>
+    /// Renders the one-line form a thumbnail tile has room for rather than the full panel.
+    /// </summary>
+    /// <remarks>
+    /// A density switch rather than two components: the facts and their formatting are the same, and it is
+    /// only how many of them fit that differs between a preview page and a 190-pixel tile.
+    /// </remarks>
+    [Parameter]
+    public bool Compact { get; set; }
+
+    /// <summary>
+    /// Heading for the panel form, so a page showing more than one file can say which is which.
+    /// </summary>
+    [Parameter]
+    public string Heading { get; set; } = "File";
+
+    /// <summary>
+    /// Controls rendered inside the panel, under the facts. Nothing is drawn when none are supplied, and
+    /// nothing is drawn in <see cref="Compact"/> mode either - a 190px tile has no room for controls.
+    /// </summary>
+    /// <remarks>
+    /// A slot rather than the controls themselves, because this component states facts for a listing tile
+    /// as well as for a page: it stays read-only and injects no repository, and the one caller that can
+    /// act on a file passes in what acts on it.
+    /// </remarks>
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+
+    // A stamp is what records that the work was done, so its absence is the question and the failure
+    // count and the switch are what explain it.
+    private static string ProcessingState(string? stamp, bool isSuppressed, int failureCount)
+    {
+        return (stamp, isSuppressed, failureCount) switch
+        {
+            (not null, _, _) => "yes",
+            (_, true, _) => "no - turned off for this file",
+            (_, _, 1) => "no - one attempt failed",
+            (_, _, > 1) => $"no - {failureCount} attempts failed",
+            _ => "no - still waiting its turn",
+        };
+    }
+
+    // Only what is genuinely outstanding: a file nobody will ever make a preview for is not news, and a
+    // tile has room for one short phrase at most.
+    private string? MissingNote()
+    {
+        var noDetails = File.MetadataStamp is null && !File.IsMetadataSuppressed;
+        var noPreview = File.ThumbnailStamp is null && !File.IsThumbnailSuppressed;
+
+        return (noDetails, noPreview) switch
+        {
+            (true, true) => "no details or preview",
+            (true, false) => "no details",
+            (false, true) => "no preview",
+            _ => null,
+        };
+    }
+}

@@ -1,0 +1,108 @@
+# DLNA media server. Read Docker.usage.md before changing the networking.
+#
+#   docker compose up --build -d
+#   docker compose logs -f
+#
+# HOST NETWORKING IS NOT OPTIONAL IF YOU WANT TELEVISIONS TO FIND THIS SERVER. Discovery is SSDP - UDP
+# multicast to 239.255.255.250:1900 - and Docker's bridge network does not forward multicast in either
+# direction. On a bridge the admin pages work perfectly, the media port answers every request you make
+# by hand, and no television ever lists the server. That failure looks like a bug in the server and is
+# not one.
+#
+# host mode ignores `ports:` entirely: the two ports below come from Dlna.Server.Port and
+# Dlna.Server.AdminPort and are already on the host. Change them there, not here.
+
+services:
+  dlna:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dlna-server:local
+    container_name: dlna-server
+    restart: unless-stopped
+
+    network_mode: host
+
+    # Match the owner of your media, or thumbnail writes fail - see "Why the media mount is not
+    # read-only" in Docker.usage.md. `id -u` and `id -g` on the host give you these.
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    volumes:
+      # Your media. READ-WRITE on purpose: previews are written beside the media, into the folder named
+      # by Thumbnails.SubFolderName, which is how an existing library arrives already previewed and how
+      # a rebuild avoids regenerating everything. Mount it :ro only if you accept having no previews.
+      - media-data:/media
+
+      # The index database. Its own volume because it is the one piece of state that is expensive to
+      # rebuild - a rescan restores it, but that means re-probing every file with ffprobe.
+      - dlna-data:/data
+
+      # Logs, so they survive a container replacement and can be read without docker exec.
+      - dlna-logs:/app/logs
+
+      # OPTIONAL, and the better way to configure this once you are past the first run: drop a
+      # config.json beside this file and uncomment. It replaces every Dlna__ variable below, and the
+      # admin Settings page writes back to it, so changes made in the UI persist across a rebuild.
+      # Without it, settings changed in the UI are lost the next time the container is recreated.
+      #- ./config.json:/app/config.json
+
+    environment:
+      Dlna__Server__Port: 25002
+      Dlna__Server__AdminPort: 25003
+      Dlna__Server__FriendlyName: "ZEN DLNA Server (docker)"
+      # Where the media is, INSIDE the container. Index 0 overwrites the /share/Media the shipped
+      # config.json carries rather than appending to it, which is what you want - but note that
+      # ConfigurationBinder ADDS to a non-empty list, so a second source folder is __1, not a repeat
+      # of __0.
+      Dlna__Library__SourceFolders__0: /media
+
+      # THE REASON THIS FEATURE EXISTS. A bind mount or an overlay filesystem usually delivers no inotify
+      # events for writes made outside the container, so FileSystemWatcher stays silent and the library
+      # silently stops keeping up. This walks the folders on a timer instead.
+      #
+      # It is not free: each pass enumerates and reconciles every source folder, which on a 25,000-file
+      # library is around 51,000 filesystem calls. Raise the interval rather than lower it. If your media
+      # lives on a real local filesystem and the watcher works, set this to false and save the walk.
+      Dlna__Library__UsePeriodicRescan: "true"
+      Dlna__Library__RescanIntervalMinutes: "5"
+
+      # ffmpeg is installed in the image, so this must stay off. Turning it on downloads and executes an
+      # unverified third-party binary, and there is nothing here for it to fix.
+      Dlna__Thumbnails__DownloadFFmpeg: "false"
+
+      # Memory. These match what the tree ships and are repeated here because they are the settings that
+      # actually decide this server's footprint - the page cache is charged PER POOLED CONNECTION, so 32
+      # here is not 32 MB, it is 32 MB times however many connections the pool has grown to.
+      Dlna__Database__MemoryMapLimitInMegabytes: "0"
+      Dlna__Database__CacheSizeInMegabytes: "2"
+      Dlna__FileCache__Enabled: "false"
+      Dlna__FileCache__WarmPreviewsOnBrowse: "false"
+      Dlna__FileCache__MaxTotalSizeInMegabytes: "256"
+      Dlna__FileCache__MaxFileSizeInMegabytes: "32"
+
+      TZ: ${TZ:-Europe/Prague}
+
+    # A container that cannot open a raw socket or change its own privileges. SSDP needs multicast, not
+    # capabilities - it is an ordinary UDP socket - so dropping everything costs nothing here.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    # Thumbnail generation is the memory-hungry part and it is native, so a hard container limit is the
+    # only thing that actually bounds it. Below ~512m the SkiaSharp decode of a large photo will fail
+    # rather than merely be slow.
+    mem_limit: ${MEM_LIMIT:-1g}
+
+volumes:
+  media-data:
+    name: "dlna_external_data"
+    driver: local
+    driver_opts:
+      device: /share/Media/
+      o: bind
+      type: local
+  dlna-data:
+    name: "dlna_database"
+  dlna-logs:
+    name: "dlna_logs"

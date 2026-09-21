@@ -1,0 +1,87 @@
+@* The file-type map, one editable line per extension. This is the list that decides whether a file on
+   disc counts as media at all, so it is the one setting on the page that can empty the whole library -
+   which is why the page refuses to save an empty list rather than letting it happen quietly.
+
+   The rows are mutated in place and read back on save. Nothing here writes to the running server's own
+   settings: Settings.razor builds these rows from a copy and hands back a fresh map. *@
+
+<DataTable>
+    <Columns>
+        <th>Extension</th>
+        <th>Type</th>
+        <th>Compatibility profile</th>
+        <th></th>
+    </Columns>
+    <ChildContent>
+        @for (var index = 0; index < Rows.Count; index++)
+        {
+            @* A fresh local per iteration - a `for` loop variable is shared, so capturing `index`
+               directly in the Remove handler would remove whichever row was last drawn. *@
+            var row = Rows[index];
+            var profileListId = $"profiles-{index}";
+
+            @* Keyed on the row itself, so removing one redraws that line rather than shifting every
+               value up by one. *@
+            <tr @key="row">
+                <td>
+                    <input type="text" placeholder=".mkv" aria-label="Extension" @bind="row.Extension" />
+                </td>
+                <td>
+                    <select aria-label="Type" @bind="row.Mime">
+                        <option value="@DlnaMime.Undefined">choose a type</option>
+                        @foreach (var mime in _selectable)
+                        {
+                            <option value="@mime">@mime.ToMimeString()</option>
+                        }
+                    </select>
+                </td>
+                <td>
+                    @* A datalist, not a select: the known profiles are offered as suggestions, and a
+                       renderer that wants something not on the list can still be given it by typing.
+                       The list follows the chosen type, so changing the type re-offers the right set. *@
+                    <input type="text" list="@profileListId" aria-label="Compatibility profile"
+                           placeholder="choose or type a profile" @bind="row.ProfileName" />
+                    <datalist id="@profileListId">
+                        @foreach (var profile in row.Mime.ToProfileNames())
+                        {
+                            <option value="@profile"></option>
+                        }
+                    </datalist>
+                </td>
+                <td>
+                    <button type="button" class="stop" @onclick="() => Remove(row)">Remove</button>
+                </td>
+            </tr>
+        }
+    </ChildContent>
+</DataTable>
+
+<div class="checkrow">
+    <button type="button" @onclick="Add">Add a file type</button>
+</div>
+
+@code {
+    // Built once: the list is the same for every row and every visit, and Undefined is offered as the
+    // "choose a type" placeholder instead of as a real option.
+    private static readonly DlnaMime[] _selectable =
+        [.. Enum.GetValues<DlnaMime>()
+            .Where(static m => m != DlnaMime.Undefined)
+            .OrderBy(static m => m.ToMimeString(), StringComparer.Ordinal)];
+
+    /// <summary>
+    /// The rows being edited, mutated in place so the page reads them back when it saves.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public List<ExtensionMapRow> Rows { get; set; } = null!;
+
+    private void Add()
+    {
+        Rows.Add(new ExtensionMapRow());
+    }
+
+    private void Remove(ExtensionMapRow row)
+    {
+        _ = Rows.Remove(row);
+    }
+}

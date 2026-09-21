@@ -1,0 +1,388 @@
+@page "/admin/maintenance"
+@rendermode InteractiveServer
+@inherits AdminPageBase
+@inject IMediaFileRepository Files
+@inject IApiBlocker Blocker
+@inject ISubscriptionStore Subscriptions
+@inject IRestartSignal RestartSignal
+@inject IHostApplicationLifetime Lifetime
+@inject IIndexMaintenance IndexMaintenance
+@inject ILibraryScanSignal ScanSignal
+@inject IDatabaseResetSignal DatabaseResetSignal
+@inject IMediaDirectoryRepository Directories
+@inject ILibraryIndexLock IndexLock
+@inject IOptionsMonitor<DlnaOptions> Options
+@inject IMediaFormatter Fmt
+
+<PageHeader Title="Maintenance">
+    These pages are not password-protected, so only use this server on a home or office network you
+    trust.
+</PageHeader>
+
+<Notice Message="@Message" />
+
+<Panel Heading="Look for changes now">
+    <p class="muted">
+        Goes through your folders and picks up anything that has been added, changed or removed since the
+        last look. Nothing already known is thrown away and no preview is remade, so this is the safe one
+        - it is only worth pressing when a file you know is there has not appeared.
+    </p>
+    <div class="actions">
+        <button @onclick="RequestScan">Look for new, changed and removed files</button>
+    </div>
+    @if (_periodicRescan)
+    {
+        <p class="muted">
+            The server is also looking on its own every
+            <Provenance Source="config.json Dlna.Library.RescanIntervalMinutes">@_rescanIntervalMinutes minute(s)</Provenance>.
+        </p>
+    }
+    else
+    {
+        <p class="muted">
+            Normally you should not need this - the server is told by the system the moment a file
+            changes. If that is not happening, which is common when the media folder comes from a
+            container or a network share, turn on <em>Look for changes on a timer</em> in Settings.
+        </p>
+    }
+</Panel>
+
+<Panel Heading="Rebuild details and previews">
+    <p class="muted">
+        These throw away the stored details and previews for your whole library and make them again, one
+        file at a time, including anything you cleared from the Library page. The buttons come back
+        straight away and the work carries on in the background. To throw something away without making
+        it again, use Clear on a folder or a file in the Library.
+    </p>
+    <div class="actions">
+        <button @onclick="ClearMetadataAsync" disabled="@_busy">Rebuild all file details</button>
+        <button @onclick="ClearThumbnailsAsync" disabled="@_busy">Rebuild all previews</button>
+        <button @onclick="RecreateAllAsync" disabled="@_busy">Rebuild everything</button>
+    </div>
+    <p class="muted">
+        Clearing previews leaves the preview pictures on disc, so they are picked up again quickly rather
+        than being made from scratch.
+    </p>
+</Panel>
+
+<Panel Heading="All metadata read from files">
+    <p class="muted">
+        The extra tags each file carries about itself &mdash; artist, album, lyrics, camera and the rest
+        &mdash; shown under <strong>All metadata</strong> on a file's own page. These are collected only
+        while <em>Read all metadata from files</em> is on in Settings.
+    </p>
+    <div class="actions">
+        <button @onclick="PurgeTagsAsync" disabled="@_busy">Purge all metadata</button>
+        <button @onclick="RecreateTagsAsync" disabled="@_busy">Rebuild all metadata</button>
+    </div>
+    <p class="muted">
+        <strong>Purge</strong> deletes what is stored and reads nothing back, which is what you want after
+        turning the setting off. <strong>Rebuild</strong> deletes it and reads every file again &mdash;
+        the tags can only come from reading the file, so this costs the same as rebuilding all file
+        details, and on a large library it takes a while.
+    </p>
+</Panel>
+
+<Panel Heading="Television traffic">
+    @if (Blocker.IsBlocked)
+    {
+        <p>
+            Blocked until @Fmt.Clock(Blocker.BlockedUntilUtc).
+            <span class="muted">@Blocker.Reason</span>
+        </p>
+        <div class="actions"><button @onclick="Unblock">Unblock now</button></div>
+    }
+    else
+    {
+        <p class="muted">
+            Stops answering televisions for a while, so maintenance can run without them reconnecting
+            part-way through. These pages keep working throughout.
+        </p>
+        <div class="actions">
+            <input type="number" min="1" max="72" @bind="_blockHours" style="width:80px" />
+            <span class="muted">hour(s)</span>
+            <button @onclick="Block">Block</button>
+        </div>
+    }
+</Panel>
+
+<Panel Heading="Subscriptions">
+    @if (_subscriptions.Count == 0)
+    {
+        <p class="muted">No television is waiting for updates.</p>
+    }
+    else
+    {
+        <DataTable>
+            <Columns>
+                <th>What it is watching</th><th>Until</th><th>Where it is</th>
+            </Columns>
+            <ChildContent>
+                @foreach (var subscription in _subscriptions)
+                {
+                    <tr>
+                        <td>@subscription.ServiceId</td>
+                        <td><Provenance Source="GENA Subscription.ExpiresUtc">@Fmt.Clock(subscription.ExpiresUtc)</Provenance></td>
+                        <td class="paths">@string.Join(", ", subscription.CallbackUrls)</td>
+                    </tr>
+                }
+            </ChildContent>
+        </DataTable>
+    }
+    <p class="muted">
+        Updates are not sent out yet, so these are remembered and kept alive but never actually notified.
+    </p>
+</Panel>
+
+<Panel Heading="Rebuild from scratch">
+    <p class="muted">
+        Both of these forget everything the server knows about your files and look through your folders
+        again from nothing. <b>None of your media is touched or deleted</b> - what it costs is time,
+        because every file's details have to be read again. Preview pictures already sitting next to your
+        media are reused rather than remade, so those are quick.
+    </p>
+
+    <ConfirmActionPair FirstLabel="Rebuild index" FirstConfirmLabel="Confirm rebuild" OnFirst="RebuildIndexAsync"
+                       SecondLabel="Recreate database" SecondConfirmLabel="Confirm recreate" OnSecond="RecreateDatabase"
+                       Disabled="_busy" OnArmed="ClearMessage" />
+
+    <MetaList>
+        <MetaRow Label="Rebuild index">
+            Forgets every file and folder, gives the space they used back to the disc, and starts a fresh
+            scan. The server keeps running and this page keeps working, so this is the one to try first.
+            Currently holding
+            <Provenance Source="database Directories row count">@_directoryCount folder(s)</Provenance>.
+        </MetaRow>
+        <MetaRow Label="Recreate database">
+            Deletes the server's own index file and <b>restarts the server</b>, which builds a brand new
+            one and scans on the way up. Use this only if <em>Rebuild index</em> did not help. Anything
+            being played will stop, and this page will disconnect until the server is back.
+        </MetaRow>
+    </MetaList>
+</Panel>
+
+<Panel Heading="Server">
+    <p class="muted">
+        Both stop whatever is being played, and this page disconnects either way. Restarting reloads the
+        settings, which is how a setting marked as needing a restart takes effect. Stopping shuts the
+        server down completely, and nothing on these pages can start it again.
+    </p>
+
+    <ConfirmActionPair FirstLabel="Restart server" FirstConfirmLabel="Confirm restart" OnFirst="Restart"
+                       SecondLabel="Stop server" SecondConfirmLabel="Confirm stop" OnSecond="Stop"
+                       OnArmed="ClearMessage" />
+</Panel>
+
+@code {
+    /// <summary>
+    /// Bounds for the block duration, matching the <c>min</c> and <c>max</c> on the input.
+    /// </summary>
+    /// <remarks>
+    /// The input's own attributes are decoration: there is no <c>EditForm</c> behind it, so they style an
+    /// invalid value and submit it anyway. <c>0</c> reached
+    /// <c>ArgumentOutOfRangeException.ThrowIfNegativeOrZero</c> inside <c>Block</c> and a large value
+    /// overflowed <c>TimeSpan.FromHours</c> - either way the page was lost and the message never set,
+    /// so the operator saw a failure with no explanation. Clamped here instead, which is also what the
+    /// route constraint on <c>/manage/block/{hours:int:min(1):max(72)}</c> already enforces.
+    /// </remarks>
+    private const int MinBlockHours = 1;
+    private const int MaxBlockHours = 72;
+    private const int DefaultBlockHours = 1;
+
+    private IReadOnlyList<EventSubscription> _subscriptions = [];
+    private bool _busy;
+    private int _blockHours = DefaultBlockHours;
+    private int _directoryCount;
+    private bool _periodicRescan;
+    private int _rescanIntervalMinutes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _subscriptions = Subscriptions.List();
+
+        var library = Options.CurrentValue.Library;
+        _periodicRescan = library.UsePeriodicRescan;
+        _rescanIntervalMinutes = library.RescanIntervalMinutes;
+
+        // Deliberately not through RunBusyAsync: the initial count must not disable the buttons.
+        await RunGuardedAsync(
+            async token => _directoryCount = await Directories.CountAsync(token),
+            "The folder count is not available right now.");
+    }
+
+    /// <summary>
+    /// Runs one of this page's actions with the buttons disabled for its duration.
+    /// </summary>
+    /// <remarks>
+    /// Every action had the same <c>_busy</c> ceremony around the same guarded call, four times over.
+    /// The guarding itself - gate, cancellation, and reporting a <c>DbException</c> rather than losing
+    /// the circuit to it - is on <see cref="AdminPageBase"/>.
+    /// </remarks>
+    private async Task RunBusyAsync(Func<CancellationToken, Task> action, string failureMessage)
+    {
+        _busy = true;
+
+        try
+        {
+            await RunGuardedAsync(action, failureMessage);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClearMessage()
+    {
+        Message = null;
+    }
+
+    /// <remarks>
+    /// Asked for, never awaited, and deliberately not behind <c>_busy</c>. A pass over a large library
+    /// takes minutes; the request itself collapses into any pass already pending, so a second press
+    /// costs nothing and there is nothing to protect the operator from.
+    /// </remarks>
+    private void RequestScan()
+    {
+        ScanSignal.RequestScan();
+
+        Message = "Looking through your folders now. Anything new appears as it is found.";
+    }
+
+    /// <remarks>
+    /// The scan is asked for rather than awaited: a pass over a large library takes minutes, and holding
+    /// the circuit here would time the request out and hold this circuit's DbContext throughout.
+    /// </remarks>
+    private Task RebuildIndexAsync()
+    {
+        // Two different locks, and both are needed. Gate serialises this CIRCUIT's DbContext;
+        // IndexLock serialises the INDEX across the whole process, which is what stops the deletes
+        // and the VACUUM running into a background scan that is already mid-pass - the foreign-key
+        // abort the indexer's gate was added to prevent, and VACUUM needs the file to itself.
+        return RunBusyAsync(
+            token => IndexLock.RunAsync(
+                async lockedToken =>
+                {
+                    var cleared = await IndexMaintenance.ClearIndexAsync(lockedToken);
+
+                    ScanSignal.RequestScan();
+
+                    _directoryCount = 0;
+                    Message = $"Removed {cleared.FilesRemoved} file(s) and {cleared.DirectoriesRemoved} folder(s)"
+                        + (cleared.SpaceReclaimed
+                            ? " and freed up the space they used"
+                            : ", but the space could not be freed because the server was busy - it will be "
+                                + "freed next time")
+                        + ". A new scan is running.";
+                },
+                token),
+            "The library could not be rebuilt.");
+    }
+
+    /// <remarks>
+    /// Requests the deletion and restarts; it does not delete anything here. The safe moment to remove a
+    /// database file is when nothing holds it open, and that is after this host is disposed - see
+    /// <see cref="IDatabaseResetSignal"/>.
+    /// </remarks>
+    private void RecreateDatabase()
+    {
+        DatabaseResetSignal.RequestReset();
+        RestartSignal.RequestRestart();
+        Lifetime.StopApplication();
+    }
+
+    private Task ClearMetadataAsync()
+    {
+        return RunBusyAsync(
+            async token =>
+            {
+                var affected = await Files.ClearAllMetadataAsync(token);
+                Message = $"Cleared the details of {affected} file(s). They will be read again in the background.";
+            },
+            "The file details could not be cleared.");
+    }
+
+    private Task PurgeTagsAsync()
+    {
+        return RunBusyAsync(
+            async token =>
+            {
+                var affected = await Files.PurgeAllTagsAsync(token);
+                Message = $"Deleted {affected} stored tag(s). Nothing will be read back.";
+            },
+            "The stored metadata could not be deleted.");
+    }
+
+    private Task RecreateTagsAsync()
+    {
+        return RunBusyAsync(
+            async token =>
+            {
+                var affected = await Files.RecreateAllTagsAsync(token);
+                Message = $"Reading every file again for {affected} file(s). "
+                    + "The tags appear as each one is read.";
+            },
+            "The metadata could not be rebuilt.");
+    }
+
+    private Task ClearThumbnailsAsync()
+    {
+        return RunBusyAsync(
+            async token =>
+            {
+                var affected = await Files.ClearAllThumbnailsAsync(token);
+                Message = $"Cleared the previews of {affected} file(s).";
+            },
+            "The previews could not be cleared.");
+    }
+
+    private Task RecreateAllAsync()
+    {
+        return RunBusyAsync(
+            async token =>
+            {
+                var thumbnails = await Files.ClearAllThumbnailsAsync(token);
+                var metadata = await Files.ClearAllMetadataAsync(token);
+
+                Message = $"Cleared the details of {metadata} file(s) and {thumbnails} preview(s).";
+            },
+            "The details and previews could not be cleared.");
+    }
+
+    private void Block()
+    {
+        // Clamped, not validated: the input's min/max are decoration without an EditForm behind them.
+        var hours = Math.Clamp(_blockHours, MinBlockHours, MaxBlockHours);
+
+        _blockHours = hours;
+
+        Blocker.Block(TimeSpan.FromHours(hours), $"Paused for {hours} hour(s) from these pages");
+        Message = $"Televisions are paused for {hours} hour(s).";
+    }
+
+    private void Unblock()
+    {
+        Blocker.Release();
+        Message = "Televisions are being answered again.";
+    }
+
+    private void Restart()
+    {
+        Message = "Restarting. This page reconnects once the server is back.";
+
+        // Same pair as /manage/restart: the signal is what makes the host loop rebuild rather than exit,
+        // and stopping is what starts that. Neither call blocks, so this render still reaches the browser.
+        RestartSignal.RequestRestart();
+        Lifetime.StopApplication();
+    }
+
+    private void Stop()
+    {
+        Message = "Stopping.";
+
+        // Cleared first, exactly as /manage/stop does: the host loop rebuilds whenever the signal is set,
+        // so a stop following a restart request would otherwise silently restart instead.
+        RestartSignal.Reset();
+        Lifetime.StopApplication();
+    }
+}

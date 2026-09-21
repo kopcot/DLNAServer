@@ -1,0 +1,47 @@
+@* Says where a value came from, on hover. "593.6 MB" is only useful once you know it is the working set,
+   and "mailto:someone" only once you know which setting produced it - so every value that is read from
+   somewhere rather than typed into the markup names its source here.
+
+   Off unless the period on the Temporary settings page is running, and then it costs one span and one
+   attribute per value. The tooltip itself is CSS: this project has no JavaScript, and a title attribute
+   cannot be styled, does not appear on a touch screen, and waits a second before showing. *@
+
+@inject ITechnicalTooltips Tooltips
+
+@if (Source is { Length: > 0 } source && Tooltips.IsEnabled)
+{
+    <span class="tech" tabindex="0" data-tech="@source">@ChildContent</span>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    /// <summary>
+    /// Where the value comes from. Nothing is rendered when it is empty.
+    /// </summary>
+    /// <remarks>
+    /// <b>One grammar, and every annotation in the admin UI follows it</b> - a tooltip that explains
+    /// itself in prose on one page and names a column on the next is worse than none, because the reader
+    /// cannot tell which they will get. It is the technical name of the thing and nothing else:
+    /// <list type="bullet">
+    /// <item>a runtime figure is its metric name - <c>Working Set (MB)</c>,
+    /// <c>GC Collections Gen0/Gen1/Gen2</c>;</item>
+    /// <item>a setting is its key path under the file it lives in - <c>config.json
+    /// Dlna.Server.ManufacturerUrl</c>;</item>
+    /// <item>an indexed value is its table and column - <c>database Files.SizeInBytes (MB)</c>.</item>
+    /// </list>
+    /// A unit or rendering goes in brackets at the end (<c>(MB)</c>, <c>(UTC)</c>, <c>(%)</c>). There is
+    /// no explanatory clause after a dash or a comma: the page's own labels and hints are where prose
+    /// belongs.
+    /// </remarks>
+    [Parameter]
+    public string? Source { get; set; }
+
+    /// <summary>
+    /// The value itself.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

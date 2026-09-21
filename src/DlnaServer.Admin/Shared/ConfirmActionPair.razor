@@ -1,0 +1,95 @@
+@* Two irreversible actions behind one arming click each: the pair shows both buttons, and clicking one
+   replaces both with a green confirm and a red cancel.
+
+   Per PANEL rather than per BUTTON, which is load-bearing. Arming is one nullable field for the whole
+   pair, so arming the second action disarms the first - two independent one-button components would leave
+   both armed at once, which is a worse interaction than the one being replaced.
+
+   Green commits, red backs out, so the second click is a decision between two obvious choices rather than
+   two buttons that look alike. *@
+
+<div class="actions">
+    @if (_armed is Slot.First)
+    {
+        <button class="go" @onclick="() => ConfirmAsync(OnFirst)" disabled="@Disabled">@FirstConfirmLabel</button>
+        <button class="stop" @onclick="Cancel" disabled="@Disabled">Cancel</button>
+    }
+    else if (_armed is Slot.Second)
+    {
+        <button class="go" @onclick="() => ConfirmAsync(OnSecond)" disabled="@Disabled">@SecondConfirmLabel</button>
+        <button class="stop" @onclick="Cancel" disabled="@Disabled">Cancel</button>
+    }
+    else
+    {
+        <button @onclick="() => ArmAsync(Slot.First)" disabled="@Disabled">@FirstLabel</button>
+        <button @onclick="() => ArmAsync(Slot.Second)" disabled="@Disabled">@SecondLabel</button>
+    }
+</div>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public string FirstLabel { get; set; } = string.Empty;
+
+    [Parameter]
+    [EditorRequired]
+    public string FirstConfirmLabel { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback OnFirst { get; set; }
+
+    [Parameter]
+    [EditorRequired]
+    public string SecondLabel { get; set; } = string.Empty;
+
+    [Parameter]
+    [EditorRequired]
+    public string SecondConfirmLabel { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback OnSecond { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// Raised when either action is armed, so the page can clear a message left over from the last one.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnArmed { get; set; }
+
+    /// <summary>
+    /// Which of the two actions is waiting for its second click.
+    /// </summary>
+    private enum Slot
+    {
+        First = 1,
+        Second = 2,
+    }
+
+    private Slot? _armed;
+
+    private async Task ArmAsync(Slot slot)
+    {
+        _armed = slot;
+
+        await OnArmed.InvokeAsync();
+    }
+
+    /// <remarks>
+    /// Disarmed before the handler runs, not after: a rebuild takes minutes, and leaving the pair armed
+    /// throughout would offer "Confirm rebuild" again to a second click. Each page's handler cleared its
+    /// own arming flag as its first statement for the same reason.
+    /// </remarks>
+    private async Task ConfirmAsync(EventCallback confirmed)
+    {
+        _armed = null;
+
+        await confirmed.InvokeAsync();
+    }
+
+    private void Cancel()
+    {
+        _armed = null;
+    }
+}

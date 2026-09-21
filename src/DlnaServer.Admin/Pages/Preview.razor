@@ -1,0 +1,453 @@
+@page "/admin/preview/{FileId:guid}"
+@page "/admin/preview/{DirectoryId:guid}/{FileId:guid}"
+@rendermode InteractiveServer
+@inherits AdminPageBase
+@inject IMediaFileRepository Files
+@inject NavigationManager Navigation
+@inject IMediaFormatter Fmt
+@inject IAdminUrls Urls
+
+@if (_details is null)
+{
+    <PageHeader Title="Preview" />
+    <Panel>That file is no longer in your library.</Panel>
+}
+else
+{
+    <PageHeader Title="@_details.File.Title" />
+
+    <p class="crumbs">
+        @* Falls back to the file's own folder, as the sibling stepping below already did: the root's
+           recently-added tiles link without a directory, so the route parameter alone left those files
+           with no way back until a next/previous click supplied one. *@
+        @if (OpenedFromDirectoryId is { } directoryId)
+        {
+            <a href="@Urls.Library(directoryId)">Back to folder</a>
+            <text> / </text>
+        }
+        <span class="paths">@_details.File.FullPath</span>
+    </p>
+
+    <Panel Class="player">
+        @switch (_details.File.Mime.ToMedia())
+        {
+            case DlnaMedia.Video when !BrowserPlayback.CanPlay(_details.File.Extension):
+            case DlnaMedia.Audio when !BrowserPlayback.CanPlay(_details.File.Extension):
+                @* The poster still earns its place: it is the one thing here that proves the file was
+                   read successfully, which is what stops this reading like a broken page. *@
+                <img class="cover" src="@(Poster() ?? Urls.KindIcon(_details.File.Mime.ToMedia()))" alt="" />
+                <Notice Message="@UnsupportedFormatMessage()" />
+                break;
+
+            case DlnaMedia.Video:
+                <video controls preload="metadata" poster="@Poster()" src="@MediaUrl()"></video>
+                break;
+
+            case DlnaMedia.Audio:
+                @* An <audio> element takes no poster, so the cover image is its own element above the
+                   controls - otherwise a track's extracted artwork shows on its tile but vanishes on
+                   the page the tile leads to. *@
+                <img class="cover" src="@(Poster() ?? Urls.KindIcon(DlnaMedia.Audio))" alt="" />
+                <audio controls preload="metadata" src="@MediaUrl()"></audio>
+                break;
+
+            case DlnaMedia.Image when !BrowserPlayback.CanDisplayImage(_details.File.Extension):
+                <Notice Message="@UnsupportedFormatMessage()" />
+                break;
+
+            case DlnaMedia.Image:
+                @* Clicking the picture opens it larger, and which "larger" that is depends on the screen.
+                   CSS decides, not the server: the button covers the picture on a desktop and is
+                   display:none on a phone, so the link underneath takes the tap instead. One <img>,
+                   so the file is fetched once either way. *@
+                <div class="photo">
+                    <a href="@Urls.Photo(OpenedFromDirectoryId, FileId)">
+                        <img src="@MediaUrl()" alt="@_details.File.Title" />
+                    </a>
+                    <button type="button" class="photozoom" @ref="_photoButton" @onclick="OpenViewer"
+                            aria-label="Open this photo full screen"></button>
+                </div>
+                break;
+
+            default:
+                <p class="muted">This kind of file has no preview.</p>
+                break;
+        }
+    </Panel>
+
+    <div class="actions">
+        <button disabled="@(_previous is null)" @onclick="GoPrevious">&larr; Previous</button>
+        <button disabled="@(_next is null)" @onclick="GoNext">Next &rarr;</button>
+        @if (_siblingCount > 0)
+        {
+            <span class="muted">@(_index + 1) of @_siblingCount in this folder</span>
+        }
+        <a class="button" href="@MediaUrl()" download>Download</a>
+    </div>
+
+    @* Acting on one file belongs here, where it can be seen: the library's tiles show a folder's worth of
+       files at once, and four buttons on each of them buried the pictures. *@
+    @* Above the facts rather than below them, and shut - the panel is now one line, so it names what the
+       page can do to this file without costing the facts underneath it any height. *@
+    <ProcessingActions Scope="MediaFileScope.ForFile(_details.File.PublicId)"
+                       Heading="This file"
+                       OnCompleted="OnParametersSetAsync" />
+
+    @* The correction sits inside the group it corrects, under the two rows it rewrites - so what a file
+       says it is and the way to change it are not in two different places on the page. *@
+    <MediaFileFacts File="_details.File">
+        <Actions>
+            <FileTypeEditor File="_details.File" OnCompleted="OnParametersSetAsync" />
+        </Actions>
+    </MediaFileFacts>
+
+    @if (_details.Video is not null)
+    {
+        <Panel Heading="Video">
+            <MetaList>
+                <MetaRow Label="Format" Source="database VideoStreams.Codec">@_details.Video.Codec</MetaRow>
+                <MetaRow Label="Resolution" Source="database VideoStreams.Width x VideoStreams.Height">@_details.Video.Width x @_details.Video.Height</MetaRow>
+                <MetaRow Label="Duration" Source="database VideoStreams.Duration">@Fmt.Duration(_details.Video.Duration)</MetaRow>
+                <MetaRow Label="Frames per second" Source="database VideoStreams.FrameRate">@_details.Video.FrameRate</MetaRow>
+                <MetaRow Label="Quality" Source="database VideoStreams.Bitrate">@Fmt.Bitrate(_details.Video.Bitrate)</MetaRow>
+            </MetaList>
+        </Panel>
+    }
+
+    @if (_details.AudioStreams.Count > 0)
+    {
+        @* A table rather than the definition list this used to be: a film with several dubs has one row
+           per language, and the point of the panel is comparing them. *@
+        <Panel>
+            <HeadingContent>Audio<span class="muted"> &middot; @_details.AudioStreams.Count track(s)</span></HeadingContent>
+            <ChildContent>
+                <DataTable>
+                    <Columns>
+                        <th>Track</th><th>Language</th><th>Title</th><th>Format</th>
+                        <th class="num">Channels</th><th class="num">Sample rate</th><th class="num">Quality</th>
+                    </Columns>
+                    <ChildContent>
+                        @foreach (var audio in _details.AudioStreams)
+                        {
+                            <tr>
+                                <td>@audio.StreamIndex@(audio.IsDefault ? " (default)" : "")</td>
+                                <td>@Fmt.Text(audio.Language)</td>
+                                <td>@Fmt.Text(audio.Title)</td>
+                                <td>@Fmt.Text(audio.Codec)</td>
+                                <td class="num">@Fmt.Number(audio.Channels)</td>
+                                <td class="num">@Fmt.Number(audio.SampleRate)</td>
+                                <td class="num">@Fmt.Bitrate(audio.Bitrate)</td>
+                            </tr>
+                        }
+                    </ChildContent>
+                </DataTable>
+            </ChildContent>
+        </Panel>
+    }
+
+    @if (_details.Subtitles.Count > 0)
+    {
+        <Panel Heading="Subtitles">
+            <DataTable>
+                <Columns>
+                    <th>Track</th><th>Language</th><th>Format</th>
+                </Columns>
+                <ChildContent>
+                    @foreach (var subtitle in _details.Subtitles)
+                    {
+                        <tr>
+                            <td>@subtitle.StreamIndex</td>
+                            <td>@Fmt.Text(subtitle.Language)</td>
+                            <td>@Fmt.Text(subtitle.Codec)</td>
+                        </tr>
+                    }
+                </ChildContent>
+            </DataTable>
+        </Panel>
+    }
+
+    @if (_tags.Count > 0)
+    {
+        @* Collapsed by default, and a <details> rather than a toggle field: a music file can carry
+           thirty tags and a lyrics block runs to hundreds of lines, so open by default would bury the
+           panels above it. The browser owns the state, so it survives a re-render. *@
+        <Panel>
+            <HeadingContent>
+                All metadata<span class="muted"> &middot; @_tags.Count tag(s) read from the file</span>
+            </HeadingContent>
+            <ChildContent>
+                <details class="tagdump">
+                    <summary>Show what the file says about itself</summary>
+                    <DataTable>
+                        <Columns>
+                            <th>Track</th><th>Name</th><th>Value</th>
+                        </Columns>
+                        <ChildContent>
+                            @foreach (var tag in _tags)
+                            {
+                                <tr>
+                                    <td>@(tag.StreamIndex is { } index ? index.ToString() : "file")</td>
+                                    <td>@tag.Name</td>
+                                    <td class="tagvalue">@tag.Value</td>
+                                </tr>
+                            }
+                        </ChildContent>
+                    </DataTable>
+                </details>
+            </ChildContent>
+        </Panel>
+    }
+
+    @if (_viewerOpen)
+    {
+        @* Rendered last so it is the final element in the page's stacking order, and fixed over
+           everything - including the sidebar, which is sticky and would otherwise sit on top of it.
+
+           Escape is handled HERE rather than on the stage below, even though the stage is what takes the
+           focus: keydown bubbles, so this catches the key whatever is focused inside the overlay. On the
+           stage alone it stopped working the moment a toolbar button was clicked, because the focus was
+           then on the button and outside the handler's element. *@
+        <div class="lightbox" @onkeydown="OnViewerKeyDown">
+            <div class="lightboxbar">
+                <button type="button" @onclick="ZoomOut" disabled="@(_zoomPercent <= MinZoomPercent)"
+                        aria-label="Zoom out">&minus;</button>
+                @* A word rather than a number while fitted, because the number would be a lie: the level
+                   is a percentage of the file's own size and fitted is that size capped to the stage, so
+                   a picture wider than the screen is not at 100% of anything the operator can see. *@
+                <span class="muted zoomlevel">@(_viewerFitted ? "Fitting" : $"{_zoomPercent}%")</span>
+                <button type="button" @onclick="ZoomIn" disabled="@(_zoomPercent >= MaxZoomPercent)"
+                        aria-label="Zoom in">+</button>
+
+                @if (!_viewerFitted)
+                {
+                    @* Gone rather than disabled while fitting - it is the one control with nothing to do
+                       in that state, and the readout beside it already says so. *@
+                    <button type="button" @onclick="FitToScreen">Fit to screen</button>
+                }
+                <span class="muted lightboxtitle">@_details.File.Title</span>
+                <button type="button" class="primary lightboxclose" @onclick="CloseViewer">Close</button>
+            </div>
+
+            @* The scrolling box is what takes the focus when the overlay opens: focused, it pans under the
+               arrow keys by itself, which is what a zoomed-in picture needs and what no handler here would
+               do as well. *@
+            <div class="lightboxstage" tabindex="-1" @ref="_stage">
+                @* One number out to the stylesheet, and the class picks which property spends it - see
+                   `.lightboxstage img`. *@
+                <img class="@(_viewerFitted ? "fitted" : null)" src="@MediaUrl()" alt="@_details.File.Title"
+                     style="--zoom:@(_zoomPercent)%" />
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public Guid FileId { get; set; }
+
+    [Parameter]
+    public Guid? DirectoryId { get; set; }
+
+    private MediaFileDetailsDto? _details;
+    private IReadOnlyList<MediaFileTagDto> _tags = [];
+    private Guid? _previous;
+    private Guid? _next;
+    private int _index = -1;
+
+    // The count, not the folder. This page used to keep the whole sibling list in a field for the
+    // lifetime of the circuit - ~600 bytes per DTO, so ~3 MB for a 5,000-file folder, and past ~10,000
+    // files the backing array is itself on the large object heap. It was only ever read for this number
+    // and to pick the two neighbours, both of which are computed once during the load.
+    private int _siblingCount;
+
+    /// <summary>
+    /// The level the viewer opens at and that <c>Fit to screen</c> returns to.
+    /// </summary>
+    /// <remarks>
+    /// Every level is a percentage of the picture's own size, so 100% is its true size and a photograph
+    /// narrower than the screen is never blown up to fill one. That was the first version's defect: it
+    /// sized the picture as a percentage of the STAGE, which made 100% the width of the screen and
+    /// stretched a 320-pixel photograph to 1,512. Fitted is this same 100% with the stage's width as a
+    /// cap, which is why it is the level the mode resets to.
+    /// </remarks>
+    private const int FitZoomPercent = 100;
+
+    private const int MinZoomPercent = 25;
+    private const int MaxZoomPercent = 400;
+    private const int ZoomStepPercent = 25;
+
+    private ElementReference _stage;
+    private ElementReference _photoButton;
+    private bool _viewerOpen;
+    private bool _stageNeedsFocus;
+    private bool _photoButtonNeedsFocus;
+    private int _zoomPercent = FitZoomPercent;
+
+    // Which of the two sizing modes the picture is in, not a level - see `.lightboxstage img`. The level
+    // cannot stand in for it: zooming back out to 100% is the file's own size, which is not the same thing
+    // as fitted and still leaves `Fit to screen` something to do.
+    private bool _viewerFitted = true;
+
+    /// <remarks>
+    /// Gated, because this page HOSTS <see cref="ProcessingActions"/>: clicking Recreate thumbnails on a
+    /// large folder and then clicking Next issued this query on the same <c>DbContext</c> the gated
+    /// update was holding, which threw <c>A second operation was started on this context instance</c>
+    /// out of an event handler and tore the circuit down. That is the exact scenario the gate exists for,
+    /// and it was unguarded on the one page where both components coexist.
+    /// </remarks>
+    protected override async Task OnParametersSetAsync()
+    {
+        await RunGatedAsync(LoadAsync);
+    }
+
+    private async Task LoadAsync(CancellationToken cancellationToken)
+    {
+        _details = await Files.GetWithDetailsAsync(FileId, cancellationToken);
+
+        if (_details is null)
+        {
+            return;
+        }
+
+        // Its own read: these are wanted by this page and by nothing on the renderer path, so they are
+        // deliberately not part of the details every Browse response goes through.
+        _tags = await Files.GetTagsAsync(FileId, cancellationToken);
+
+        if (OpenedFromDirectoryId is not { } id)
+        {
+            _siblingCount = 0;
+            _index = -1;
+            _previous = null;
+            _next = null;
+
+            return;
+        }
+
+        // Only playable siblings are stepped through: a folder of videos should not require clicking
+        // past every stray text file to reach the next one.
+        // The repository now answers this directly. It used to read every file in the folder as a full
+        // MediaFileDto and keep two of them - on a folder of 1,564 photographs that materialised 1,564
+        // records with every path, stamp and metadata field, to draw two buttons and a position.
+        var neighbours = await Files.GetPlayableNeighboursAsync(id, FileId, cancellationToken);
+
+        _siblingCount = neighbours.Count;
+        _index = neighbours.Index;
+        _previous = neighbours.PreviousPublicId;
+        _next = neighbours.NextPublicId;
+    }
+
+    // The folder this file was opened from: the route's, or the file's own when it was reached from
+    // outside any folder. Three sites need it - the crumbs, the sibling stepping and the photo link - and
+    // the one that used the bare route parameter left a recently-added tile's file with no way back.
+    private Guid? OpenedFromDirectoryId => DirectoryId ?? _details?.File.DirectoryPublicId;
+
+    private string MediaUrl()
+    {
+        return Urls.MediaFile(FileId);
+    }
+
+    private string? Poster()
+    {
+        return _details?.File.ThumbnailPublicId is { } thumbnailId
+            ? Urls.Thumbnail(thumbnailId)
+            : null;
+    }
+
+    /// <remarks>
+    /// Says which format, so the operator can tell this file apart from the ones that do play, and points
+    /// at the Download link already on this page rather than leaving them with nothing to try. It names
+    /// the television deliberately: the file is not broken, and the previous behaviour - a player that
+    /// silently did nothing - suggested it was.
+    /// </remarks>
+    private string UnsupportedFormatMessage()
+    {
+        var container = BrowserPlayback.ContainerName(_details!.File.Extension);
+
+        return $"{container} is not a format browsers can play. Televisions on the network play this file "
+            + "normally - use the Download button to open it in a media player on this computer.";
+    }
+
+    private void GoPrevious()
+    {
+        Navigate(_previous);
+    }
+
+    private void GoNext()
+    {
+        Navigate(_next);
+    }
+
+    private void Navigate(Guid? target)
+    {
+        if (target is not { } targetId)
+        {
+            return;
+        }
+
+        Navigation.NavigateTo(Urls.Preview(OpenedFromDirectoryId, targetId));
+    }
+
+    private void OpenViewer()
+    {
+        _viewerOpen = true;
+        _stageNeedsFocus = true;
+        FitToScreen();
+    }
+
+    private void CloseViewer()
+    {
+        _viewerOpen = false;
+        _photoButtonNeedsFocus = true;
+    }
+
+    private void ZoomIn()
+    {
+        _zoomPercent = Math.Min(_zoomPercent + ZoomStepPercent, MaxZoomPercent);
+        _viewerFitted = false;
+    }
+
+    private void ZoomOut()
+    {
+        _zoomPercent = Math.Max(_zoomPercent - ZoomStepPercent, MinZoomPercent);
+        _viewerFitted = false;
+    }
+
+    private void FitToScreen()
+    {
+        _zoomPercent = FitZoomPercent;
+        _viewerFitted = true;
+    }
+
+    // Escape is the one key this owes the operator; panning is the browser's, which is why the stage takes
+    // the focus rather than being given arrow handlers of its own.
+    private void OnViewerKeyDown(KeyboardEventArgs args)
+    {
+        if (string.Equals(args.Key, "Escape", StringComparison.Ordinal))
+        {
+            CloseViewer();
+        }
+    }
+
+    /// <remarks>
+    /// Focus follows the overlay in and back out again: into the stage when it opens, so Escape and the
+    /// arrow keys reach it, and back onto the picture when it shuts, so a keyboard is not left at the top
+    /// of the page it was three tab stops into. Each flag is what keeps the move to the render that caused
+    /// it - every later render would otherwise steal the focus back from wherever the operator had put it.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_stageNeedsFocus)
+        {
+            _stageNeedsFocus = false;
+
+            await _stage.FocusAsync();
+        }
+
+        if (_photoButtonNeedsFocus)
+        {
+            _photoButtonNeedsFocus = false;
+
+            await _photoButton.FocusAsync();
+        }
+    }
+}

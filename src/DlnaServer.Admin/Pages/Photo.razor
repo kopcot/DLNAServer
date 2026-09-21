@@ -1,0 +1,44 @@
+@* One photograph and nothing else, which is where a tap on a photograph leads on a phone. The preview
+   page's zoom overlay is desktop-only - on a viewport that narrow an overlay has nothing to offer that the
+   browser's own pinch-zoom does not already do better, and it takes the toolbar's height to do it.
+
+   Statically rendered on purpose: the page has no controls, so it costs a render and no SignalR circuit -
+   the rule App.razor states for every page without buttons. *@
+
+@page "/admin/photo/{FileId:guid}"
+@page "/admin/photo/{DirectoryId:guid}/{FileId:guid}"
+@inherits AdminPageBase
+@inject IMediaFileRepository Files
+@inject IAdminUrls Urls
+
+@if (_file is null)
+{
+    <PageHeader Title="Photo" />
+    <Panel>That file is no longer in your library.</Panel>
+}
+else
+{
+    <p class="crumbs">
+        <a href="@Urls.Preview(DirectoryId, FileId)">Back to the file</a>
+    </p>
+
+    @* Pinch-zoom is the browser's, so the picture is simply as wide as the column and as tall as its own
+       ratio makes it. No max-height: a cap is what squashes a photograph, which is the defect the
+       preview page's own image rules were written for. *@
+    <img class="photopage" src="@Urls.MediaFile(FileId)" alt="@_file.Title" />
+}
+
+@code {
+    [Parameter]
+    public Guid FileId { get; set; }
+
+    [Parameter]
+    public Guid? DirectoryId { get; set; }
+
+    private MediaFileDto? _file;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await RunGatedAsync(async token => _file = await Files.GetByPublicIdAsync(FileId, token));
+    }
+}

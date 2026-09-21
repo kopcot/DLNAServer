@@ -1,0 +1,115 @@
+@* A panel whose body folds away. Holds whatever is put in it - inputs, selects, anything.
+
+   It exists because a pinned panel costs the results below it whatever height it has, and the search forms
+   grew tall enough for that to matter. Collapsing gives the height back without losing the filters, which
+   are still set - they are hidden, not cleared. *@
+
+<div class="panel @(Pinned ? "pinned" : "") collapsible @(_isCollapsed ? "is-collapsed" : "")">
+    <h2>
+        <button type="button" class="collapse-toggle" @onclick="Toggle" aria-expanded="@((!_isCollapsed).ToString().ToLowerInvariant())">
+            <span class="chevron" aria-hidden="true">@(_isCollapsed ? "▸" : "▾")</span>
+            <span>@Heading</span>
+            @if (_isCollapsed && Summary is not null)
+            {
+                <span class="muted collapse-summary">@Summary</span>
+            }
+        </button>
+    </h2>
+
+    @if (!_isCollapsed)
+    {
+        @ChildContent
+    }
+
+    @* Outside the fold on purpose: the buttons that act on the panel stay reachable while it is shut, so
+       collapsing the filters does not also hide the way to run them again. *@
+    @Footer
+</div>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public string Heading { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The part that folds away.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// Content that stays visible whether the panel is open or shut.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Footer { get; set; }
+
+    /// <summary>
+    /// Shown beside the heading while the panel is shut, to say what it is hiding.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Summary { get; set; }
+
+    /// <summary>
+    /// Keeps the panel at the top of the viewport while the content below it scrolls.
+    /// </summary>
+    [Parameter]
+    public bool Pinned { get; set; }
+
+    /// <summary>
+    /// Whether the panel starts shut.
+    /// </summary>
+    /// <remarks>
+    /// Read once, when the component is first created: after that the state belongs to whoever clicked it,
+    /// and re-reading the parameter would reopen a panel the operator had just shut.
+    /// </remarks>
+    [Parameter]
+    public bool StartCollapsed { get; set; }
+
+    private bool _isCollapsed;
+
+    protected override void OnInitialized()
+    {
+        _isCollapsed = StartCollapsed;
+    }
+
+    private void Toggle()
+    {
+        _isCollapsed = !_isCollapsed;
+    }
+
+    /// <summary>
+    /// Shuts the panel from outside, for a caller that has just finished the thing it was opened for.
+    /// </summary>
+    /// <remarks>
+    /// Renders itself: the caller is a parent event handler, and a parent re-render does not reach a child
+    /// whose parameters have not changed - which is exactly this case, since the fold is internal state.
+    /// </remarks>
+    public void Collapse()
+    {
+        if (_isCollapsed)
+        {
+            return;
+        }
+
+        _isCollapsed = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Opens the panel from outside, for a caller that has undone the thing it was shut for.
+    /// </summary>
+    /// <remarks>
+    /// Renders itself for the same reason <see cref="Collapse"/> does: the fold is internal state, so a
+    /// parent re-render does not reach it.
+    /// </remarks>
+    public void Expand()
+    {
+        if (!_isCollapsed)
+        {
+            return;
+        }
+
+        _isCollapsed = false;
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,74 @@
+# graphify scope for DLNAServer.
+# Goal: the server's own source - src/ and tests/, no build output, no vendored
+# binaries, no generated code, no media.
+#
+# The graph is built from the repository root, which is where the CLI and the
+# PreToolUse hook-guard look for graphify-out/ by default.
+
+# ===== Build artifacts =====
+**/bin/
+**/obj/
+**/.vs/
+**/.idea/
+**/publish/
+
+# ===== Runtime output =====
+**/logs/
+**/ffmpeg/
+media/
+**/*.sqlite
+**/*.sqlite-wal
+**/*.sqlite-shm
+
+# ===== Generated code =====
+**/*.Designer.cs
+**/*.g.cs
+**/*.g.i.cs
+**/*.AssemblyInfo.cs
+**/*.AssemblyInfoInputs.cache
+**/GlobalUsings.g.cs
+**/.AssemblyAttributes/
+**/*.generated.*
+
+# ===== Static web assets / device icons / thumbnails =====
+**/wwwroot/lib/
+**/Resources/images/
+**/.@__thumb/
+
+# ===== Binary / media =====
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.ico
+**/*.svg
+**/*.webp
+**/*.mp3
+**/*.mp4
+**/*.mkv
+**/*.avi
+**/*.pdf
+**/*.dll
+**/*.exe
+**/*.pdb
+**/*.so
+**/*.dylib
+**/*.woff
+**/*.woff2
+**/*.ttf
+**/*.zip
+**/*.tar
+**/*.gz
+
+# ===== Local config noise =====
+**/*.csproj.user
+**/*.DotSettings.user
+**/launchSettings.json
+**/appsettings.Development.json
+
+# ===== Meta-instruction files (no architectural value in the graph) =====
+**/CLAUDE.md
+.claude/
+
+# ===== Our own graphify output =====
+graphify-out/

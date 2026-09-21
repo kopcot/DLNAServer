@@ -1,0 +1,154 @@
+@* What this build is, and what it tells the televisions it is. The second half is the part with a use:
+   the identity a renderer keys its quirks on comes from config.json, so an operator chasing a television
+   that behaves oddly needs to see the exact strings it was given.
+
+   Statically rendered - nothing here has a control, so it costs a render and no SignalR circuit. *@
+
+@page "/admin/about"
+@using System.Reflection
+@using System.Runtime.InteropServices
+@inject IOptionsMonitor<DlnaOptions> Options
+
+<PageHeader Title="About">
+    Which build this is, and what it is telling your network.
+</PageHeader>
+
+<Panel Heading="This server">
+    <MetaList>
+        <MetaRow Label="Product">ZEN DLNA Server</MetaRow>
+        <MetaRow Label="Version" Source="AssemblyInformationalVersionAttribute">@Version()</MetaRow>
+        <MetaRow Label="Runtime" Source="RuntimeInformation.FrameworkDescription">@RuntimeInformation.FrameworkDescription</MetaRow>
+        <MetaRow Label="Machine" Source="Environment.MachineName + RuntimeInformation.OSArchitecture">@Environment.MachineName (@RuntimeInformation.OSArchitecture)</MetaRow>
+        <MetaRow Label="Operating system" Source="RuntimeInformation.OSDescription">@RuntimeInformation.OSDescription</MetaRow>
+    </MetaList>
+</Panel>
+
+<Panel Heading="What your televisions are told">
+    <MetaList>
+        <MetaRow Label="Name in the device list" Source="config.json Dlna.Server.FriendlyName">@_server.FriendlyName</MetaRow>
+        <MetaRow Label="Model" Source="config.json Dlna.Server.ModelName">@_server.ModelName</MetaRow>
+        <MetaRow Label="Manufacturer" Source="config.json Dlna.Server.ManufacturerName">@_server.ManufacturerName</MetaRow>
+        <MetaRow Label="Contact" Source="config.json Dlna.Server.ManufacturerUrl">@_server.ManufacturerUrl</MetaRow>
+        <MetaRow Label="Media port" Source="config.json Dlna.Server.Port">@_server.Port</MetaRow>
+        <MetaRow Label="Admin port" Source="config.json Dlna.Server.AdminPort">@_server.AdminPort</MetaRow>
+    </MetaList>
+    <p class="muted">
+        All six come from <code>config.json</code> and are editable on
+        <a href="/admin/settings">Settings</a>. Some televisions key their own quirks off the model and
+        manufacturer strings, so changing them can change how a renderer behaves.
+    </p>
+</Panel>
+
+<Panel>
+    <HeadingContent>
+        Assemblies<span class="muted"> &middot; @_assemblies.Count loaded</span>
+    </HeadingContent>
+    <ChildContent>
+        @* A native details rather than a CollapsiblePanel: this page is statically rendered on purpose,
+           and a component whose fold is server-side state would cost it a SignalR circuit. *@
+        <details class="tagdump">
+            <summary>Show every assembly this build has loaded</summary>
+            <DataTable>
+                <Columns>
+                    <th>Assembly</th><th>Version</th><th>Informational version</th>
+                </Columns>
+                <ChildContent>
+                    @foreach (var assembly in _assemblies)
+                    {
+                        <tr>
+                            <td>@assembly.Name</td>
+                            <td>@assembly.Version</td>
+                            <td class="tagvalue">@assembly.InformationalVersion</td>
+                        </tr>
+                    }
+                </ChildContent>
+            </DataTable>
+        </details>
+        <p class="muted">
+            What is loaded right now, not what was shipped &mdash; .NET loads an assembly when something
+            first needs it, so a page you have not visited yet may add to this list.
+        </p>
+    </ChildContent>
+</Panel>
+
+<Panel Heading="Copyright">
+    <p>@Copyright.Notice</p>
+    @* Named rather than reproduced: the full text ships beside the binaries, as LICENSE, and a licence
+       an operator cannot find is one they have to take on trust. *@
+    <p>
+        Released under the <strong>MIT licence</strong> - free to use, change and pass on, with no warranty.
+        The full text is in the <code>LICENSE</code> file beside the server's program files, next to
+        <code>release-notes.md</code>.
+    </p>
+    <p class="muted">
+        Built on .NET and ASP.NET Core, with SQLite for the index, SkiaSharp for picture previews, and
+        ffmpeg - optional, and not included - for everything to do with video and music.
+    </p>
+</Panel>
+
+<Panel Heading="Getting started">
+    <p>
+        <a href="/admin/help">Help</a> covers what each page does, where the server keeps its files, and
+        what to try when a television cannot see the server.
+    </p>
+</Panel>
+
+@code {
+    private ServerOptions _server = null!;
+    private List<LoadedAssembly> _assemblies = [];
+
+    protected override void OnInitialized()
+    {
+        // Read once for the page rather than per row: a static render has no later state to keep in step,
+        // and six rows must all describe the same configuration.
+        _server = Options.CurrentValue.Server;
+        _assemblies = ReadAssemblies();
+    }
+
+    /// <remarks>
+    /// Dynamic assemblies are skipped because they have no file version to report and are not something
+    /// the operator deployed - they are generated at run time, by the regular-expression compiler among
+    /// others.
+    /// </remarks>
+    private static List<LoadedAssembly> ReadAssemblies()
+    {
+        var loaded = AppDomain.CurrentDomain.GetAssemblies();
+        var rows = new List<LoadedAssembly>(loaded.Length);
+
+        foreach (var assembly in loaded)
+        {
+            if (assembly.IsDynamic)
+            {
+                continue;
+            }
+
+            var name = assembly.GetName();
+
+            rows.Add(new LoadedAssembly(
+                name.Name ?? "unknown",
+                name.Version?.ToString() ?? "unknown",
+                assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                    ?? string.Empty));
+        }
+
+        rows.Sort(static (a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+
+        return rows;
+    }
+
+    private sealed record LoadedAssembly(string Name, string Version, string InformationalVersion);
+
+    /// <remarks>
+    /// The informational version, which is what carries a suffix such as a build or commit when one is
+    /// set. The number itself comes from the single <c>Version</c> property in
+    /// <c>Directory.Build.props</c>, so no version string is duplicated here.
+    /// </remarks>
+    private static string Version()
+    {
+        var assembly = typeof(About).Assembly;
+
+        return assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? assembly.GetName().Version?.ToString()
+            ?? "unknown";
+    }
+}

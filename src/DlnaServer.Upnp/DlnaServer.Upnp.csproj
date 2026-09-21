@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="SoapCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DlnaServer.Core\DlnaServer.Core.csproj" />
+  </ItemGroup>
+
+</Project>

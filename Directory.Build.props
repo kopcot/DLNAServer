@@ -1,0 +1,50 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Major.Minor.MonthDate, bumped on every change - the scheme and who may bump which part
+         are in PLAN.md section 7 under "Assembly version". One property for all nine projects. -->
+    <Version>1.1.0917</Version>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: XML docs are required on public API only where they add value, not everywhere. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- The server runs with InvariantGlobalization, so translated framework messages are never used.
+         Keeping only English drops 13 satellite locale folders from the NAS deployment, and with them
+         the 234 NETSDK1188 warnings SoapCore's WCF dependencies raise about locales .NET does not
+         recognise - which is what broke the 0-warning build on the NAS. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+<!-- NO GC PROPERTY BELONGS IN THIS FILE. The server runs long and hot on a NAS, so GC configuration
+       matters - but two attempts to set it from here were both silently inert, and this is the note that
+       stops a third.
+
+       This file is imported by Microsoft.Common.props, which runs BEFORE the Web SDK defines OutputType.
+       A `Condition="'$(OutputType)' == 'Exe'"` PropertyGroup here therefore evaluates against an empty
+       string and never applies. It sat here looking configured for a long time: ServerGarbageCollection
+       happened to match Microsoft.NET.Sdk.Web's own default of true, so the dead setting agreed with
+       reality, while ConcurrentGarbageCollection - which matches no SDK default - evaluated to empty.
+       Confirmed with `dotnet msbuild -getProperty:ServerGarbageCollection`, not by reading source.
+
+       GarbageCollectionAdaptationMode was the earlier casualty of the same class: a .NET 9 SDK property
+       against a global.json pinned to 8.0.414, so the published runtimeconfig.json carried no
+       System.GC.DynamicAdaptationMode at all and the 0-warning build gave no hint.
+
+       GC settings now live in src/DlnaServer.Host/DlnaServer.Host.csproj (project body, which is
+       evaluated after Sdk.props and is the only place that wins) and in
+       src/DlnaServer.Host/runtimeconfig.template.json for the knobs that have no MSBuild property.
+       Where the two overlap the MSBuild property wins. Verify any change by reading
+       bin/<config>/net8.0/DlnaServer.Host.runtimeconfig.json back out. -->
+
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Tests'))">
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

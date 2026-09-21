@@ -1,0 +1,30 @@
+@* A one-line result message. Every page that performs an action shows one, and they had become five
+   copies of the same markup.
+
+   Renders nothing at all when there is no message, so a caller passes Message and drops the @if that
+   four of them had wrapped this in. *@
+
+@if (ChildContent is not null || Message is not null)
+{
+    <div class="notice @(IsBad ? "bad" : "ok")">@ChildContent@Message</div>
+}
+
+@code {
+    /// <summary>
+    /// Renders the message as a problem rather than a confirmation.
+    /// </summary>
+    [Parameter]
+    public bool IsBad { get; set; }
+
+    /// <summary>
+    /// The message, for the common case of plain text that may be absent.
+    /// </summary>
+    /// <remarks>
+    /// Ignored when <see cref="ChildContent"/> is supplied, which is what a message carrying markup uses.
+    /// </remarks>
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

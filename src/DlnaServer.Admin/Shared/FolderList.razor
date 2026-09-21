@@ -1,0 +1,63 @@
+@* A scrolling list of folders, virtualized. Drawn by the library listing and by the folder search, which
+   differ only in whether each row carries the full path under its name.
+
+   The row heights live here rather than on each page: <Virtualize> positions rows by a fixed ItemSize, the
+   two values below are measured from the rendered page, and a second copy of a measured constant is a
+   copy that goes stale. See PLAN.md section 7, "Virtualization", for the rest of the constraints. *@
+
+@inject IAdminUrls Urls
+
+<Scroller>
+    <ul class="folders">
+        <Virtualize Items="Folders" ItemSize="@(ShowPath ? PathRowHeight : NameRowHeight)"
+                    OverscanCount="10" SpacerElement="li" Context="folder">
+            <ItemContent>
+                <li @key="folder.PublicId">
+                    <a href="@Urls.Library(folder.PublicId)" title="@folder.FullPath">
+                        @folder.Name
+                        @if (ShowPath)
+                        {
+                            <div class="muted paths">@folder.FullPath</div>
+                        }
+                    </a>
+                </li>
+            </ItemContent>
+            <Placeholder>
+                @* Only rendered when items come from an ItemsProvider; with an in-memory Items collection
+                   the rows are already there and this never shows. *@
+                <li class="muted">Loading&hellip;</li>
+            </Placeholder>
+            <EmptyContent>
+                <li class="muted">@EmptyMessage</li>
+            </EmptyContent>
+        </Virtualize>
+    </ul>
+</Scroller>
+
+@code {
+    /// <summary>
+    /// Height of a row showing only the folder name, in pixels.
+    /// </summary>
+    private const float NameRowHeight = 41.5f;
+
+    /// <summary>
+    /// Height of a row showing the name over its full path, in pixels.
+    /// </summary>
+    private const float PathRowHeight = 59.5f;
+
+    /// <remarks>
+    /// A List rather than the repository's IReadOnlyList: Virtualize binds Items to ICollection&lt;T&gt;.
+    /// </remarks>
+    [Parameter]
+    [EditorRequired]
+    public List<MediaDirectoryDto> Folders { get; set; } = [];
+
+    /// <summary>
+    /// Shows each folder's full path beneath its name, which is what the search needs and a listing does not.
+    /// </summary>
+    [Parameter]
+    public bool ShowPath { get; set; }
+
+    [Parameter]
+    public string EmptyMessage { get; set; } = "No folders.";
+}

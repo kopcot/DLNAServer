@@ -1,0 +1,45 @@
+@* A bordered section, optionally with a heading. Nineteen copies of this markup existed across the pages
+   and three of the shared components before it was a component.
+
+   The heading takes either a plain string or a fragment, because one panel puts a muted track count
+   inside its own <h2> and the rest do not. *@
+
+<div class="panel @Class">
+    @if (HeadingContent is not null)
+    {
+        <h2>@HeadingContent</h2>
+    }
+    else if (!string.IsNullOrWhiteSpace(Heading))
+    {
+        <h2>@Heading</h2>
+    }
+
+    @ChildContent
+</div>
+
+@code {
+    /// <summary>
+    /// The panel's heading, as text.
+    /// </summary>
+    [Parameter]
+    public string? Heading { get; set; }
+
+    /// <summary>
+    /// The panel's heading, when it carries markup of its own.
+    /// </summary>
+    /// <remarks>
+    /// Wins over <see cref="Heading"/> when both are set.
+    /// </remarks>
+    [Parameter]
+    public RenderFragment? HeadingContent { get; set; }
+
+    /// <summary>
+    /// Extra classes for the panel - <c>pinned</c> to hold it at the top of the viewport, <c>player</c>
+    /// for the one that frames a video element.
+    /// </summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

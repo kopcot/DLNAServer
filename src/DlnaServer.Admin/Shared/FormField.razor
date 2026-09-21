@@ -1,0 +1,59 @@
+@* One labelled control, in a fixed order: heading, the control, a validation error if there is one, then
+   the description.
+
+   The order is the point. The description used to sit above the control, so in a multi-column form a field
+   that had one pushed its input below the fields that did not, and nothing lined up across a row. With the
+   control always second, every input in a row starts at the same height. *@
+
+<div class="field">
+    <label for="@For">@Label</label>
+
+    @ChildContent
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <div class="error">@Error</div>
+    }
+
+    <FieldNotes Hint="Hint" Restart="Restart" />
+</div>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Identifier of the control the label belongs to, so clicking the label focuses it.
+    /// </summary>
+    /// <remarks>
+    /// Left unset for a field whose control is a checkbox carrying its own text, where the label element
+    /// here is the heading rather than the checkbox's own label.
+    /// </remarks>
+    [Parameter]
+    public string? For { get; set; }
+
+    /// <summary>
+    /// The control itself.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// What is wrong with the value entered, shown between the control and its description.
+    /// </summary>
+    [Parameter]
+    public string? Error { get; set; }
+
+    /// <summary>
+    /// What the setting does, in prose.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Hint { get; set; }
+
+    /// <summary>
+    /// A note that the value only takes effect after the server is restarted.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Restart { get; set; }
+}

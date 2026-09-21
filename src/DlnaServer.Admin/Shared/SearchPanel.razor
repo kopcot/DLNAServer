@@ -1,0 +1,98 @@
+@* The filter panel both search pages are built on: a pinned, collapsible box of filters with Search and
+   Reset below it and a result count beside them.
+
+   The two pages were the same page twice - the same lede, the same panel, and a footer that matched
+   character for character down to the limit warning. Only the filters, the repository and the result
+   rendering ever differed.
+
+   The re-entrancy guard deliberately stays on the page rather than moving in here. Both pages document
+   why: `disabled` does not suppress a keystroke, and key repeat fires keyup once per repeat, so holding
+   Enter overlapped two searches on one DbContext. IsRunning comes in and OnSearch goes out, so the check
+   stays at the page's single entry point. *@
+
+<CollapsiblePanel @ref="_panel" Heading="Filters" Pinned="true">
+    <Summary>@Summary</Summary>
+    <ChildContent>
+        @Filters
+    </ChildContent>
+    <Footer>
+        <div class="actions">
+            <button class="primary" @onclick="OnSearch" disabled="@IsRunning">Search</button>
+            <button @onclick="OnReset" disabled="@IsRunning">Reset</button>
+            @if (HasSearched)
+            {
+                <span class="muted">@ResultCount result(s)@(ResultCount >= Limit ? " - narrow the filters, this is the limit" : "")</span>
+            }
+        </div>
+    </Footer>
+</CollapsiblePanel>
+
+@code {
+    private CollapsiblePanel _panel = null!;
+
+    /// <summary>
+    /// The filter controls.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public RenderFragment Filters { get; set; } = null!;
+
+    /// <summary>
+    /// What is being filtered on, named while the panel is shut.
+    /// </summary>
+    [Parameter]
+    public string? Summary { get; set; }
+
+    /// <summary>
+    /// Whether a search has run, which is what decides between "no results" and "not searched yet".
+    /// </summary>
+    [Parameter]
+    public bool HasSearched { get; set; }
+
+    /// <summary>
+    /// Disables both buttons while a search is in flight.
+    /// </summary>
+    [Parameter]
+    public bool IsRunning { get; set; }
+
+    [Parameter]
+    public int ResultCount { get; set; }
+
+    /// <summary>
+    /// The cap the repository applies, so the count can say when it has been reached.
+    /// </summary>
+    [Parameter]
+    public int Limit { get; set; }
+
+    [Parameter]
+    public EventCallback OnSearch { get; set; }
+
+    [Parameter]
+    public EventCallback OnReset { get; set; }
+
+    /// <summary>
+    /// Shuts the filters, so the results a search has just produced start at the top of the viewport.
+    /// </summary>
+    /// <remarks>
+    /// Called by the page rather than wired to the Search button here, because Enter in a filter box runs
+    /// the same search without going through the button - the page's run method is the one entry point
+    /// both paths share.
+    /// </remarks>
+    public void Collapse()
+    {
+        _panel.Collapse();
+    }
+
+    /// <summary>
+    /// Reopens the filters, for a page that has just cleared them.
+    /// </summary>
+    /// <remarks>
+    /// Reset leaves nothing to read on a shut panel - no results, and a summary that says "no filters set"
+    /// - so the panel stays folded over an empty page until the operator opens it again. Reopening is what
+    /// makes Reset look like it did something.
+    /// </remarks>
+    public void Expand()
+    {
+        _panel.Expand();
+    }
+}

@@ -1,0 +1,29 @@
+@* A table with a header row. Three copies of the thead/tbody scaffold existed - the preview page's audio
+   and subtitle tables and the maintenance page's subscription list.
+
+   Columns holds the <th> cells and ChildContent the <tr> rows, so the enclosing <tr>, <thead> and <tbody>
+   are stated once. *@
+
+<table>
+    <thead>
+        <tr>@Columns</tr>
+    </thead>
+    <tbody>
+        @ChildContent
+    </tbody>
+</table>
+
+@code {
+    /// <summary>
+    /// The header cells, as <c>th</c> elements.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public RenderFragment Columns { get; set; } = null!;
+
+    /// <summary>
+    /// The body rows, as <c>tr</c> elements.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

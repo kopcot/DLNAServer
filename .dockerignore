@@ -1,0 +1,50 @@
+# Build output. Copying these in would ship a Windows-built bin/ into a linux image and, worse, make the
+# layer cache miss on every local build.
+**/bin/
+**/obj/
+
+# Runtime state that must never be baked into an image: a database carrying somebody's library, the logs
+# that describe it, and the generated previews.
+**/logs/
+**/*.sqlite
+**/*.sqlite-shm
+**/*.sqlite-wal
+**/thumbnails/
+**/backup/
+**/ffmpeg/
+
+# The deployment's own configuration, which names real folders on a real NAS. The image ships no
+# config.json at all; one is mounted at run time.
+config.json
+**/config.json.saved-*
+
+# Tooling and editor state. graphify-out/ and .claude/ arrived at the context root when the
+# Current/ folder was flattened away; the graph alone is tens of megabytes of generated JSON.
+.git/
+.gitignore
+.idea/
+.vs/
+.claude/
+graphify-out/
+
+# Local media used for manual testing - never part of an image.
+media/
+**/*.user
+**/.DS_Store
+
+# Documentation - large, and changing a markdown file should not invalidate the restore layer.
+*.md
+docs/
+tools/
+NasBuild.sh
+NasBuild.usage.txt
+
+# Except the release notes, which the Host copies into its output as an operator-facing file: excluded,
+# the container build fails at publish with MSB3030 while a local build succeeds. It arrives in the
+# `COPY . .` layer, after the restore layer, so the reason for the rule above still holds.
+!release-notes.md
+
+# Docker's own files.
+Dockerfile
+.dockerignore
+docker-compose*.yml

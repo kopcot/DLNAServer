@@ -1,0 +1,255 @@
+@* The operator's manual. Two deliberate choices:
+
+   Plain panels rather than the collapsible kind used elsewhere - a manual is read straight through and
+   searched with the browser's own Ctrl+F, and text inside a shut CollapsiblePanel is not in the DOM to be
+   found.
+
+   Paragraphs rather than MetaList, even where the shape is label-and-value: `dl.meta dd` carries
+   word-break:break-all so a file path never widens a table, and on a sentence that breaks words at every
+   line end.
+
+   Statically rendered - nothing here has a control, so it costs a render and no SignalR circuit. *@
+
+@page "/admin/help"
+
+<PageHeader Title="Help">
+    What each page does, and what to do when something is not as you expect.
+</PageHeader>
+
+<Panel Heading="What this server is">
+    <p>
+        It publishes the video, music and photographs on this machine to the televisions and media players
+        on your network, using DLNA - the standard most televisions already speak, with nothing to install
+        on the television itself. A television finds the server by itself and lists its folders.
+    </p>
+    <p class="muted">
+        The server answers on <strong>two ports</strong>. One serves televisions, the other serves these
+        admin pages, and neither answers the other's requests. That is deliberate: nothing on your network
+        reaches these pages by browsing the media server.
+    </p>
+</Panel>
+
+<Panel Heading="Getting your media in">
+    <p>
+        <strong>Source folders</strong> are the folders the server indexes, set on
+        <a href="/admin/settings">Settings</a>. Everything underneath one is included. With none set the
+        server falls back to its own folder and says so on the Dashboard.
+    </p>
+    <p>
+        <strong>Excluded folders</strong> are never looked at and never listed - recycle bins and working
+        folders belong here. An entry is a folder name, a partial path or a full path, and it is matched on
+        whole folder names: <em>path1</em> hides <em>path1</em> and everything under it, and leaves
+        <em>path1L</em> alone.
+    </p>
+    <p>
+        <strong>Temporarily hidden folders</strong> are indexed and kept up to date, but absent from every
+        listing and refused to televisions. <a href="/admin/settings/temporary">Temporary</a> reveals them
+        for a number of minutes and hides them again by itself. Use this rather than excluding for anything
+        you want kept current.
+    </p>
+    <p>
+        <strong>Scanning</strong> runs on a schedule and after a change on disc.
+        <em>Scan now</em> on <a href="/admin/maintenance">Maintenance</a> starts one immediately.
+    </p>
+    <p class="muted">
+        A folder holding no media - at any depth - is not listed at all, so an empty tree does not appear
+        as a trail of folders leading to nothing.
+    </p>
+</Panel>
+
+<Panel Heading="Adding files from a browser">
+    <p>
+        <strong>Add files</strong> copies media from the device you are reading this on - a phone, a
+        laptop - into one of your library folders. It is <strong>off until you turn it on</strong>:
+        <em>Accept uploads</em> on <a href="/admin/settings">Settings</a>, and then restart the server,
+        because the page does not exist until it starts with that setting on. The menu entry appears once
+        it does.
+    </p>
+    <p>
+        Choose the folder, optionally a folder inside it - which is created if it is not there - and
+        whether a file already of that name is <strong>left alone or replaced</strong>. Only the file types
+        your library holds are accepted; anything else is refused by name in the report, and the list of
+        types is the one on Settings. <em>Upload folder</em> restricts uploads to a single folder, and
+        <em>Largest file</em> refuses one file bigger than you allow.
+    </p>
+    <p>
+        Afterwards you get a table of every file and what happened to it, and the server looks through the
+        folder straight away - so the files appear in the library on their own, though a preview and a
+        length follow a little later.
+    </p>
+    <p class="muted">
+        The folder you last used is offered again next time, on this device. Every upload is also written
+        to a log of its own, with the address and browser it came from, so you can see later how a file
+        arrived. Anyone who can reach these pages can add files, which is the reason the setting ships off.
+    </p>
+</Panel>
+
+<Panel Heading="Previews and file details">
+    <p>
+        Previews are the small images a television and these pages show for a file. They are written
+        <strong>beside your media</strong>, in a hidden sub-folder, so they survive a reinstall and an
+        existing library arrives already previewed. File details are lengths, picture sizes, formats, sound
+        tracks and subtitles. Delete a media file and its preview goes with it, the next time the server
+        looks over your folders.
+    </p>
+    <p>
+        Photographs need nothing. <strong>Video and music need the video helper programs</strong> (ffmpeg),
+        which are optional and are not included. Without them, browsing and playing still work normally,
+        but videos get no previews, nothing gets a length, and the search page has no languages to offer.
+        The <a href="/admin">Dashboard</a> says plainly when they are missing.
+    </p>
+    <p class="muted">
+        <em>Clear</em> and <em>Rebuild</em> are not the same thing. Both throw away what is stored;
+        <em>Clear</em> leaves it gone until you ask for it, and <em>Rebuild</em> has it made again. Use
+        <em>Clear</em> on files that fail every time and waste the attempt.
+    </p>
+    <p class="muted">
+        <em>Allow in memory again</em> throws nothing away. When reading a file into memory fails once -
+        a disc that was unplugged, a folder the server was not allowed to open - the server stops trying
+        for that file and says so as <em>Kept in memory: no</em>. Once the cause is fixed, this is what
+        lets it try again, for one file or for a whole folder.
+    </p>
+    <p class="muted">
+        <em>Change file type</em>, on a file's own page, corrects what that one file tells televisions it
+        is. Use it when a television refuses a file that plays perfectly here - usually by choosing a
+        different <em>compatibility profile</em>. It affects that file only; the list that types files by
+        their extension is on <a href="/admin/settings">Settings</a>.
+    </p>
+</Panel>
+
+<Panel Heading="Finding things">
+    <p>
+        <strong>Library</strong> walks the folders exactly as a television sees them, and opens on the
+        source folders with the newest files in the library underneath.
+    </p>
+    <p>
+        <strong>Search folders</strong> matches a folder's own name, or any part of the full path - typing
+        a parent's name finds everything inside it.
+    </p>
+    <p>
+        <strong>Search files</strong> has filters that are all optional and all combine. Setting
+        <em>Details read</em> or <em>Preview made</em> to <em>not yet</em> is how you find the files the
+        server still has work to do on, and <em>Kept in memory</em> set to <em>no</em> lists the files the
+        server gave up on reading.
+    </p>
+    <p>
+        <strong>Preview</strong> is one file: play it, step to the next and previous in the folder,
+        download it, and read everything the file says about itself. Click a photograph to see it at the
+        width of the screen.
+    </p>
+    <p class="muted">
+        <strong>Folders</strong>, <strong>Files</strong> and <strong>Recently added</strong> each fold away
+        on the Library page - the heading keeps the count while it is shut, and it stays shut as you walk
+        from folder to folder.
+    </p>
+    <p class="muted">
+        The filter panel folds away when a search runs, so the results start at the top of the screen. The
+        filters are hidden, not cleared - the heading says what is still set, and <em>Reset</em> clears
+        them and opens the panel again.
+    </p>
+</Panel>
+
+<Panel Heading="Memory, and the recently served files">
+    <p>
+        This server is written to run on a small machine, so it keeps recently served files in memory up to
+        a limit you set, and gives that memory back under pressure.
+        <a href="/admin/cache">Recently served</a> lists what it is holding and the
+        <a href="/admin">Dashboard</a> reports the total.
+    </p>
+    <p class="muted">
+        <em>Served without the disc</em> is the figure that matters if the machine sits somewhere you can
+        hear it - it counts the requests answered without a drive having to spin up.
+    </p>
+</Panel>
+
+<Panel Heading="Maintenance, and what each button costs">
+    <p>
+        <strong>Scan now</strong> is cheap. It finds what has appeared, disappeared or moved.
+    </p>
+    <p>
+        <strong>Rebuild index</strong> empties the index and asks for a fresh scan, with no restart. Your
+        previews are kept and adopted again, so this costs far less than it sounds.
+    </p>
+    <p>
+        <strong>Recreate database</strong> deletes the database file and restarts. Everything is indexed
+        from nothing and every file gets a <strong>new identifier</strong> - so a television's own
+        bookmarks and recently-played list will point at nothing. Last resort.
+    </p>
+    <p>
+        <strong>Pause televisions</strong> stops answering renderers for a number of hours. These pages
+        keep working throughout, which is the point: it is how you get the machine quiet without stopping
+        the server.
+    </p>
+</Panel>
+
+<Panel Heading="When a television cannot see the server">
+    <p>
+        Televisions find the server by a network broadcast, and the usual cause of silence is that the
+        broadcast never leaves the machine.
+    </p>
+    <p>
+        <strong>In a container, host networking is not optional.</strong> On a bridged network these admin
+        pages work perfectly and no television ever sees the server, which makes this look like a server
+        fault rather than a network one.
+    </p>
+    <p>
+        <strong>On two networks at once</strong> - wired and wireless - the machine may be announcing
+        itself on the one your television is not on.
+    </p>
+    <p>
+        <strong>A firewall</strong> must allow both the media port and the discovery broadcast.
+    </p>
+    <p>
+        <strong>If the television sees the server but no files</strong>, then discovery is fine and the
+        library is the question: check the source folders, and that what you expect is not excluded or
+        temporarily hidden.
+    </p>
+    <p class="muted">
+        A television that has already listed a folder is not told when the library changes; it notices the
+        next time it browses.
+    </p>
+</Panel>
+
+<Panel Heading="A file plays on the television but not on this page">
+    <p>
+        That is normal, and it is not a fault in the file. These pages play a file using the browser, and
+        browsers open far fewer formats than a television does - AVI, WMV, MPEG and RealMedia among them.
+        The page says so when it happens and offers the file for download, so you can open it in a media
+        player on this computer.
+    </p>
+</Panel>
+
+<Panel Heading="Where a number on these pages comes from">
+    <p>
+        Every figure here is read from somewhere - a setting, a counter kept by the runtime, a column in
+        the index. <em>Show where each value comes from</em> on
+        <a href="/admin/settings/temporary">Temporary</a> turns that on for a number of minutes, after
+        which hovering a figure names its source: <em>Total in use</em> says <em>Working Set (MB)</em>, a
+        contact address says which <code>config.json</code> setting it came from, and a file's size says
+        which column holds it.
+    </p>
+    <p class="muted">
+        It is off by default because it underlines a large part of every page, and it switches itself off
+        again - a restart turns it off too. <strong>About</strong> also lists every program library this
+        build has loaded and its version, in a group that starts shut.
+    </p>
+</Panel>
+
+<Panel Heading="Where things are kept">
+    <p>
+        <strong>Settings</strong> live in <code>config.json</code>, next to the server. Most of them apply
+        without a restart; the ones that do not are marked on the Settings page.
+    </p>
+    <p>
+        <strong>The index</strong> is a single database file next to the server. It holds no media - it is
+        a catalogue, and a rescan rebuilds it.
+    </p>
+    <p>
+        <strong>Previews</strong> sit beside your media in a hidden sub-folder, so the folder holding your
+        media has to be writable.
+    </p>
+    <p>
+        <strong>Logs</strong> are in a <code>logs</code> folder next to the server. Uploads have one of
+        their own there, <code>uploadSecurity.log</code>, kept apart from the rest so it stays readable.
+    </p>
+</Panel>

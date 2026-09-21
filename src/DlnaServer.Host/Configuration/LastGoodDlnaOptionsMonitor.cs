@@ -1,0 +1,80 @@
+using DlnaServer.Core.Configuration;
+using Microsoft.Extensions.Options;
+
+namespace DlnaServer.Host.Configuration
+{
+    /// <summary>
+    /// Serves the last options that validated when the current ones do not, instead of throwing at
+    /// every reader for the rest of the process.
+    /// </summary>
+    /// <remarks>
+    /// <c>OptionsCache.GetOrAdd</c> stores a <see cref="Lazy{T}"/> built with the default
+    /// <c>LazyThreadSafetyMode.ExecutionAndPublication</c>, and that mode <b>caches the exception and
+    /// rethrows the same instance on every later access</b>. So one parseable-but-invalid edit -
+    /// <c>"Port": 0</c>, a relative source folder, a per-file cache limit above the total - made every
+    /// subsequent <c>CurrentValue</c> read throw until <c>config.json</c> changed again.
+    /// <para>
+    /// That is read on every media request, every listing, every Browse and every executed database
+    /// command, so the whole server answered 500 - <b>including the Settings page that would have
+    /// repaired the edit</b>, which left an operator with no way back except SSH. Two background
+    /// services died with it, silently, because <c>BackgroundServiceExceptionBehavior.Ignore</c>
+    /// swallows what escapes their loop.
+    /// </para>
+    /// <para>
+    /// Startup is deliberately NOT protected: nothing has validated yet, so there is no last good value
+    /// and the exception propagates exactly as before. A configuration that has never been usable still
+    /// refuses to boot, which is what <c>ValidateOnStart</c> is for.
+    /// </para>
+    /// </remarks>
+    internal sealed partial class LastGoodDlnaOptionsMonitor : IOptionsMonitor<DlnaOptions>
+    {
+        private readonly IOptionsMonitor<DlnaOptions> _inner;
+        private readonly ILogger<LastGoodDlnaOptionsMonitor> _logger;
+
+        private DlnaOptions? _lastGood;
+
+        public LastGoodDlnaOptionsMonitor(
+            IOptionsMonitor<DlnaOptions> inner,
+            ILogger<LastGoodDlnaOptionsMonitor> logger)
+        {
+            ArgumentNullException.ThrowIfNull(inner);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            _inner = inner;
+            _logger = logger;
+        }
+
+        public DlnaOptions CurrentValue => Get(Options.DefaultName);
+
+        public DlnaOptions Get(string? name)
+        {
+            try
+            {
+                var current = _inner.Get(name);
+
+                // Only a value that came back without throwing is worth keeping, and reference
+                // assignment is atomic - a concurrent reader sees either the previous instance or this
+                // one, never a half-built graph. The options object is treated as immutable by every
+                // consumer, so sharing one instance across threads is what already happens.
+                _lastGood = current;
+
+                return current;
+            }
+            catch (OptionsValidationException exception) when (_lastGood is not null)
+            {
+                // Deliberately not caching the failure or rate-limiting the message. Every read that
+                // would have thrown logs one line, which is loud - and that is the point: the server is
+                // running on settings the operator has since edited, and the noise stops the moment the
+                // file is valid again.
+                LogServingLastGood(string.Join(" ", exception.Failures));
+
+                return _lastGood;
+            }
+        }
+
+        public IDisposable? OnChange(Action<DlnaOptions, string?> listener)
+        {
+            return _inner.OnChange(listener);
+        }
+    }
+}

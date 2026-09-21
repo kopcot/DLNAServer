@@ -1,0 +1,725 @@
+@page "/admin/settings"
+@rendermode InteractiveServer
+@inject IOptionsMonitor<DlnaOptions> Options
+@inject ISettingsWriter Writer
+@inject ISourceFolderChecker SourceFolders
+@inject ISettingsPreflight Preflight
+
+<PageHeader Title="Settings">
+    Saved to the server's settings file. Most changes take effect as soon as you save; the ones that need
+    a restart say so.
+</PageHeader>
+
+<Notice IsBad="_failed" Message="@_message" />
+
+<Panel Heading="Server">
+    <FormField Label="Media port" For="port">
+        <ChildContent>
+            <input id="port" type="number" @bind="_edited.Server.Port" />
+        </ChildContent>
+        <Hint>
+            The port your televisions connect to, for both browsing and playing. Change it only if another
+            program on this machine already uses it.
+        </Hint>
+        <Restart>Takes effect after the server is restarted.</Restart>
+    </FormField>
+
+    <FormField Label="Admin port" For="adminPort">
+        <ChildContent>
+            <input id="adminPort" type="number" @bind="_edited.Server.AdminPort" />
+        </ChildContent>
+        <Hint>The port these pages are on. It must be different from the media port.</Hint>
+        <Restart>Takes effect after the server is restarted.</Restart>
+    </FormField>
+
+    <FormField Label="Friendly name" For="friendlyName">
+        <ChildContent>
+            <input id="friendlyName" type="text" @bind="_edited.Server.FriendlyName" />
+        </ChildContent>
+        <Hint>
+            The name televisions show in their source list. Left blank it becomes
+            <code>ZEN DLNA Server (machine name)</code>, which is what distinguishes two servers on one network.
+        </Hint>
+    </FormField>
+
+    <FormField Label="Version shown to televisions" For="modelName">
+        <ChildContent>
+            <input id="modelName" type="text" @bind="_edited.Server.ModelName" />
+        </ChildContent>
+        <Hint>
+            Shown by a television next to the server's name, in its device information. Cosmetic - no
+            television behaves differently because of it.
+        </Hint>
+        <Restart>Takes effect after the server is restarted.</Restart>
+    </FormField>
+
+    <FormField Label="Made by" For="manufacturerName">
+        <ChildContent>
+            <input id="manufacturerName" type="text" @bind="_edited.Server.ManufacturerName" />
+        </ChildContent>
+        <Hint>The manufacturer name a television shows for this server. Cosmetic.</Hint>
+        <Restart>Takes effect after the server is restarted.</Restart>
+    </FormField>
+
+    <FormField Label="Contact address" For="manufacturerUrl">
+        <ChildContent>
+            <input id="manufacturerUrl" type="text" @bind="_edited.Server.ManufacturerUrl" />
+        </ChildContent>
+        <Hint>
+            A web or e-mail address a television can offer as the contact for this server. Cosmetic.
+        </Hint>
+        <Restart>Takes effect after the server is restarted.</Restart>
+    </FormField>
+
+    <CheckField Label="Detailed logging" @bind-Value="_edited.Server.DebugMode">
+        <Hint>
+            Records far more detail about what each television asks for, which helps track down a problem.
+            Leave it off otherwise: it can write tens of megabytes a day.
+        </Hint>
+    </CheckField>
+</Panel>
+
+<Panel Heading="Library">
+    <FormField Label="Source folders" For="sources">
+        <ChildContent>
+            <div class="checkrow">
+                <textarea id="sources" rows="4" @bind="_sourceFolders"></textarea>
+                <button type="button" @onclick="CheckSourceFolders" disabled="@_saving">Check</button>
+            </div>
+            @if (_sourceFolderChecks.Count > 0)
+            {
+                <ul class="checks">
+                    @foreach (var check in _sourceFolderChecks)
+                    {
+                        <li class="@(check.IsUsable ? "ok" : "bad")">
+                            <span class="paths">@check.Path</span>
+                            <span class="verdict">@(check.Problem ?? "Found, and readable.")</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </ChildContent>
+        <Hint>
+            One per line. Each becomes a top-level folder on your televisions. With none set, the server
+            shares its own folder and warns you, rather than refusing to start.
+        </Hint>
+        <Restart>
+            Takes effect after the server is restarted: your folders are searched for media when the server
+            starts, so a folder added here is not searched - and one removed is still shown - until then.
+        </Restart>
+    </FormField>
+
+    <FormField Label="Excluded folders" For="excludes">
+        <ChildContent>
+            <textarea id="excludes" rows="4" style="width:100%" @bind="_excludeFolders"></textarea>
+        </ChildContent>
+        <Hint>
+            One per line. An entry can be a folder name (<code>@@Recycle</code>), a partial path
+            (<code>Films/Private</code>) or a folder's full path as it reads on this server &mdash; use
+            a full or partial path when you want to hide just one folder and not every folder that happens
+            to share its name. Either kind of slash works; <code>/</code> and <code>\</code> mean the same
+            thing here.
+            <br />
+            Matched on <strong>whole folder names</strong>, so <code>path1</code> hides
+            <code>path1</code> and everything inside it but does <strong>not</strong> touch
+            <code>path1L</code> or <code>path10</code>. Hidden files are simply not shown &mdash; on your
+            televisions or on these pages. Nothing is deleted, and no new scan is needed.
+            <br />
+            The preview folder must be listed here, or the preview images would themselves be treated as
+            media.
+        </Hint>
+    </FormField>
+
+    <FormField Label="Temporarily hidden folders" For="tempHidden">
+        <ChildContent>
+            <textarea id="tempHidden" rows="4" style="width:100%" @bind="_temporarilyHiddenFolders"></textarea>
+        </ChildContent>
+        <Hint>
+            One per line, written exactly like the excluded folders above and matched by the same rule.
+            <br />
+            The difference is what happens behind the scenes: these folders <strong>are</strong> still
+            scanned, so new files are picked up, changed and deleted ones are noticed, and previews are
+            made &mdash; they are simply not shown, and a television cannot play one even from a link it
+            already has. Use <em>Settings &rarr; Temporary</em> when you want them back for a while.
+            <br />
+            Excluded folders, by contrast, are not looked at at all, so anything added to one while it is
+            excluded stays unknown until you remove it from that list.
+        </Hint>
+    </FormField>
+
+    <FormField Label="Recently added count" For="recent">
+        <ChildContent>
+            <input id="recent" type="number" @bind="_edited.Library.RecentlyAddedCount" />
+        </ChildContent>
+        <Hint>
+            How many of the newest files appear in the <em>Recently added</em> list, alongside your folders.
+        </Hint>
+    </FormField>
+
+    <FormField Label="Wait before adding a file (seconds)" For="settle">
+        <ChildContent>
+            <input id="settle" type="number" @bind="_edited.Library.FileSettleSeconds" />
+        </ChildContent>
+        <Hint>
+            How long a file must stop changing before it is added. A file being copied over the network
+            appears long before it is finished, and adding it too early records the wrong size and length.
+            Every further change restarts the wait.
+        </Hint>
+    </FormField>
+
+    <CheckField Label="Look for changes on a timer" @bind-Value="_edited.Library.UsePeriodicRescan">
+        <Hint>
+            Normally the system tells this server the moment a file is added, changed or removed, and
+            nothing has to go looking. Turn this on when that is not happening - most often when your
+            media folder comes from a container or a network share, where those notifications never
+            arrive and the library silently stops keeping up.
+            <br />
+            Leave it off otherwise. Each look goes through every folder twice, which on a large library
+            is tens of thousands of disc reads, and doing that on a timer costs a small machine more than
+            it gains.
+        </Hint>
+    </CheckField>
+
+    <FormField Label="How often to look (minutes)" For="rescan">
+        <ChildContent>
+            <input id="rescan" type="number" min="1" max="1440" @bind="_edited.Library.RescanIntervalMinutes" />
+        </ChildContent>
+        <Hint>
+            Only used when <em>Look for changes on a timer</em> is on. Pick the longest wait you can live
+            with rather than the shortest one you can bear - a look costs the same whether anything
+            changed or not. Pressing <em>Look for new, changed and removed files</em> on the Maintenance
+            page restarts this wait.
+        </Hint>
+    </FormField>
+
+    <CheckField Label="Use the file's own date" @bind-Value="_edited.Library.UseFileCreationDateTime">
+        <Hint>
+            Which date a television sees when it sorts a folder by date: the date on the file itself, or
+            the moment this server added it. Only files added from now on are affected - the ones already
+            in the library keep the date they were given until the library is rebuilt.
+            <br />
+            The first time a folder is filled, the file's own date is always used whatever this says,
+            because otherwise every file in it would carry one identical timestamp.
+        </Hint>
+    </CheckField>
+
+    <CheckField Label="Read all metadata from files" @bind-Value="_edited.Library.ReadContainerTags">
+        <Hint>
+            Collects everything a file says about itself &mdash; artist, album, lyrics, camera, and
+            whatever else it happens to carry &mdash; and shows it under <strong>All metadata</strong> on
+            the file's own page.
+            <br />
+            It reads each file a second time, so the first pass over a large library takes noticeably
+            longer with this on. Turning it off stops the reading; what has already been collected stays
+            until those files are processed again.
+        </Hint>
+    </CheckField>
+</Panel>
+
+<Panel Heading="Uploads">
+    <CheckField Label="Accept uploads" @bind-Value="_edited.Upload.Enabled">
+        <Hint>
+            Adds an <em>Add files</em> page that copies media from a browser into one of your folders.
+            It ships off: this is the only part of the server that writes into your library, and anything
+            on your network that can reach these pages can use it.
+        </Hint>
+        <Restart>Takes effect after the server is restarted.</Restart>
+    </CheckField>
+
+    <FormField Label="Upload folder" For="uploadFolder">
+        <ChildContent>
+            @* The same Check as Source folders above, and the same question: is this folder there and can
+               the server read it. Whether it sits inside a source folder is the save's question - the
+               validator answers that one without touching the disc, and refuses the save. *@
+            <div class="checkrow">
+                <input id="uploadFolder" type="text" @bind="_edited.Upload.DestinationFolder" />
+                <button type="button" @onclick="CheckUploadFolder" disabled="@_saving">Check</button>
+            </div>
+            @if (_uploadFolderChecks.Count > 0)
+            {
+                <ul class="checks">
+                    @foreach (var check in _uploadFolderChecks)
+                    {
+                        <li class="@(check.IsUsable ? "ok" : "bad")">
+                            <span class="paths">@check.Path</span>
+                            <span class="verdict">@(check.Problem ?? "Found, and readable.")</span>
+                        </li>
+                    }
+                </ul>
+            }
+            else if (_uploadFolderNote is not null)
+            {
+                <ul class="checks">
+                    <li class="ok">
+                        <span class="verdict">@_uploadFolderNote</span>
+                    </li>
+                </ul>
+            }
+        </ChildContent>
+        <Hint>
+            Leave this empty to choose from all your source folders when uploading. Set it to one full
+            path to allow that folder only &mdash; it has to be inside a source folder, or nothing put
+            there would ever be found.
+        </Hint>
+    </FormField>
+
+    <FormField Label="Largest file (MB)" For="maxUploadSize">
+        <ChildContent>
+            <input id="maxUploadSize" type="number" min="1" @bind="_edited.Upload.MaxSizeInMegabytes" />
+        </ChildContent>
+        <Hint>
+            Applies to each file rather than to the whole upload. A file over the limit is refused and
+            named in the report; nothing part-written is left behind.
+        </Hint>
+    </FormField>
+</Panel>
+
+<Panel Heading="Previews">
+    <FormField Label="Preview folder name" For="subFolder">
+        <ChildContent>
+            <input id="subFolder" type="text" required @bind="_edited.Thumbnails.SubFolderName" />
+        </ChildContent>
+        <Hint>
+            Preview images are stored in a folder of this name next to your media, so a library that has
+            been previewed before arrives ready and a reinstall does not throw them away. Required, and
+            always skipped when looking for media whether or not it appears in the excluded list &mdash;
+            without that, every preview would itself be treated as media and then previewed in turn.
+        </Hint>
+    </FormField>
+
+    <CheckField Label="Make previews for videos" @bind-Value="_edited.Thumbnails.GenerateForVideo">
+        <Hint>
+            Takes a still frame from each video. This is the slowest part of the first scan of a large
+            library.
+            <strong>Switching any of these three back on affects new files only.</strong> Files already
+            indexed while it was off were recorded as not needing a preview, so use
+            <em>Recreate thumbnails</em> on the Maintenance page to make them for the existing library.
+        </Hint>
+    </CheckField>
+
+    <CheckField Label="Make previews for photos" @bind-Value="_edited.Thumbnails.GenerateForImages" />
+
+    <CheckField Label="Make previews for music" @bind-Value="_edited.Thumbnails.GenerateForAudio">
+        <Hint>
+            Uses the cover image stored inside the music file. Tracks without one keep the music icon,
+            and are not retried.
+        </Hint>
+    </CheckField>
+
+    <CheckField Label="Download the video tools automatically" @bind-Value="_edited.Thumbnails.DownloadFFmpeg">
+        <Hint>
+            <strong>Leave this off unless you mean it.</strong> Previews for videos, and the length,
+            resolution and language information for videos and music, all need two helper programs
+            (ffmpeg and ffprobe). Turning this on lets the server fetch them from the internet by itself
+            and then run them - nothing checks that what arrives is genuine, and it stays on the machine
+            afterwards. The safe alternative is to put the two programs in the server's
+            <code>ffmpeg</code> folder yourself.
+            <br />
+            With it off and the programs absent, the library still works: files are found, browsed and
+            played. Only video previews and that extra information are missing.
+        </Hint>
+    </CheckField>
+
+    <CheckField Label="Also keep previews in the database" @bind-Value="_edited.Thumbnails.StoreInDatabase">
+        <Hint>
+            Keeps a second copy of each preview inside the server's own database as well as on disc, which
+            makes folder listings load faster.
+        </Hint>
+    </CheckField>
+
+    <FormField Label="Maximum size" For="maxWidth">
+        <ChildContent>
+            <input id="maxWidth" type="number" @bind="_edited.Thumbnails.MaxWidth" />
+            <input id="maxHeight" type="number" @bind="_edited.Thumbnails.MaxHeight" />
+        </ChildContent>
+        <Hint>
+            Width and height in pixels. A preview only ever shrinks to fit; a smaller picture is left alone.
+        </Hint>
+    </FormField>
+
+    <FormField Label="Preview quality" For="quality">
+        <ChildContent>
+            <input id="quality" type="number" @bind="_edited.Thumbnails.Quality" />
+        </ChildContent>
+        <Hint>
+            1 to 100. Higher looks better but makes every folder your televisions draw a little slower.
+        </Hint>
+    </FormField>
+</Panel>
+
+@* Everything below is folded away by default. These are the settings that need you to know what
+   they do - a wrong file-type map empties the library, and the database figures trade memory for
+   speed. The panels keep whatever you set; collapsing hides them, it does not reset them. *@
+<h2 class="advanced-heading">Advanced</h2>
+<p class="muted">
+    You should not need to change any of these. They are here because a television that misbehaves,
+    or a machine short of memory, occasionally needs one of them.
+</p>
+
+<CollapsiblePanel @key='AdvancedKey("File types")' StartCollapsed="@(!_failed)" Heading="File types">
+    <p class="muted">
+        Which file extensions are treated as media, and what each one is announced as. A file whose
+        extension is not listed here is ignored completely - it is not indexed, browsed or played.
+        Removing a line hides those files at the next scan; adding one needs a scan before they appear.
+    </p>
+
+    <ExtensionMapEditor Rows="_extensions" />
+</CollapsiblePanel>
+
+<CollapsiblePanel @key='AdvancedKey("Recently served files")' StartCollapsed="@(!_failed)" Heading="Recently served files">
+    <CheckField Label="Enabled" @bind-Value="_edited.FileCache.Enabled">
+        <Hint>
+            Keeps recently played files in memory so the disc does not have to be read again. Switching
+            this off frees that memory straight away, and every request then reads from the disc.
+        </Hint>
+    </CheckField>
+
+    <CheckField Label="Load previews ahead of time" @bind-Value="_edited.FileCache.WarmPreviewsOnBrowse">
+        <Hint>
+            Reads a folder's previews into memory as the television opens it, rather than waiting for
+            each one to be asked for. Switching this off means fewer disc reads when a folder is only
+            paged past, at the cost of the pictures appearing more slowly when it is actually looked at.
+        </Hint>
+    </CheckField>
+
+    <FormField Label="Total budget (MB)" For="total">
+        <ChildContent>
+            <input id="total" type="number" @bind="_edited.FileCache.MaxTotalSizeInMegabytes" />
+        </ChildContent>
+        <Hint>
+            Never more than half the machine's memory, so on a 2 GB server a larger number is reduced to
+            about 1 GB. The dashboard shows what is actually being used.
+        </Hint>
+        <Restart>Takes effect after the server is restarted.</Restart>
+    </FormField>
+
+    <FormField Label="Largest cached file (MB)" For="perFile">
+        <ChildContent>
+            <input id="perFile" type="number" @bind="_edited.FileCache.MaxFileSizeInMegabytes" />
+        </ChildContent>
+        <Hint>
+            Larger files are always read straight from the disc. This is also capped at half the total
+            budget, so one film cannot fill the whole cache.
+        </Hint>
+    </FormField>
+
+    <FormField Label="Media lifetime (minutes)" For="mediaSliding">
+        <ChildContent>
+            <input id="mediaSliding" type="number" @bind="_edited.FileCache.MediaSlidingExpirationInMinutes" />
+        </ChildContent>
+        <Hint>Extended every time the file is used, so something being watched keeps its place.</Hint>
+    </FormField>
+
+    <FormField Label="Preview lifetime (minutes)" For="thumbSliding">
+        <ChildContent>
+            <input id="thumbSliding" type="number" @bind="_edited.FileCache.ThumbnailSlidingExpirationInMinutes" />
+        </ChildContent>
+        <Hint>
+            Longer than media, because a preview is small and is asked for again every time a television
+            redraws the folder it belongs to.
+        </Hint>
+    </FormField>
+</CollapsiblePanel>
+
+<CollapsiblePanel @key='AdvancedKey("Compatibility")' StartCollapsed="@(!_failed)" Heading="Compatibility">
+    <CheckField Label="Send extra DLNA information" @bind-Value="_edited.Compatibility.SendDlnaResponseHeaders">
+        <Hint>
+            Sends extra details about each file alongside it. Most televisions need this; turn it off only
+            if one stops working after an upgrade.
+        </Hint>
+    </CheckField>
+
+    <CheckField Label="Older device discovery mode" @bind-Value="_edited.Compatibility.UseLegacyInvertedSearchTargetMatch">
+        <Hint>
+            Uses the older way of answering devices that go looking for a media server. Turn it on only if
+            a device found your previous server but cannot find this one.
+        </Hint>
+    </CheckField>
+
+    <FormField Label="Announce interval (seconds)" For="alive">
+        <ChildContent>
+            <input id="alive" type="number" @bind="_edited.Compatibility.SsdpAliveIntervalInSeconds" />
+        </ChildContent>
+        <Hint>
+            How often the server tells the network it is here. A shorter time means televisions find it
+            sooner, at the cost of a little more network traffic.
+        </Hint>
+    </FormField>
+
+    <CheckField Label="Announce to the whole network as well" @bind-Value="_edited.Compatibility.AlsoNotifyBroadcastAddress">
+        <Hint>
+            Sends the server's announcements a second way, for networks that quietly drop the usual one.
+            Leave it on unless a television finds the server twice.
+        </Hint>
+    </CheckField>
+
+    <FormField Label="Maximum items per request" For="maxBrowse">
+        <ChildContent>
+            <input id="maxBrowse" type="number" @bind="_edited.Compatibility.MaxBrowseRequestedCount" />
+        </ChildContent>
+        <Hint>
+            The most items sent to a television at once when it asks for a whole folder. A television that
+            asks for a 25,000-file library in one go gives up before the answer is ready.
+        </Hint>
+    </FormField>
+</CollapsiblePanel>
+
+@* The heading matches the name the validator uses for this section, so a refused value names a panel
+   that is actually on this page. *@
+<CollapsiblePanel @key='AdvancedKey("Database")' StartCollapsed="@(!_failed)" Heading="Database">
+    <FormField Label="Index kept in memory (MB)" For="mmap">
+        <ChildContent>
+            <input id="mmap" type="number" min="0" @bind="_edited.Database.MemoryMapLimitInMegabytes" />
+        </ChildContent>
+        <Hint>
+            How much of the library index file the server may hold in memory to read it faster. Never more
+            than the file's own size. Zero lets the database decide for itself.
+        </Hint>
+        <Restart>
+            Applies as the server opens new connections to the index, so restart to be sure it applies
+            everywhere.
+        </Restart>
+    </FormField>
+
+    <FormField Label="Lookup cache, each connection (MB)" For="dbCache">
+        <ChildContent>
+            <input id="dbCache" type="number" min="0" @bind="_edited.Database.CacheSizeInMegabytes" />
+        </ChildContent>
+        <Hint>
+            Memory for speeding up repeated lookups. This is the amount <em>per connection</em>, and the
+            server keeps a number of them open at once, so the real cost is several times what you type
+            here - a small number is usually the right one. Zero lets the database decide.
+        </Hint>
+        <Restart>
+            Applies as the server opens new connections to the index, so restart to be sure it applies
+            everywhere.
+        </Restart>
+    </FormField>
+
+    <CheckField Label="Keep working data in memory" @bind-Value="_edited.Database.UseMemoryTempStore">
+        <Hint>
+            Lets the database do its sorting and grouping in memory rather than in a temporary file.
+            Faster, but the amount it uses is not bounded, which is why it ships off.
+        </Hint>
+    </CheckField>
+
+    <FormField Label="Report lookups slower than (ms)" For="slowQuery">
+        <ChildContent>
+            <input id="slowQuery" type="number" min="0" @bind="_edited.Database.SlowQueryThresholdInMilliseconds" />
+        </ChildContent>
+        <Hint>
+            Anything slower than this is written to its own log file, which is where to look if browsing
+            feels slow. Zero turns that log off.
+        </Hint>
+    </FormField>
+
+    <FormField Label="Wait for the index before giving up (ms)" For="busyTimeout">
+        <ChildContent>
+            <input id="busyTimeout" type="number" min="0" @bind="_edited.Database.BusyTimeoutInMilliseconds" />
+        </ChildContent>
+        <Hint>
+            Only one thing may write to the index at a time, so a scan and a television can collide. This
+            is how long the second one waits before reporting a failure. Too short and a scan running in
+            the background makes these pages fail.
+        </Hint>
+    </FormField>
+</CollapsiblePanel>
+
+
+<div class="actions">
+    <button class="primary" @onclick="SaveAsync" disabled="@_saving">Save</button>
+    <button @onclick="Reload" disabled="@_saving">Discard changes</button>
+</div>
+
+@code {
+    private DlnaOptions _edited = new();
+    private List<ExtensionMapRow> _extensions = [];
+    private string _sourceFolders = string.Empty;
+    private string _excludeFolders = string.Empty;
+    private string _temporarilyHiddenFolders = string.Empty;
+    private IReadOnlyList<SourceFolderCheck> _sourceFolderChecks = [];
+    private IReadOnlyList<SourceFolderCheck> _uploadFolderChecks = [];
+    private string? _uploadFolderNote;
+    private string? _message;
+    private bool _failed;
+    private bool _saving;
+
+    protected override void OnInitialized()
+    {
+        Reload();
+    }
+
+    /// <remarks>
+    /// The advanced panels are shut until a save is refused, and a refusal names the panel its setting
+    /// lives in - so leaving them shut would point the operator at a panel they cannot see.
+    /// <see cref="CollapsiblePanel.StartCollapsed"/> is read once by design, so the only way to reopen
+    /// one is to change its key and have Blazor build it again.
+    /// <para>
+    /// The panel's name is in the key because siblings may not share one: keying all four on
+    /// <c>_failed</c> alone threw <c>More than one sibling ... has the same key value</c> and the page
+    /// returned 500.
+    /// </para>
+    /// </remarks>
+    private (string Panel, bool Failed) AdvancedKey(string panel)
+    {
+        return (panel, _failed);
+    }
+
+    private void Reload()
+    {
+        // A copy, not the live options: binding straight to the monitor's instance would apply every
+        // keystroke to the running server and leave no way to discard.
+        var current = Options.CurrentValue;
+
+        _edited = new DlnaOptions
+        {
+            Server = Clone(current.Server),
+            Library = Clone(current.Library),
+            Thumbnails = Clone(current.Thumbnails),
+            FileCache = Clone(current.FileCache),
+            Database = Clone(current.Database),
+            Compatibility = Clone(current.Compatibility),
+            Upload = Clone(current.Upload),
+        };
+
+        _sourceFolders = string.Join(Environment.NewLine, current.Library.SourceFolders);
+        _excludeFolders = string.Join(Environment.NewLine, current.Library.ExcludeFolders);
+        _temporarilyHiddenFolders = string.Join(Environment.NewLine, current.Library.TemporarilyHiddenFolders);
+
+        // Rows of their own rather than a binding onto the map itself. Clone copies a dictionary by
+        // reference, so editing it in place would rewrite the running server's settings keystroke by
+        // keystroke - which is exactly what the copy above exists to prevent.
+        _extensions = ExtensionMap.FromOptions(current.Library.MediaFileExtensions);
+        _sourceFolderChecks = [];
+        _uploadFolderChecks = [];
+        _uploadFolderNote = null;
+        _message = null;
+        _failed = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+
+        try
+        {
+            _edited.Library.SourceFolders = SplitLines(_sourceFolders);
+            _edited.Library.ExcludeFolders = SplitLines(_excludeFolders);
+            _edited.Library.TemporarilyHiddenFolders = SplitLines(_temporarilyHiddenFolders);
+
+            // Checked before the options validator, because the validator cannot see these rows - and
+            // an empty or broken map is the one edit on this page that can empty the whole library.
+            var fileTypeProblems = ExtensionMap.Validate(_extensions);
+
+            if (fileTypeProblems.Count > 0)
+            {
+                _failed = true;
+                _message = "Not saved, because of the file types. " + string.Join(" ", fileTypeProblems);
+
+                return;
+            }
+
+            // A fresh map, never the one that was read: see the note in Reload.
+            _edited.Library.MediaFileExtensions = ExtensionMap.ToOptions(_extensions);
+
+            // Validate BEFORE writing. The validator is an IValidateOptions, so on its own it runs only
+            // when something next reads CurrentValue - and by then config.json already holds the bad
+            // value, the file watcher has invalidated the cache, and every reader throws
+            // OptionsValidationException. That includes the announce loop, which stops advertising the
+            // server to every television, and this page, which can then no longer render to undo it.
+            // Recovering from that state needs a shell on the NAS.
+            //
+            // Through the preflight rather than the validator directly, so what is checked is what
+            // startup would see: the defaults are applied first, on a copy. Validating the raw edit
+            // refused values the server accepts - emptying the source folders was reported as fatal
+            // where startup falls back to the application's own folder.
+            var failures = Preflight.Validate(_edited);
+
+            if (failures.Count > 0)
+            {
+                _failed = true;
+                _message = "Not saved, because the server would refuse to start with these values. "
+                    + string.Join(" ", failures);
+
+                return;
+            }
+
+            await Writer.SaveAsync(_edited, CancellationToken.None);
+
+            _failed = false;
+            _message = "Saved. The settings were reloaded straight away; the ones marked as needing a "
+                + "restart take effect the next time the server starts.";
+        }
+        // JsonException and ArgumentException are here for reasons the earlier filter missed:
+        // SerializeToNode throws the first on a value it cannot represent, and Path.GetFullPath throws
+        // the second on a malformed Thumbnails.CacheDirectory - both reachable from this form, and both
+        // used to reach the ErrorBoundary, which loses the page and every unsaved edit on it.
+        catch (Exception exception) when (exception
+            is IOException
+            or UnauthorizedAccessException
+            or JsonException
+            or ArgumentException)
+        {
+            _failed = true;
+            _message = "The settings could not be saved. Check that the folder the server runs from can "
+                + "be written to, and that one of the values is not something the file cannot hold.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void CheckSourceFolders()
+    {
+        // The same split the save performs, so what is checked is exactly what would be written.
+        _sourceFolderChecks = SourceFolders.Check(SplitLines(_sourceFolders));
+    }
+
+    /// <remarks>
+    /// An empty folder is a legitimate setting here rather than a path to look up - it means an upload may
+    /// go to any source folder - so it is answered in words instead of being handed to the checker, which
+    /// would call it "Blank." and colour it as a fault.
+    /// </remarks>
+    private void CheckUploadFolder()
+    {
+        var folder = _edited.Upload.DestinationFolder;
+
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            _uploadFolderChecks = [];
+            _uploadFolderNote = "Empty, so an upload may go to any of your source folders. Check those above.";
+
+            return;
+        }
+
+        _uploadFolderChecks = SourceFolders.Check([folder]);
+        _uploadFolderNote = null;
+    }
+
+    private static List<string> SplitLines(string value)
+    {
+        return value
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+    }
+
+    /// <remarks>
+    /// Shallow per section, which is all that is needed: every option is a value or a string, and the two
+    /// collections are rebuilt from the text areas on save.
+    /// </remarks>
+    private static T Clone<T>(T source) where T : new()
+    {
+        var copy = new T();
+
+        foreach (var property in typeof(T).GetProperties())
+        {
+            if (property.CanRead && property.CanWrite)
+            {
+                property.SetValue(copy, property.GetValue(source));
+            }
+        }
+
+        return copy;
+    }
+}

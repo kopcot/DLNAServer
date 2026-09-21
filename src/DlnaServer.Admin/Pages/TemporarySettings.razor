@@ -1,0 +1,119 @@
+@page "/admin/settings/temporary"
+@rendermode InteractiveServer
+@inject ITemporaryFolderVisibility Visibility
+@inject ITechnicalTooltips Tooltips
+@inject IMediaFormatter Fmt
+
+<PageHeader Title="Temporary settings">
+    Settings that apply the moment you press the button and are <strong>not</strong> written to your
+    settings file. The server forgets them when it restarts.
+</PageHeader>
+
+<Notice IsBad="false" Message="@_message" />
+
+<Panel Heading="Show temporarily hidden folders">
+    <p class="muted">
+        The folders listed under <em>Temporarily hidden folders</em> on the Settings page are indexed and
+        kept up to date, but are not shown and cannot be played. This shows them again for a while.
+    </p>
+
+    @if (Visibility.IsVisible)
+    {
+        <p>They are being shown, until @Fmt.Clock(Visibility.VisibleUntilUtc).</p>
+
+        <div class="actions">
+            <button @onclick="Hide">Hide now</button>
+        </div>
+    }
+    else
+    {
+        <p class="muted">They are hidden.</p>
+
+        <div class="actions">
+            <input id="showMinutes" type="number" min="@MinMinutes" max="@MaxMinutes" @bind="_minutes" style="width:80px" />
+            <span class="muted">minute(s)</span>
+            <button class="primary" @onclick="Show">Show now</button>
+        </div>
+    }
+
+    <p class="muted">
+        A television already looking at a folder will not notice either way until it browses again &mdash;
+        nothing in DLNA tells it the library has changed.
+    </p>
+</Panel>
+
+<Panel Heading="Show where each value comes from">
+    <p class="muted">
+        Every figure on these pages is read from somewhere - a setting, a counter, a column. While this is
+        on, hovering one shows which. It is off by default because it puts a dotted underline under a
+        large part of every page.
+    </p>
+
+    @if (Tooltips.IsEnabled)
+    {
+        <p>They are being shown, until @Fmt.Clock(Tooltips.EnabledUntilUtc).</p>
+
+        <div class="actions">
+            <button @onclick="HideTooltips">Hide now</button>
+        </div>
+    }
+    else
+    {
+        <p class="muted">They are hidden.</p>
+
+        <div class="actions">
+            <input id="tooltipMinutes" type="number" min="@MinMinutes" max="@MaxMinutes"
+                   @bind="_tooltipMinutes" style="width:80px" />
+            <span class="muted">minute(s)</span>
+            <button class="primary" @onclick="ShowTooltips">Show now</button>
+        </div>
+    }
+
+    <p class="muted">
+        A page already open picks this up the next time it draws something. Reload it if nothing changes.
+    </p>
+</Panel>
+
+@code {
+    private const int MinMinutes = 1;
+    private const int MaxMinutes = 1440;
+
+    private int _minutes = 15;
+    private int _tooltipMinutes = 15;
+    private string? _message;
+
+    /// <remarks>
+    /// Straight to the singleton, never through <c>ISettingsWriter</c>. That writer serialises the whole
+    /// options graph, so a setting held anywhere under <c>DlnaOptions</c> reaches <c>config.json</c> on the
+    /// next save - which is the one thing everything on this page must not do.
+    /// </remarks>
+    private void Show()
+    {
+        var minutes = Math.Clamp(_minutes, MinMinutes, MaxMinutes);
+        _minutes = minutes;
+
+        Visibility.ShowFor(TimeSpan.FromMinutes(minutes));
+        _message = $"Temporarily hidden folders are showing for {minutes} minute(s).";
+    }
+
+    private void Hide()
+    {
+        Visibility.Hide();
+        _message = "Temporarily hidden folders are hidden again.";
+    }
+
+    private void ShowTooltips()
+    {
+        var minutes = Math.Clamp(_tooltipMinutes, MinMinutes, MaxMinutes);
+        _tooltipMinutes = minutes;
+
+        Tooltips.EnableFor(TimeSpan.FromMinutes(minutes));
+        _message = $"Values show where they come from for {minutes} minute(s).";
+    }
+
+    private void HideTooltips()
+    {
+        Tooltips.Disable();
+        _message = "Values no longer show where they come from.";
+    }
+}

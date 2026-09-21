@@ -1,0 +1,28 @@
+@* The prose under a form control: what the setting does, and whether it needs a restart.
+
+   Shared by FormField and CheckField, which render different controls above it and the same two notes
+   below it. *@
+
+@if (Hint is not null)
+{
+    <div class="hint">@Hint</div>
+}
+
+@if (Restart is not null)
+{
+    <div class="restart">@Restart</div>
+}
+
+@code {
+    /// <summary>
+    /// What the setting does, in prose.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Hint { get; set; }
+
+    /// <summary>
+    /// A note that the value only takes effect after the server is restarted.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Restart { get; set; }
+}

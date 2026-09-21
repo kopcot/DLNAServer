@@ -1,0 +1,84 @@
+# Overlay that puts ONLY the admin pages on the internet, behind TLS and a password.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.admin-remote.yml up -d
+#
+# ---------------------------------------------------------------------------------------------------
+# READ THIS FIRST
+#
+# The admin pages can restart the server, stop it, delete the index and rewrite config.json. The server
+# itself has NO authentication of any kind - that is a deliberate trusted-LAN decision recorded in
+# ManageController's own remarks. Everything protecting this is in the proxy below. If the password is
+# weak, the admin UI is open.
+#
+# A VPN is the better answer and costs less to run. WireGuard on the router or the NAS gives you the
+# admin pages, the media port, SSH and everything else, with no public surface at all. Use this file
+# only when a VPN genuinely is not an option.
+#
+# WHAT THIS DOES NOT EXPOSE, and it is worth knowing why: /manage lives on the MEDIA port, not the admin
+# port, and AdminSurfaceMiddleware enforces that separation for Blazor paths too. Verified against the
+# running server - /manage/database answers 200 on 26852 and 404 on 26853. So publishing the admin port
+# does not publish /manage/stop.
+#
+# "Never publish the media port" is what this used to say next, and it described a control that does not
+# exist. docker-compose.yml mandates network_mode: host because SSDP needs multicast, and Program.cs binds
+# both ports with ListenAnyIP - so the media port is already on every interface and there is nothing to
+# publish or withhold. The HOST FIREWALL is the only thing confining it.
+#
+# That mattered because ADMIN_HOSTNAME below widens AllowedHosts for the whole PROCESS, not just the admin
+# port - HostFilteringOptions has no per-port form - so setting it also let internet-origin requests past
+# the one in-process check that had been refusing them on the media port. The hostname is not a secret
+# either: the Let's Encrypt certificate for it is published in the Certificate Transparency logs.
+# RejectRemoteManagementEndpointFilter now refuses /manage from any non-private remote address, which is
+# the actual control. Keep the firewall anyway - the filter protects /manage, not the media itself.
+# ---------------------------------------------------------------------------------------------------
+
+services:
+  dlna:
+    environment:
+      # WITHOUT THIS YOU GET A 400 AND NOTHING ELSE. AllowedHostsDefaults replaces the shipped wildcard
+      # with loopback, this machine's name and its LAN addresses - a DNS-rebinding guard - so a request
+      # arriving as dlna.example.com matches nothing and host filtering rejects it before any page runs.
+      # Naming hosts explicitly is the documented escape hatch: Apply() returns early on a non-wildcard
+      # list. Semicolon-separated. Keep localhost so the container's own healthcheck still passes.
+      AllowedHosts: "${ADMIN_HOSTNAME:?set ADMIN_HOSTNAME in .env};localhost;127.0.0.1"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: dlna-admin-proxy
+    restart: unless-stopped
+
+    # Host networking so it can reach the DLNA container on 127.0.0.1 - that container is on the host
+    # stack too, because SSDP needs multicast. Caddy binds 80 and 443 on the host directly.
+    network_mode: host
+
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+    environment:
+      # The name your certificate is issued for and the only name that will be answered.
+      ADMIN_HOSTNAME: ${ADMIN_HOSTNAME:?set ADMIN_HOSTNAME in .env}
+
+      # bcrypt hash, NOT the password. Generate it with:
+      #     docker run --rm caddy:2-alpine caddy hash-password --plaintext 'your-password'
+      # Escape every $ as $$ when you paste it into .env, or compose will treat it as a variable.
+      ADMIN_USER: ${ADMIN_USER:?set ADMIN_USER in .env}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?set ADMIN_PASSWORD_HASH in .env}
+
+      ADMIN_PORT: ${ADMIN_PORT:-26853}
+
+    depends_on:
+      - dlna
+
+    cap_drop:
+      - ALL
+    # Binding 80 and 443 is the one privilege it does need.
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  caddy-data:
+  caddy-config:

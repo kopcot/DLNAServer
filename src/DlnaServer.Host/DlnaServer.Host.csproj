@@ -1,0 +1,99 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.HighPerformance" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="SoapCore" />
+  </ItemGroup>
+
+  <!-- Renames only THIS assembly, so `dotnet <name>.dll` launches the server under a deployment-chosen
+       name. Setting AssemblyName on the command line instead applies it to every project in the graph -
+       Core, Persistence, Media and Upnp all become that one name, the compiler sees four references
+       sharing one identity, and the Host fails to compile against types that have silently vanished.
+       NasBuild.sh passes this property; nothing else reads it. -->
+  <PropertyGroup Condition="'$(PublishAssemblyName)' != ''">
+    <AssemblyName>$(PublishAssemblyName)</AssemblyName>
+  </PropertyGroup>
+
+  <!-- HERE, not in Directory.Build.props, and not only in runtimeconfig.template.json. Both of those
+       were tried and both are silently overridden:
+
+       Directory.Build.props is imported by Microsoft.Common.props, which runs BEFORE the Web SDK
+       defines OutputType - so its `Condition="'$(OutputType)' == 'Exe'"` PropertyGroup evaluated
+       against an empty string and never applied at all. It had never applied. Server GC looked
+       configured because Microsoft.NET.Sdk.Web defaults ServerGarbageCollection to true anyway, so the
+       dead setting agreed with reality and nobody noticed. ConcurrentGarbageCollection, which does NOT
+       match an SDK default, evaluated to empty - confirmed with `dotnet msbuild -getProperty`.
+
+       The template loses too: the SDK writes System.GC.Server from this property over whatever the
+       template says, so a template value of false and a property value of true produced true.
+
+       A PropertyGroup in the project body is evaluated after Sdk.props and before Sdk.targets, which is
+       the only place that wins. Verify a change here by reading the value back out of
+       bin/<config>/net8.0/DlnaServer.Host.runtimeconfig.json - never by reading the source.
+
+       Why workstation GC: server GC reserves a heap and a GC thread per logical core, and the NAS
+       reports 4 - four of each for a workload whose managed-heap target is 60 MB and whose concurrency
+       is a handful of televisions. No single heap ever filled, which is the mechanism behind the reading
+       of 6 gen0 collections in 42 minutes. Review finding 34. -->
+  <PropertyGroup>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <!-- DlnaServer.Admin holds the Blazor admin UI and is referenced as of M8. Its components are served
+       on the admin port only, through the port filter on MapRazorComponents in Program.cs. -->
+  <ItemGroup>
+    <ProjectReference Include="..\DlnaServer.Core\DlnaServer.Core.csproj" />
+    <ProjectReference Include="..\DlnaServer.Persistence\DlnaServer.Persistence.csproj" />
+    <ProjectReference Include="..\DlnaServer.Media\DlnaServer.Media.csproj" />
+    <ProjectReference Include="..\DlnaServer.Upnp\DlnaServer.Upnp.csproj" />
+    <ProjectReference Include="..\DlnaServer.Admin\DlnaServer.Admin.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="appsettings.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+    <Content Update="config.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+  </ItemGroup>
+
+  <!-- The two documents an operator is owed beside the binaries: what changed in this version, and the
+       terms it is under. They stay at the solution root, where a reader of the repository finds them
+       next to README.md, and are LINKED here rather than moved - so PLAN.md's rule that release-notes.md
+       is updated as part of every change still points at one file in one place.
+
+       Link is what puts them in the output ROOT rather than under a `../../` path, the same reason the
+       Resources glob below names an explicit TargetPath.
+
+       These two Includes depend on `.dockerignore` keeping its `!release-notes.md` negation; the reason
+       is written on that line. LICENSE has no extension and was never excluded. -->
+  <ItemGroup>
+    <Content Include="../../release-notes.md" Link="release-notes.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="../../LICENSE" Link="LICENSE">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="DlnaServer.IntegrationTests" />
+  </ItemGroup>
+
+  <!-- Icons are protocol assets: description.xml advertises them in its iconList and DIDL-Lite uses
+       them as fallback thumbnails. Copied byte-for-byte from the reference so renderers see no change. -->
+  <ItemGroup>
+    <!-- Forward slashes, and an explicit TargetPath. With `Resources\**\*` the backslash is not a
+         directory separator on Linux, so %(RecursiveDir) resolves to nothing and every file is copied
+         into the output root: the NAS deployment had folder.jpg and contentDirectory.xml loose beside
+         the assemblies, and /icon/* and /SCPD/* answered 404 because they resolve through
+         Resources/images/icons and Resources/xml. Naming the target path keeps the layout identical on
+         both platforms rather than relying on how the glob is interpreted. -->
+    <Content Include="Resources/**/*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Resources/%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
+    </Content>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,118 @@
+@* Corrects what one file claims to be on the wire - its type and its compatibility profile.
+
+   These two columns are written once, when the file is first indexed, from the extension map. Nothing
+   re-derives them afterwards, which is what makes an edit here worth making: it survives every rescan.
+   It is also the only way to correct a single file without changing the map for every file sharing its
+   extension - a folder of .mkv files where one is really something else.
+
+   Its own component rather than markup on the preview page, for the reason ProcessingActions is one:
+   this writes to the library, and MediaFileFacts - which hosts it - states facts for listing tiles too
+   and must stay read-only. *@
+
+@inject IMediaFileRepository Files
+@inject IAdminOperationGate Gate
+
+@* Shut to begin with. The facts above it are what the panel is for; this is the rarely-wanted correction
+   underneath them, and open by default it would put a form between them and everything below. *@
+<CollapsiblePanel Heading="Change file type" StartCollapsed="true">
+    <p class="muted">
+        What this file tells televisions it is. Changing it here affects this file only - the list that
+        types files by their extension is on the Settings page.
+    </p>
+
+    <FormField Label="File type" For="fileTypeMime">
+        <ChildContent>
+            <select id="fileTypeMime" @bind="_mime">
+                @* Servable, not All: the catalogue also holds subtitle types, which would collapse the
+                   item to a bare object.item, and types the server advertises no extension for, which a
+                   renderer filtering on SourceProtocolInfo then drops. *@
+                @foreach (var info in DlnaMimeCatalog.Servable)
+                {
+                    <option value="@info.Mime">@info.Mime.ToMimeString()</option>
+                }
+            </select>
+        </ChildContent>
+        <Hint>Changing this also changes whether the file is offered as a video, a track or a picture.</Hint>
+    </FormField>
+
+    @* A datalist, not a select, for the reason ExtensionMapEditor gives. *@
+    <FormField Label="Compatibility profile" For="fileTypeProfile">
+        <ChildContent>
+            <input id="fileTypeProfile" type="text" list="fileTypeProfiles"
+                   placeholder="leave empty for the standard profile" @bind="_profileName" />
+            <datalist id="fileTypeProfiles">
+                @foreach (var profile in _mime.ToProfileNames())
+                {
+                    <option value="@profile"></option>
+                }
+            </datalist>
+        </ChildContent>
+        <Hint>Leave this empty unless a television refuses the file - empty means the standard profile for the type. Letters, digits and underscores only.</Hint>
+    </FormField>
+
+    <div class="actions">
+        <button class="primary" @onclick="SaveAsync" disabled="@_busy">Save</button>
+    </div>
+    <Notice Message="@_message" />
+</CollapsiblePanel>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public MediaFileDto File { get; set; } = null!;
+
+    /// <summary>
+    /// Raised once a change has been stored, so the page can re-read what it is showing.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnCompleted { get; set; }
+
+    private DlnaMime _mime;
+    private string? _profileName;
+    private string? _message;
+    private bool _busy;
+
+    // Which file the controls were filled from. Seeding on every parameter set instead would throw away
+    // a half-made edit whenever the page re-rendered for an unrelated reason, and the preview page
+    // re-renders on every sibling step and every completed action.
+    private Guid _seededFileId;
+
+    protected override void OnParametersSet()
+    {
+        if (_seededFileId == File.PublicId)
+        {
+            return;
+        }
+
+        _seededFileId = File.PublicId;
+        _mime = File.Mime;
+        _profileName = File.DlnaProfileName;
+        _message = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+
+        try
+        {
+            // Gated for the reason ProcessingActions is: this component's own button is disabled while it
+            // runs, but the page's navigation is not, and a second operation on the circuit's shared
+            // DbContext tears the circuit down.
+            var stored = await Gate.RunAsync(
+                token => Files.UpdateDlnaMappingAsync(File.PublicId, _mime, _profileName, token),
+                CancellationToken.None);
+
+            _message = stored
+                ? $"This file is now {_mime.ToMimeString()}. Televisions see the change the next time they browse."
+                : "Nothing was changed - either that file is no longer in your library, or the compatibility "
+                    + "profile is not a name this server can advertise (letters, digits and underscores).";
+
+            await OnCompleted.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <title>ZEN DLNA Server</title>
+    @* The server's own device icon, served on the admin port so no admin page names the media port. *@
+    <link rel="icon" href="/admin/favicon.ico" />
+    <link rel="stylesheet" href="_content/DlnaServer.Admin/admin.css" />
+    <HeadOutlet />
+</head>
+<body>
+    @* Static by default, interactive per page. Making the whole router interactive opened a
+       SignalR circuit for every page - and a circuit owns a DI scope holding a DlnaDbContext and
+       therefore a pooled SQLite connection with its own page cache. The Dashboard is the landing page
+       and the one most likely left open in a tab, and it has no buttons at all: it now costs a render
+       and nothing else. Every page that does have controls opts in with @@rendermode InteractiveServer,
+       and a page that forgets to loses its buttons visibly rather than silently. *@
+    <Routes />
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>

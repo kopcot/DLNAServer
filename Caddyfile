@@ -1,0 +1,48 @@
+# Fronts the DLNA admin pages with TLS and a password. Used by docker-compose.admin-remote.yml.
+#
+# Only the name below is answered. A request arriving on the IP, or under any other name, gets no
+# response at all rather than a redirect - which keeps the admin UI out of the way of anything scanning
+# address ranges, and matches what AllowedHosts on the server itself will accept.
+
+{$ADMIN_HOSTNAME} {
+	# Automatic certificate from Let's Encrypt. Needs port 80 reachable for the challenge and the DNS
+	# name pointing here. Remove this whole block and use `tls internal` if you are testing.
+	encode zstd gzip
+
+	basic_auth {
+		{$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
+	}
+
+	# The Blazor circuit is a WebSocket. Caddy's reverse_proxy upgrades automatically, which is the
+	# single most common thing to get wrong here: with a proxy that does not, every admin page renders
+	# once, looks correct, and then does nothing when clicked, because the circuit never connected.
+	reverse_proxy 127.0.0.1:{$ADMIN_PORT} {
+		# The server reads none of these - every confinement control keys on the connection's local
+		# port, not on the Host header - but they keep the request honest for logging and for any
+		# redirect the framework generates.
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output file /data/admin-access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
+
+# Anything arriving under another name, including the bare IP, is refused without a response body. Caddy
+# would otherwise serve a default certificate error page that confirms something is listening here.
+:443 {
+	tls internal
+	abort
+}

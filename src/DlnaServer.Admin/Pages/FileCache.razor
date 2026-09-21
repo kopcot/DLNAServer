@@ -1,0 +1,192 @@
+@page "/admin/cache"
+@rendermode InteractiveServer
+@inherits AdminPageBase
+@using System.Diagnostics
+@inject IServedFileCache FileCacheStore
+@inject IIndexMaintenance Maintenance
+@inject IMediaFormatter Fmt
+
+<PageHeader Title="Recently served files">
+    Files that have already been played are kept in memory for a while, so the disc does not have to spin
+    up to read the same file twice.
+</PageHeader>
+
+<Notice Message="@Message" />
+
+<Panel Class="pinned">
+    <StatGrid>
+        <StatTile Label="In use" Source="ServedFileCacheReport.BytesHeld (MB)">@Fmt.Megabytes(_report.BytesHeld)</StatTile>
+        <StatTile Label="Limit" Source="config.json Dlna.FileCache.MaxTotalSizeInMegabytes (MB)">@Fmt.Megabytes(_report.BudgetInBytes)</StatTile>
+        <StatTile Label="Largest file kept" Source="config.json Dlna.FileCache.MaxFileSizeInMegabytes (MB)">@Fmt.Megabytes(_report.MaxFileSizeInBytes)</StatTile>
+        <StatTile Label="Files kept" Source="ServedFileCacheReport.EntryCount">@_report.EntryCount</StatTile>
+        @* Kept short deliberately: a third source pushed the old "From memory / from disc" wording onto
+           two lines, which wraps the tile and drops "Reading now" onto a row of its own. *@
+        <StatTile Label="Memory / disc / database" Source="ServedFileCacheReport Hits / (Misses - DatabaseHits) / DatabaseHits">@_report.Hits / @DiscReads() / @_report.DatabaseHits</StatTile>
+        <StatTile Label="Reading now" Source="ServedFileCacheReport.ReadsInFlight">@_report.ReadsInFlight</StatTile>
+    </StatGrid>
+    <div class="actions" style="margin-top:16px">
+        <button @onclick="Refresh" disabled="@_busy">Refresh</button>
+        <button class="danger" @onclick="ClearAsync" disabled="@_busy">Empty the memory</button>
+    </div>
+    <p class="muted">
+        Emptying it also asks the system to hand the memory back straight away, rather than releasing it
+        whenever it next gets round to it. This covers the memory the server keeps for looking things up
+        in its own index as well, which is usually the larger part, so expect the next few pages to be a
+        little slower while it fills again.
+    </p>
+</Panel>
+
+<Panel Heading="@($"Files in memory ({_report.Paths.Count})")">
+    @*
+        Virtualized: a full cache on the real library is hundreds of rows, and every one of them was being
+        rendered into the DOM to show the twenty that fit on screen. SpacerElement is tr because the spacers
+        are children of tbody, where a div would be invalid.
+    *@
+    <Scroller>
+        <table class="paths">
+            <tbody>
+                <Virtualize Items="_paths" ItemSize="PathRowHeight" OverscanCount="10" SpacerElement="tr" Context="path">
+                    <ItemContent>
+                        <tr @key="path"><td title="@path">@path</td></tr>
+                    </ItemContent>
+                    <Placeholder>
+                        @* Only rendered when items come from an ItemsProvider; with an in-memory Items
+                           collection the rows are already there and this never shows. *@
+                        <tr><td class="muted">Loading&hellip;</td></tr>
+                    </Placeholder>
+                    <EmptyContent>
+                        <tr><td class="muted">Nothing is being kept in memory.</td></tr>
+                    </EmptyContent>
+                </Virtualize>
+            </tbody>
+        </table>
+    </Scroller>
+</Panel>
+
+@code {
+    /// <summary>
+    /// Height of one path row in pixels, which <see cref="Virtualize{TItem}"/> needs in advance.
+    /// </summary>
+    /// <remarks>
+    /// Measured from the rendered table rather than derived, and it has to stay in step with the padding
+    /// and font size of <c>table.paths td</c>. Too small and the first render puts rows outside the
+    /// visible region, which costs a second render and can leave the scroll position showing the wrong
+    /// rows on a reload.
+    /// </remarks>
+    private const float PathRowHeight = 32.5f;
+
+    private ServedFileCacheReport _report = null!;
+
+    // Virtualize binds Items to ICollection<T>, which the report's IReadOnlyList is not.
+    private List<string> _paths = [];
+
+    // The work below blocks for the length of two compacting gen2 collections, and the button stayed
+    // live throughout - a second press re-entered it.
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        Reload();
+    }
+
+    private void Refresh()
+    {
+        Message = null;
+
+        Reload();
+    }
+
+    /// <remarks>
+    /// Three steps, in this order, because each frees memory the next one cannot see. Emptying the cache
+    /// and collecting only ever touched the managed heap, which on this server is the smaller half: read
+    /// live on the NAS 2026-09-06, the process held a 562 MB working set against 44 MB of GC-committed
+    /// bytes. Most of the rest is SQLite page cache held by pooled connections, freed by the first step
+    /// and handed to the C allocator, which then keeps it until the last step asks for it back.
+    /// </remarks>
+    private async Task ClearAsync()
+    {
+        _busy = true;
+
+        try
+        {
+            await ReleaseAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReleaseAsync()
+    {
+        var before = CurrentWorkingSetInBytes();
+        var cleared = FileCacheStore.Clear();
+        var databaseReleased = true;
+
+        try
+        {
+            // Through the gate, which this page was alone in skipping. IIndexMaintenance is scoped and
+            // runs PRAGMA shrink_memory on the same DlnaDbContext every component in this circuit shares,
+            // so a second UI event dispatched while this await was outstanding started a second operation
+            // on it - "A second operation was started on this context instance", thrown inside an event
+            // handler, which tears the circuit down and leaves a reconnect banner. Six sibling pages
+            // already route through here for exactly that reason.
+            //
+            // CancellationToken.None inside the gate, deliberately: a half-released connection pool is
+            // worse than a slow one, so navigating away must not abandon it part-way.
+            await RunGatedAsync(_ => Maintenance.ReleaseMemoryAsync(CancellationToken.None));
+        }
+        catch (DbException)
+        {
+            // The rest of the release is still worth doing, and the message below says what was missed.
+            databaseReleased = false;
+        }
+
+        // Outside the gate on purpose: these touch no DbContext, and holding it across two blocking
+        // compacting collections would stall every other page in the circuit for their duration.
+        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+
+        _ = NativeHeapTrimmer.TryTrim();
+
+        var freed = before - CurrentWorkingSetInBytes();
+
+        Message = (freed > 0
+            ? $"Released {cleared} file(s) and handed back {Fmt.Megabytes(freed)}."
+            : $"Released {cleared} file(s). The system did not hand any memory back this time.")
+            + (databaseReleased
+                ? string.Empty
+                : " The index lookup memory was in use and could not be released - try again in a moment.");
+
+        Reload();
+    }
+
+    private static long CurrentWorkingSetInBytes()
+    {
+        using var process = Process.GetCurrentProcess();
+
+        return process.WorkingSet64;
+    }
+
+    private void Reload()
+    {
+        _report = FileCacheStore.Describe();
+        _paths = [.. _report.Paths];
+    }
+
+    /// <summary>
+    /// How many payloads came off the disc, which the cache does not count directly.
+    /// </summary>
+    /// <remarks>
+    /// A preview taken from the database misses the memory cache on its way past, so it lands in
+    /// <c>Misses</c> alongside the genuine disc reads and used to be shown as one. Subtracting is an
+    /// upper bound rather than an exact count - see <see cref="ServedFileCacheReport.DatabaseHits"/> -
+    /// and the clamp is what keeps a report read between the two counters from showing a negative.
+    /// </remarks>
+    private long DiscReads()
+    {
+        return Math.Max(_report.Misses - _report.DatabaseHits, 0);
+    }
+}

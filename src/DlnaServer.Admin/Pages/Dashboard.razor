@@ -1,0 +1,156 @@
+@page "/admin"
+@inherits AdminPageBase
+@inject IServedFileCache Cache
+@inject IMediaFileRepository Files
+@inject IMediaDirectoryRepository Directories
+@inject IApiBlocker Blocker
+@inject IMediaCapabilities Capabilities
+@inject IMediaFormatter Fmt
+
+<PageHeader Title="Dashboard">
+    What the server is holding, and how much of this machine it is using.
+</PageHeader>
+
+@if (_blocked is not null)
+{
+    <Notice IsBad="true">
+        Televisions are paused until @Fmt.Clock(_blocked). These pages keep working.
+    </Notice>
+}
+
+@* Shown only when the answer is a definite no. Availability resolves on first use, so null means nothing
+   has needed ffmpeg yet and a fresh start must not raise a false alarm. *@
+@if (Capabilities.IsVideoProcessingAvailable == false)
+{
+    <Notice IsBad="true">
+        <strong>Video support is not installed</strong>, so lengths, picture sizes, sound tracks and
+        subtitles are not being read, and no previews are being made for videos. The search page has no
+        languages to choose from either. Browsing and playing your media still work normally.
+        To fix it, put the video helper programs in the <code>ffmpeg</code> folder next to the server,
+        then use <em>Rebuild all file details</em> on the Maintenance page.
+    </Notice>
+}
+
+<Panel Heading="Server">
+    <StatGrid>
+        <StatTile Label="Running for" Source="Process start time (elapsed)">@Fmt.Elapsed(_uptime)</StatTile>
+        <StatTile Label="Started" Source="Process start time (UTC)">@Fmt.Day(_startedUtc) @Fmt.Clock(_startedUtc)</StatTile>
+    </StatGrid>
+    <p class="muted">
+        Counted from when the server last started. Restarting it, changing a setting marked as needing a
+        restart, or <em>Recreate database</em> all set this back to nothing - so a figure much smaller
+        than you expect means something restarted the server.
+    </p>
+</Panel>
+
+<Panel Heading="Memory">
+    <StatGrid>
+        <StatTile Label="Total in use" Source="Working Set (MB)" IsOverTarget="_workingSetBytes > WorkingSetTargetBytes">@Fmt.Megabytes(_workingSetBytes)</StatTile>
+        <StatTile Label="Used by the server itself" Source="GC Total Memory (MB)">@Fmt.Megabytes(_managedBytes)</StatTile>
+        <StatTile Label="Used by large items" Source="GC Large Object Heap (MB)">@Fmt.Megabytes(_lohBytes)</StatTile>
+        <StatTile Label="Tidy-ups so far" Source="GC Collections Gen0/Gen1/Gen2">@_gen0 / @_gen1 / @_gen2</StatTile>
+    </StatGrid>
+    <p class="muted">
+        <em>Total in use</em> is the figure that matters on a small machine; the target is
+        @WorkingSetTargetMb MB. <em>Used by large items</em> is mostly the recently served files below.
+    </p>
+</Panel>
+
+<Panel Heading="Recently served files">
+    <StatGrid>
+        @* Formatted through IMediaFormatter, which is also what the File cache page uses. These two tiles
+           once divided with two long operands and truncated, so the two pages reported different numbers
+           for the same bytes. *@
+        <StatTile Label="In use" Source="ServedFileCacheReport.BytesHeld (MB)">@Fmt.Megabytes(_report.BytesHeld)</StatTile>
+        <StatTile Label="Limit" Source="config.json Dlna.FileCache.MaxTotalSizeInMegabytes (MB)">@Fmt.Megabytes(_report.BudgetInBytes)</StatTile>
+        <StatTile Label="Files kept" Source="ServedFileCacheReport.EntryCount">@_report.EntryCount</StatTile>
+        @* Not "Served from memory" any more: previews read out of the database count towards this too,
+           and the drives are what the figure is really about. *@
+        <StatTile Label="Served without the disc" Source="ServedFileCacheReport (Hits + DatabaseHits) / (Hits + Misses) (%)">@HitRate()</StatTile>
+    </StatGrid>
+</Panel>
+
+<Panel Heading="Library">
+    <StatGrid>
+        <StatTile Label="Files" Source="database Files row count">@_fileCount</StatTile>
+        <StatTile Label="Folders" Source="database Directories row count">@_directoryCount</StatTile>
+    </StatGrid>
+</Panel>
+
+@code {
+    private const int WorkingSetTargetMb = 200;
+
+    private const long WorkingSetTargetBytes = WorkingSetTargetMb * 1024L * 1024L;
+
+    private ServedFileCacheReport _report = null!;
+    private DateTimeOffset? _blocked;
+    private int _fileCount;
+    private int _directoryCount;
+    private long _workingSetBytes;
+    private long _managedBytes;
+    private long _lohBytes;
+    private int _gen0;
+    private int _gen1;
+    private int _gen2;
+    private TimeSpan _uptime;
+    private DateTime _startedUtc;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _report = Cache.Describe();
+        _blocked = Blocker.IsBlocked ? Blocker.BlockedUntilUtc : null;
+
+        // Gated: this page's two counts shared the circuit's DbContext with whatever a Maintenance or
+        // Preview action was still running, and an ungated read racing a gated write is the whole
+        // failure mode IAdminOperationGate exists for.
+        await RunGatedAsync(
+            async token =>
+            {
+                _fileCount = await Files.CountAsync(token);
+                _directoryCount = await Directories.CountAsync(token);
+            });
+
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
+        var gc = GC.GetGCMemoryInfo();
+
+        // Process.StartTime is local, and subtracting it from a UTC now would report the timezone offset
+        // as uptime - which on this machine would read as a server that started two hours in the future.
+        _startedUtc = process.StartTime.ToUniversalTime();
+        _uptime = DateTime.UtcNow - _startedUtc;
+
+        _workingSetBytes = process.WorkingSet64;
+        _managedBytes = GC.GetTotalMemory(forceFullCollection: false);
+        _gen0 = GC.CollectionCount(0);
+        _gen1 = GC.CollectionCount(1);
+        _gen2 = GC.CollectionCount(2);
+
+        // Index 3 is the large object heap, in the fixed order the runtime reports generations.
+        _lohBytes = gc.GenerationInfo.Length > 3
+            ? gc.GenerationInfo[3].SizeAfterBytes
+            : 0;
+    }
+
+    /// <summary>
+    /// How often something was served without the disc having to be read.
+    /// </summary>
+    /// <remarks>
+    /// Previews taken from the database count towards this alongside the memory hits: the reason this
+    /// figure is on the dashboard at all is acoustic, and a preview read out of SQLite leaves the drives
+    /// as untouched as one read out of memory. They are not already in <c>Hits</c> - a payload supplied
+    /// from the database misses the memory cache on its way past, so before this it was counted against
+    /// the rate rather than for it.
+    /// <para>
+    /// The denominator stays <c>Hits + Misses</c> for that same reason: the database reads are inside
+    /// <c>Misses</c>, so adding them again would count each one twice.
+    /// </para>
+    /// </remarks>
+    private string HitRate()
+    {
+        var total = _report.Hits + _report.Misses;
+        var withoutDisc = _report.Hits + _report.DatabaseHits;
+
+        return total == 0
+            ? "nothing served yet"
+            : string.Create(CultureInfo.InvariantCulture, $"{withoutDisc * 100.0 / total:0}%");
+    }
+}

@@ -1,0 +1,106 @@
+{
+  "Dlna": {
+    "Server": {
+      "Port": 26855,
+      "AdminPort": 26856,
+      "ModelName": "1.0.0.0",
+      "ManufacturerName": "Kopco",
+      "ManufacturerUrl": "mailto:kopco.t@gmail.com",
+      "DebugMode": false
+    },
+    "Database": {
+      "MemoryMapLimitInMegabytes": 0,
+      "CacheSizeInMegabytes": 2,
+      "UseMemoryTempStore": false,
+      "SlowQueryThresholdInMilliseconds": 50
+    },
+    "Library": {
+      "SourceFolders": [
+        "/share/Media"
+      ],
+      "ExcludeFolders": [
+        ".@__thumb",
+        "@Recycle"
+      ],
+      "TemporarilyHiddenFolders": [],
+      "RecentlyAddedCount": 30,
+      "UseFileCreationDateTime": false,
+      "ReadContainerTags": true,
+      "MediaFileExtensions": {
+        ".mp4": {
+          "Mime": "VideoMp4"
+        },
+        ".mpg": {
+          "Mime": "VideoMpeg"
+        },
+        ".mpeg": {
+          "Mime": "VideoMpeg"
+        },
+        ".avi": {
+          "Mime": "VideoXMsvideo"
+        },
+        ".mkv": {
+          "Mime": "VideoXMatroska"
+        },
+        ".mov": {
+          "Mime": "VideoQuicktime"
+        },
+        ".wmv": {
+          "Mime": "VideoXMswmv"
+        },
+        ".flv": {
+          "Mime": "VideoXFlv"
+        },
+        ".m4v": {
+          "Mime": "VideoMpeg"
+        },
+        ".3gp": {
+          "Mime": "Video3gpp"
+        },
+        ".mp3": {
+          "Mime": "AudioMp4"
+        },
+        ".png": {
+          "Mime": "ImagePng"
+        },
+        ".jpg": {
+          "Mime": "ImageJpeg"
+        },
+        ".jpeg": {
+          "Mime": "ImageJpeg"
+        }
+      }
+    },
+    "Thumbnails": {
+      "SubFolderName": ".@__thumb",
+      "GenerateForVideo": true,
+      "GenerateForImages": true,
+      "GenerateForAudio": true,
+      "StoreInDatabase": true,
+      "MaxWidth": 480,
+      "MaxHeight": 360,
+      "Quality": 75,
+      "DownloadFFmpeg": false
+    },
+    "FileCache": {
+      "Enabled": true,
+      "WarmPreviewsOnBrowse": true,
+      "MaxTotalSizeInMegabytes": 256,
+      "MaxFileSizeInMegabytes": 32,
+      "MediaSlidingExpirationInMinutes": 10,
+      "ThumbnailSlidingExpirationInMinutes": 60
+    },
+    "Upload": {
+      "Enabled": false,
+      "DestinationFolder": null,
+      "MaxSizeInMegabytes": 8192
+    },
+    "Compatibility": {
+      "SendDlnaResponseHeaders": true,
+      "UseLegacyInvertedSearchTargetMatch": false,
+      "SsdpAliveIntervalInSeconds": 30,
+      "AlsoNotifyBroadcastAddress": true,
+      "MaxBrowseRequestedCount": 32
+    }
+  }
+}

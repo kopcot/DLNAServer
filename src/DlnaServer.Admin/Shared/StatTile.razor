@@ -1,0 +1,30 @@
+@* One labelled figure in a statistics grid. Sixteen copies of this markup existed across the dashboard and
+   the file-cache page before it was a component. *@
+
+<div class="stat">
+    <div class="label">@Label</div>
+    <div class="value @(IsOverTarget ? "over" : "")">
+        <Provenance Source="@Source">@ChildContent</Provenance>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Where the figure comes from, shown on hover while technical tooltips are on.
+    /// </summary>
+    [Parameter]
+    public string? Source { get; set; }
+
+    /// <summary>
+    /// Marks the figure as past the target it is measured against, which the stylesheet colours.
+    /// </summary>
+    [Parameter]
+    public bool IsOverTarget { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

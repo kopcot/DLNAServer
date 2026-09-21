@@ -1,0 +1,47 @@
+@* The "showing N of M" line and the button that fetches the next page. Two copies existed on the library
+   page, one for folders and one for files.
+
+   Renders nothing once everything is shown, which is what both copies' enclosing @if did. *@
+
+@if (Total > Shown)
+{
+    <p class="muted">
+        Showing @Shown of
+        <Provenance Source="@Source">@Total @Noun</Provenance>.
+        <button @onclick="OnMore" disabled="@Disabled">Show more</button>
+    </p>
+}
+
+@code {
+    /// <summary>
+    /// How many rows are on the page now.
+    /// </summary>
+    [Parameter]
+    public int Shown { get; set; }
+
+    /// <summary>
+    /// How many rows there are altogether.
+    /// </summary>
+    [Parameter]
+    public int Total { get; set; }
+
+    /// <summary>
+    /// What is being counted, already in its plural-tolerant form - <c>folder(s)</c>, <c>file(s)</c>.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public string Noun { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Where the total comes from, shown on hover while technical tooltips are on. The caller supplies it
+    /// because this component counts whatever it is given.
+    /// </summary>
+    [Parameter]
+    public string? Source { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public EventCallback OnMore { get; set; }
+}

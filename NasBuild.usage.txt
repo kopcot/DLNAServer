@@ -1,0 +1,252 @@
+NasBuild.sh - build and deploy DlnaServer to the QNAP NAS
+=========================================================
+
+WHAT IT DOES
+    Restores, builds (Release) and publishes src/DlnaServer.Host for this machine's own
+    FRAMEWORK-DEPENDENT application, then optionally starts it.
+
+    The NAS has the .NET 8.0 runtime installed, so the runtime is not bundled.
+    This keeps the publish output small and the startup fast.
+
+
+USAGE
+    ./NasBuild.sh [PUBLISH_DIR] [ASSEMBLY_NAME] [run]
+
+    PUBLISH_DIR     Where to publish.       Default: /share/Internal/DLNA/publish
+    ASSEMBLY_NAME   Output assembly name.   Default: DlnaServer
+    run             Literal word "run" to start the server after publishing.
+                    Omit it to publish only.  Default: do not start.
+
+    Arguments are positional. To set the third you must supply the first two.
+
+    ASSEMBLY_NAME renames ONLY the Host assembly, so the launch command becomes
+    `dotnet <ASSEMBLY_NAME>.dll`. Every dependency keeps its own name. This is what lets two
+    deployments run side by side from one source tree.
+
+    The script passes it as -p:PublishAssemblyName, which DlnaServer.Host.csproj reads. Do not
+    change that to -p:AssemblyName: that is a global MSBuild property, so it renames every project
+    in the graph. Core, Persistence, Media, Upnp and Admin all become the same assembly, the
+    compiler then sees several references sharing one identity, and the Host fails to compile
+    against types that have silently disappeared - 113 errors, all of them "the type or namespace
+    name 'Core' does not exist in the namespace 'DlnaServer'". Newer SDKs fail earlier and more
+    clearly, at restore, with "Ambiguous project name".
+
+
+ENVIRONMENT VARIABLES YOU CAN SET
+    SKIP_TESTS=1         Skip the test gate. The script runs the architecture and wire-contract tests
+                         before it restores, and a failure stops the deployment. They need no fixture,
+                         no NAS and no I/O, so they cost a few seconds - this exists for a deliberate
+                         hurry, not for routine use. Skipping them means publishing without any
+                         mechanical proof that the layer boundaries still hold or that the bytes a
+                         television parses are unchanged; there is no git here and no CI, so this
+                         script is the only gate there is.
+
+                         The tests deliberately run BEFORE the restore. `dotnet test` on the solution
+                         performs its own implicit restore with no --runtime, and the integration tests
+                         reference the Host - so running them after the restore rewrites the Host's
+                         project.assets.json without the target-runtime entry, and the publish then fails
+                         with NETSDK1047 while the build and the tests both report success. If you add
+                         a step between the restore and the publish, it must not restore the Host
+                         without --runtime "$RUNTIME".
+
+    NAS_RUNTIME=...      Override the target architecture. Detected from `uname -m` by default -
+                         x86_64 gives linux-x64, aarch64/arm64 gives linux-arm64, armv7l gives
+                         linux-arm, and anything else stops the script rather than guessing.
+
+                         Detected rather than fixed because this script runs ON the NAS, and
+                         publishing linux-x64 onto an ARM box produces a folder that looks complete
+                         and dies at the first instruction.
+
+                         NO PACKAGE CHANGES ARE NEEDED FOR ARM. Both native dependencies already ship
+                         it: SkiaSharp.NativeAssets.Linux.NoDependencies and SQLitePCLRaw.lib.e_sqlite3
+                         each carry linux-arm64 and linux-musl-arm64. Verified 2026-09-06 by building
+                         and running an arm64 image - migrations applied, SkiaSharp produced a real
+                         thumbnail, ffprobe ran.
+
+                         Set it explicitly for a musl system (NAS_RUNTIME=linux-musl-arm64), which
+                         QNAP is not but an Alpine container would be. The .NET runtime installed on
+                         the target must match the architecture too - a framework-dependent publish
+                         carries no runtime of its own.
+
+    NAS_READY_TO_RUN=1   Turn ReadyToRun back on. Off by default: crossgen2 on this NAS (SDK 8.0.414)
+                         crashes loading its own native JIT, and publish dies with NETSDK1096
+                         "Optimizing assemblies for performance failed".
+
+                         The reference server's script appears to enable R2R but does not: it passes
+                         -p:ReadyToRun=true, which is not a property the SDK recognises, so it is
+                         silently ignored (the real name is PublishReadyToRun). That is why the
+                         reference publishes cleanly on the same NAS. Running with R2R off therefore
+                         matches the reference's actual behaviour, and costs only a slower JIT
+                         warm-up on a process that then runs for weeks.
+
+
+EXAMPLES
+    ./NasBuild.sh
+        Publish to /share/Internal/DLNA/publish as DlnaServer.dll. Does not start it.
+
+    ./NasBuild.sh /share/Internal/DLNA/publish DlnaServer run
+        Publish and start immediately, detached, logging to <PUBLISH_DIR>/stdout.log.
+
+    ./NasBuild.sh /share/Internal/DLNA/test DlnaServerTest
+        Publish a second copy to a test folder, leaving the live one untouched.
+        Give the test instance different ports in its own config.json.
+
+
+RUNNING IT MANUALLY
+    /share/Internal/DLNA/publish/run.sh
+
+    Use run.sh, not "dotnet DlnaServer.dll". NasBuild.sh generates it into the
+    publish folder on every deploy, and it exports the four memory variables listed
+    under ENVIRONMENT SET BY THE SCRIPT below. A bare dotnet command carries none of
+    them, which gives a hand-started server measurably different memory behaviour
+    from one this script launched - silently, and with nothing to compare against.
+
+    Point an init script or an autorun entry at run.sh for the same reason. Do not
+    edit it: a redeploy overwrites it. Change the exports in NasBuild.sh instead.
+
+    Stop a detached instance with:
+        pkill -f DlnaServer.dll
+
+
+PORTS
+    26852   DLNA / UPnP and media streaming. This is the port advertised to TVs.
+    26853   Blazor admin UI. Deliberately separate so renderers never reach it.
+
+    These are the values the shipped config.json sets, one above the ServerOptions
+    defaults of 26851/26852, so this server can run alongside the reference one on
+    26851. Read the live values out of config.json rather than trusting either
+    number here.
+
+    Both are set in config.json under Dlna.Server. They must differ; startup fails
+    with an explicit message if they are equal.
+
+
+CONFIGURATION
+    config.json sits next to the published binaries and is read at startup and on
+    change - most edits apply live without a restart.
+
+    SET Dlna.Library.SourceFolders to your media roots:
+
+        "Dlna": {
+          "Library": {
+            "SourceFolders": [ "/share/Media" ]
+          }
+        }
+
+    If you leave it empty the server still starts, serving the folder it is running
+    from, and logs a warning saying so. That is meant to get a fresh deployment up,
+    not to be the final configuration - the published folder holds binaries, not media.
+
+    Dlna.Server.FriendlyName is the name renderers display. Left unset it defaults
+    to "ZEN DLNA Server (<machine name>)", which is what the reference does and what
+    tells two instances apart on the same TV. The shipped config.json no longer pins
+    it - an existing deployment's config.json does, so delete that line there to pick
+    the machine name up.
+
+    Thumbnails are written beside the media, into Dlna.Thumbnails.SubFolderName
+    (default .@__thumb), so they live on the media volume and survive a redeploy.
+    An existing thumbnail is reused rather than regenerated, which means a library
+    the old server already previewed needs no thumbnail work at all.
+
+    Startup fails if that folder name is not in Dlna.Library.ExcludeFolders, or if
+    Dlna.Thumbnails.CacheDirectory resolves inside a source folder without an
+    exclusion covering it - generated thumbnails would otherwise be re-indexed as
+    media on the next scan, and then previewed in turn.
+
+    FFMPEG - INSTALL IT BY HAND, THIS IS THE SUPPORTED PATH
+    ffmpeg and ffprobe are optional. Without them the server still indexes, browses
+    and streams; what goes missing is video and audio metadata (durations,
+    resolutions, codecs, audio and subtitle tracks, and therefore the search page's
+    language filters) and video thumbnails. Image thumbnails do not need it.
+
+    Put both binaries in an "ffmpeg" folder next to the published binaries:
+
+        PUBLISH_DIR/ffmpeg/ffmpeg
+        PUBLISH_DIR/ffmpeg/ffprobe        (chmod +x both)
+
+    The server picks them up without a restart - it re-checks whenever it needs
+    them, so a Recreate metadata run from the Maintenance page is enough.
+
+    Dlna.Thumbnails.DownloadFFmpeg = true makes the server fetch them itself, and it
+    ships OFF deliberately. The download is not integrity-verified: no hash, no
+    signature, no pinned version, and the result is then executed as whatever
+    account runs the server. TLS stops someone on the wire; nothing stops a
+    compromised upstream. Turning it on logs a warning saying exactly that. If you
+    do turn it on to bootstrap a box, turn it off again once the binaries are there
+    - they are preserved across a redeploy.
+
+    NOTE: the config schema is NOT compatible with the old DLNAServer config.json.
+    Settings are grouped (Server / Library / Thumbnails / FileCache / Compatibility)
+    instead of flat. Port the values across by hand; do not copy the old file over.
+
+
+WHAT IS PRESERVED ACROSS A REDEPLOY
+    Deleted:   *.dll *.pdb *.deps.json *.runtimeconfig.json *.so *.a in PUBLISH_DIR
+    Preserved: config.json, logs/, the SQLite database, and the thumbnail cache
+    Regenerated: run.sh, on every deploy - do not edit it in place
+
+    Publishing over a running instance will fail on locked files. Stop it first.
+
+
+ENVIRONMENT SET BY THE SCRIPT
+    DOTNET_GCServer=0                       workstation GC - see below
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 no ICU dependency on the NAS
+    MALLOC_TRIM_THRESHOLD_=65536            keep glibc from holding freed native memory
+    MALLOC_MMAP_THRESHOLD_=65536            after SkiaSharp thumbnail work
+    MALLOC_ARENA_MAX=2                      cap glibc arenas - see below
+
+    These are also written into PUBLISH_DIR/run.sh, which is how they reach a server
+    started by hand or by an init script. See RUNNING IT MANUALLY above.
+
+    The MALLOC_* values matter in practice: without them, resident memory grows
+    steadily across thumbnail generation and never returns to the OS.
+
+    MALLOC_ARENA_MAX=2 rather than the earlier 32. glibc's own default is 8 x the
+    core count, and the NAS has 4 cores, so 32 asked for exactly what glibc would
+    have done unasked. Each arena retains up to 64 MB of freed-but-untrimmed heap.
+
+    DOTNET_GCServer=0 rather than 1. Server GC reserves a heap and a GC thread per
+    logical core, so a 4-core NAS got four of each for a workload targeting a 60 MB
+    managed heap - and no single heap ever filled enough to trigger a collection.
+    One measurement recorded 6 gen0 collections in 42 minutes. Workstation GC with
+    concurrent collection keeps one heap and collects often enough to reclaim.
+    This is set in three places that must agree: here, Directory.Build.props, and
+    runtimeconfig.template.json. Any one of them left on server GC wins.
+
+
+TROUBLESHOOTING
+    "dotnet: command not found"
+        The NAS runtime is not on PATH for this shell. Locate it and either add it
+        to PATH or call it by absolute path.
+
+    "The framework 'Microsoft.NETCore.App', version '8.0.x' was not found"
+        The installed runtime is older than the build target. Check with:
+            dotnet --list-runtimes
+
+    Server starts but no TV finds it
+        SSDP needs UDP 1900 and multicast on the LAN. Confirm the NAS firewall
+        allows it and that the TV is on the same subnet. If a device still cannot
+        find the server, try setting
+            Dlna.Compatibility.UseLegacyInvertedSearchTargetMatch = true
+        which restores the old server's M-SEARCH behaviour.
+
+    A browser gets "400 Bad Request - Invalid Host header"
+        The server answers only on the host names and addresses it resolved when it
+        started: localhost, 127.0.0.1, its machine name, <machine name>.local, and
+        every LAN address on an interface with a gateway. That is the DNS-rebinding
+        guard - without it a hostile web page can resolve its own name to the NAS
+        and drive the unauthenticated admin UI as a same-origin page.
+
+        You will see this if the NAS picked up a new DHCP address while running, or
+        if you reach it on an interface with no gateway. Restarting re-resolves the
+        list. To pin it instead, name the hosts in appsettings.json - an explicit
+        list is used verbatim and the generated one is skipped:
+
+            "AllowedHosts": "nas;nas.local;192.168.1.50;localhost;127.0.0.1"
+
+        Renderers are unaffected: they reach the server on a LAN address, which is
+        in the list, and a renderer that sends no Host header at all is allowed.
+
+    A TV finds the server but refuses to play
+        Try Dlna.Compatibility.SendDlnaResponseHeaders = false to match the old
+        server, which never sent contentFeatures.dlna.org.

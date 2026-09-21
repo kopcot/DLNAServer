@@ -1,0 +1,14 @@
+@* Two filters that belong together - a "from" and its "to". They are never split across a row boundary:
+   side by side where the row is wide enough, one under the other where it is not.
+
+   Left to flow with the other fields, a pair broke apart whenever it happened to begin in the last column,
+   which put "Size from" at the end of one row and "Size to" at the start of the next. *@
+
+<div class="fieldpair">
+    @ChildContent
+</div>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

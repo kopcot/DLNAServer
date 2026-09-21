@@ -1,0 +1,150 @@
+@page "/admin/library/search/folders"
+@rendermode InteractiveServer
+@inherits AdminPageBase
+@inject IMediaDirectoryRepository Directories
+
+<PageHeader Title="Search folders">
+    Every filter is optional and they combine. Names ignore capitals.
+</PageHeader>
+
+<SearchPanel @ref="_panel" Summary="@SummaryText()" HasSearched="_searched" IsRunning="_running"
+             ResultCount="_results.Count" Limit="_criteria.Take"
+             OnSearch="RunAsync" OnReset="Reset">
+    <Filters>
+        <div class="searchform">
+            <FormField Label="Name contains" For="name">
+                <ChildContent>
+                    <input id="name" type="text" @bind="_criteria.Name" @bind:event="oninput"
+                           @onkeyup="OnKeyUp" placeholder="part of the folder name" />
+                </ChildContent>
+                <Hint>The folder's own name, without the path above it.</Hint>
+            </FormField>
+
+            <FormField Label="Path contains" For="path">
+                <ChildContent>
+                    <input id="path" type="text" @bind="_criteria.Path" @bind:event="oninput"
+                           @onkeyup="OnKeyUp" placeholder="part of the full path" />
+                </ChildContent>
+                <Hint>Searches the whole path, so typing a parent folder's name finds everything inside it.</Hint>
+            </FormField>
+        </div>
+    </Filters>
+</SearchPanel>
+
+@* Rendered once a search has run - the no-results case is the Virtualize EmptyContent below. *@
+@if (_searched)
+{
+    @* Text links, the same shape the Library page uses: a folder has no image to show. *@
+    <FolderList Folders="_results" ShowPath="true" EmptyMessage="Nothing matches those filters." />
+}
+
+@code {
+    private Criteria _criteria = new();
+
+    // A List rather than the repository's IReadOnlyList: Virtualize binds Items to ICollection<T>.
+    private List<MediaDirectoryDto> _results = [];
+    private bool _searched;
+    private bool _running;
+
+    private SearchPanel _panel = null!;
+
+    /// <remarks>
+    /// Named while the panel is shut, so what is being filtered on is not a mystery until it is reopened.
+    /// </remarks>
+    private string SummaryText()
+    {
+        List<string> set = [];
+
+        if (!string.IsNullOrWhiteSpace(_criteria.Name))
+        {
+            set.Add($"name '{_criteria.Name}'");
+        }
+
+        if (!string.IsNullOrWhiteSpace(_criteria.Path))
+        {
+            set.Add($"path '{_criteria.Path}'");
+        }
+
+        return set.Count == 0 ? "no filters set" : string.Join(", ", set);
+    }
+
+    private async Task OnKeyUp(KeyboardEventArgs args)
+    {
+        if (string.Equals(args.Key, "Enter", StringComparison.Ordinal))
+        {
+            await RunAsync();
+        }
+    }
+
+    /// <remarks>
+    /// The <c>_running</c> guard is HERE rather than only on the buttons, because <c>disabled</c> does
+    /// not apply to a keystroke: Enter reached this through <c>OnKeyUp</c> whatever the buttons looked
+    /// like, and key repeat fires <c>keyup</c> once per repeat - so holding Enter overlapped two
+    /// <c>SearchAsync</c> calls on one <c>DbContext</c>. One check at the single entry point covers the
+    /// keyboard, the buttons, and anything added later.
+    /// </remarks>
+    private async Task RunAsync()
+    {
+        if (_running)
+        {
+            return;
+        }
+
+        _running = true;
+
+        try
+        {
+            await RunGatedAsync(
+                async token =>
+                {
+                    var found = await Directories.SearchAsync(_criteria.ToRequest(), token);
+
+                    _results = [.. found];
+                    _searched = true;
+                });
+        }
+        finally
+        {
+            _running = false;
+        }
+
+        // After the search rather than before it, so the filters stay put when the re-entrancy guard
+        // above turns the call away.
+        _panel.Collapse();
+    }
+
+    private void Reset()
+    {
+        _criteria = new Criteria();
+        _results = [];
+        _searched = false;
+
+        _panel.Expand();
+    }
+
+    /// <summary>
+    /// The form's own state, in the shapes the inputs bind to.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="MediaDirectorySearchRequest"/> for the same reason the file search keeps
+    /// its own: that contract is immutable, while a form needs mutable properties to bind against.
+    /// </remarks>
+    private sealed class Criteria
+    {
+        public string? Name { get; set; }
+
+        public string? Path { get; set; }
+
+        public int Take { get; } = 200;
+
+        public MediaDirectorySearchRequest ToRequest()
+        {
+            return new MediaDirectorySearchRequest
+            {
+                NameContains = Name,
+                PathContains = Path,
+                Take = Take,
+            };
+        }
+    }
+}

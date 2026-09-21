@@ -1,0 +1,28 @@
+# Build output
+bin/
+obj/
+publish/
+
+# IDE / editor state
+.vs/
+.idea/
+*.user
+
+# Runtime state - a database carrying somebody's library, its logs, generated previews,
+# and the ffmpeg binaries the provisioner downloads beside the binaries.
+logs/
+thumbnails/
+ffmpeg/
+backup/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Deployment configuration written by the admin UI, and the local environment file
+# whose committed sibling is .env.example.
+config.json.saved-*
+.env
+
+# Local media used for manual testing, and the knowledge graph, which is generated.
+media/
+graphify-out/

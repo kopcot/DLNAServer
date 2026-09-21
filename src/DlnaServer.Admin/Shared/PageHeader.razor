@@ -1,0 +1,23 @@
+@* The title and standfirst every page opens with. Seven copies of the pair existed.
+
+   <h1> stays the focus target Routes.razor's FocusOnNavigate selects, so it must remain the first heading
+   the page emits. *@
+
+<h1>@Title</h1>
+
+@if (ChildContent is not null)
+{
+    <p class="lede">@ChildContent</p>
+}
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What the page is for, in a sentence or two. Omitted by a page whose title says enough.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

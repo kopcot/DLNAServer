@@ -1,0 +1,419 @@
+@page "/admin/library/search/files"
+@* The route the page shipped under, kept so an existing link or bookmark still resolves. *@
+@page "/admin/library/search"
+@rendermode InteractiveServer
+@inherits AdminPageBase
+@inject IMediaFileRepository Files
+
+<PageHeader Title="Search files">
+    Every filter is optional and they combine. Names ignore capitals.
+</PageHeader>
+
+<SearchPanel @ref="_panel" Summary="@SummaryText()" HasSearched="_searched" IsRunning="_running"
+             ResultCount="_results.Count" Limit="_criteria.Take"
+             OnSearch="RunAsync" OnReset="Reset">
+    <Filters>
+        <div class="searchform">
+            <FormField Label="Name contains" For="name">
+                <input id="name" type="text" @bind="_criteria.Name" @bind:event="oninput"
+                       @onkeyup="OnKeyUp" placeholder="part of the file name" />
+            </FormField>
+
+            <FormField Label="Kind" For="media">
+                <select id="media" @bind="_criteria.Media">
+                    <option value="">any</option>
+                    <option value="@DlnaMedia.Video">video</option>
+                    <option value="@DlnaMedia.Audio">audio</option>
+                    <option value="@DlnaMedia.Image">image</option>
+                </select>
+            </FormField>
+
+            <FormField Label="Exact file type" For="mime">
+                <select id="mime" @bind="_criteria.Mime">
+                    <option value="">any</option>
+                    @foreach (var info in DlnaMimeCatalog.Servable)
+                    {
+                        <option value="@info.Mime">@info.Mime.ToMimeString()</option>
+                    }
+                </select>
+            </FormField>
+
+            <FieldPair>
+                <FormField Label="Modified from" For="from">
+                    <input id="from" type="date" @bind="_criteria.From" />
+                </FormField>
+
+                <FormField Label="Modified to" For="to">
+                    <input id="to" type="date" @bind="_criteria.To" />
+                </FormField>
+            </FieldPair>
+
+            <FieldPair>
+                <FormField Label="Size from (MB)" For="minSize">
+                    <input id="minSize" type="number" min="0" @bind="_criteria.MinSizeMb" />
+                </FormField>
+
+                <FormField Label="Size to (MB)" For="maxSize">
+                    <input id="maxSize" type="number" min="0" @bind="_criteria.MaxSizeMb" />
+                </FormField>
+            </FieldPair>
+
+            <FormField Label="Video at least this wide (pixels)" For="minWidth">
+                <ChildContent>
+                    <input id="minWidth" type="number" min="0" @bind="_criteria.MinWidth" />
+                </ChildContent>
+                <Hint>Only finds files whose details have already been read.</Hint>
+            </FormField>
+
+            <FormField Label="Format contains" For="codec">
+                <input id="codec" type="text" @bind="_criteria.Codec" placeholder="h264, aac, ..." />
+            </FormField>
+
+            @* Paired because they answer the same question - what still needs work - and reading one
+               without the other invites the wrong conclusion about a file. *@
+            <FieldPair>
+                <FormField Label="Details read" For="hasMetadata">
+                    <select id="hasMetadata" @bind="_criteria.DetailsRead">
+                        <option value="">any</option>
+                        <option value="@Presence.Yes">yes</option>
+                        <option value="@Presence.No">not yet</option>
+                    </select>
+                </FormField>
+
+                <FormField Label="Preview made" For="hasThumbnail">
+                    <select id="hasThumbnail" @bind="_criteria.PreviewMade">
+                        <option value="">any</option>
+                        <option value="@Presence.Yes">yes</option>
+                        <option value="@Presence.No">not yet</option>
+                    </select>
+                </FormField>
+            </FieldPair>
+
+            @* Not paired with the two above: those ask what has not been produced yet, and this asks
+               which files the server has already failed to read - a different question with a different
+               remedy, which is the Allow in memory again button on the file or its folder. *@
+            <FormField Label="Kept in memory" For="keptInMemory">
+                <ChildContent>
+                    <select id="keptInMemory" @bind="_criteria.KeptInMemory">
+                        <option value="">any</option>
+                        <option value="@Presence.Yes">yes</option>
+                        <option value="@Presence.No">no - reading it failed</option>
+                    </select>
+                </ChildContent>
+                <Hint>Choose <em>no</em> to list the files the server gave up on reading into memory.</Hint>
+            </FormField>
+        </div>
+
+        @* Offered from what the index actually holds, so a selection can always match something. Picking
+           several widens the search - a film is wanted if it carries any one of them.
+
+           The empty case now says so instead of rendering nothing. The whole block used to disappear, which
+           reads as a missing feature rather than an empty index - and was reported as exactly that. *@
+        <div class="searchform">
+            @if (_languages.Audio.Count == 0 && _languages.Subtitle.Count == 0)
+            {
+                <FormField Label="Audio and subtitle language">
+                    <ChildContent>
+                        <p class="empty">Nothing to offer yet.</p>
+                    </ChildContent>
+                    <Hint>
+                        There are no languages to choose from yet. Languages are read out of your video
+                        and music files, and that needs the video helper programs installed - see the
+                        notice on the Dashboard. Files that do not name their own languages never add
+                        any either.
+                    </Hint>
+                </FormField>
+            }
+
+            @if (_languages.Audio.Count > 0)
+            {
+                <FormField Label="Audio language" For="audioLanguages">
+                    <ChildContent>
+                        <select id="audioLanguages" class="multi" multiple size="@SelectRows(_languages.Audio.Count)"
+                                @bind="_criteria.AudioLanguages">
+                            @foreach (var language in _languages.Audio)
+                            {
+                                <option value="@language">@language</option>
+                            }
+                        </select>
+                    </ChildContent>
+                    <Hint>
+                        Pick any number - hold Ctrl to add to the selection. Only finds files whose details
+                        have already been read.
+                    </Hint>
+                </FormField>
+            }
+
+            @if (_languages.Subtitle.Count > 0)
+            {
+                <FormField Label="Subtitle language" For="subtitleLanguages">
+                    <ChildContent>
+                        <select id="subtitleLanguages" class="multi" multiple size="@SelectRows(_languages.Subtitle.Count)"
+                                @bind="_criteria.SubtitleLanguages">
+                            @foreach (var language in _languages.Subtitle)
+                            {
+                                <option value="@language">@language</option>
+                            }
+                        </select>
+                    </ChildContent>
+                    <Hint>Pick any number - hold Ctrl to add to the selection.</Hint>
+                </FormField>
+            }
+        </div>
+    </Filters>
+</SearchPanel>
+
+@* Scrolled inside its own box, the way FolderList scrolls the folder search: without it a long result set
+   pushed the pinned filter panel off the top of the viewport. *@
+<FileList Files="_results" Scrolling="true"
+          EmptyMessage="@(_searched ? "Nothing matches those filters." : null)" />
+
+@code {
+    private Criteria _criteria = new();
+    private IReadOnlyList<MediaFileDto> _results = [];
+    private MediaLanguagesDto _languages = new() { Audio = [], Subtitle = [] };
+    private bool _searched;
+    private bool _running;
+
+    private SearchPanel _panel = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The page renders with empty dropdowns if this is cancelled, which is what it does on a library
+        // with no extracted metadata anyway.
+        await RunGatedAsync(async token => _languages = await Files.GetLanguagesAsync(token));
+    }
+
+    /// <remarks>
+    /// Tall enough to show the whole list where it is short, capped where it is not - a library with forty
+    /// languages must not push the Search button off the screen.
+    /// </remarks>
+    private static int SelectRows(int optionCount)
+    {
+        return Math.Clamp(optionCount, 2, 6);
+    }
+
+    /// <remarks>
+    /// Named while the panel is shut, so what is being filtered on is not a mystery until it is reopened.
+    /// Counted rather than listed past a couple: nine filters would not fit on the heading's line.
+    /// </remarks>
+    private string SummaryText()
+    {
+        List<string> set = [];
+
+        if (!string.IsNullOrWhiteSpace(_criteria.Name))
+        {
+            set.Add($"name '{_criteria.Name}'");
+        }
+
+        if (_criteria.Media is { } media)
+        {
+            set.Add(media.ToString().ToLowerInvariant());
+        }
+
+        if (_criteria.Mime is not null)
+        {
+            set.Add("file type");
+        }
+
+        if (_criteria.From is not null || _criteria.To is not null)
+        {
+            set.Add("modified date");
+        }
+
+        if (_criteria.MinSizeMb is not null || _criteria.MaxSizeMb is not null)
+        {
+            set.Add("size");
+        }
+
+        if (_criteria.MinWidth is not null)
+        {
+            set.Add("video width");
+        }
+
+        if (!string.IsNullOrWhiteSpace(_criteria.Codec))
+        {
+            set.Add($"format '{_criteria.Codec}'");
+        }
+
+        if (_criteria.AudioLanguages.Length > 0)
+        {
+            set.Add($"audio {string.Join('/', _criteria.AudioLanguages)}");
+        }
+
+        if (_criteria.SubtitleLanguages.Length > 0)
+        {
+            set.Add($"subtitles {string.Join('/', _criteria.SubtitleLanguages)}");
+        }
+
+        if (_criteria.DetailsRead is { } detailsRead)
+        {
+            set.Add(detailsRead == Presence.Yes ? "details read" : "details missing");
+        }
+
+        if (_criteria.PreviewMade is { } previewMade)
+        {
+            set.Add(previewMade == Presence.Yes ? "preview made" : "preview missing");
+        }
+
+        if (_criteria.KeptInMemory is { } keptInMemory)
+        {
+            set.Add(keptInMemory == Presence.Yes ? "kept in memory" : "not kept in memory");
+        }
+
+        return set.Count switch
+        {
+            0 => "no filters set",
+            <= 3 => string.Join(", ", set),
+            _ => $"{set.Count} filters set",
+        };
+    }
+
+    private async Task OnKeyUp(KeyboardEventArgs args)
+    {
+        if (string.Equals(args.Key, "Enter", StringComparison.Ordinal))
+        {
+            await RunAsync();
+        }
+    }
+
+    /// <remarks>
+    /// The <c>_running</c> guard is HERE rather than only on the buttons, because <c>disabled</c> does
+    /// not apply to a keystroke: Enter reached this through <c>OnKeyUp</c> whatever the buttons looked
+    /// like, and key repeat fires <c>keyup</c> once per repeat - so holding Enter overlapped two
+    /// <c>SearchAsync</c> calls on one <c>DbContext</c>. It also closed a second hole: this was
+    /// reachable before <c>OnInitializedAsync</c>'s <c>GetLanguagesAsync</c> had returned.
+    /// </remarks>
+    private async Task RunAsync()
+    {
+        if (_running)
+        {
+            return;
+        }
+
+        _running = true;
+
+        try
+        {
+            await RunGatedAsync(
+                async token =>
+                {
+                    _results = await Files.SearchAsync(_criteria.ToRequest(), token);
+                    _searched = true;
+                });
+        }
+        finally
+        {
+            _running = false;
+        }
+
+        // After the search rather than before it, so the filters stay put when the re-entrancy guard
+        // above turns the call away.
+        _panel.Collapse();
+    }
+
+    private void Reset()
+    {
+        _criteria = new Criteria();
+        _results = [];
+        _searched = false;
+
+        _panel.Expand();
+    }
+
+    /// <summary>
+    /// Whether a filter wants the files that have something or the ones that do not. Null is "any".
+    /// </summary>
+    /// <remarks>
+    /// A nullable enum rather than a <c>bool?</c>, and that is not a style choice: <c>@bind</c> on a
+    /// <c>select</c> does not round-trip a nullable bool here - the chosen value is discarded and the
+    /// control snaps back to "any", so the filter silently never applies. Verified in a browser both
+    /// ways. The nullable-enum filters on this page bind correctly, so this mirrors them.
+    /// </remarks>
+    private enum Presence
+    {
+        Yes = 1,
+        No = 2,
+    }
+
+    /// <summary>
+    /// The form's own state, in the shapes the inputs bind to.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="MediaFileSearchRequest"/> because that contract is immutable and carries
+    /// bytes and exact times, while a form needs mutable properties, megabytes and dates. Converting once
+    /// on search keeps the units in one place instead of at every input.
+    /// </remarks>
+    private sealed class Criteria
+    {
+        private const long BytesPerMegabyte = 1024L * 1024L;
+
+        public string? Name { get; set; }
+
+        public DlnaMedia? Media { get; set; }
+
+        public DlnaMime? Mime { get; set; }
+
+        public DateTime? From { get; set; }
+
+        public DateTime? To { get; set; }
+
+        public int? MinSizeMb { get; set; }
+
+        public int? MaxSizeMb { get; set; }
+
+        public int? MinWidth { get; set; }
+
+        public string? Codec { get; set; }
+
+        // Arrays rather than sets: a multiple <select> binds to string[], and the order it hands back is
+        // the order of the options, which is already sorted.
+        public string[] AudioLanguages { get; set; } = [];
+
+        public string[] SubtitleLanguages { get; set; } = [];
+
+        public Presence? DetailsRead { get; set; }
+
+        public Presence? PreviewMade { get; set; }
+
+        public Presence? KeptInMemory { get; set; }
+
+        public int Take { get; } = 200;
+
+        private static bool? ToFlag(Presence? presence)
+        {
+            return presence switch
+            {
+                Presence.Yes => true,
+                Presence.No => false,
+                _ => null,
+            };
+        }
+
+        public MediaFileSearchRequest ToRequest()
+        {
+            return new MediaFileSearchRequest
+            {
+                NameContains = Name,
+                Media = Media,
+                Mime = Mime,
+
+                // A date means the whole of that day: a "to" of the 5th must include the 5th, and an
+                // inclusive comparison against midnight would exclude all but the first instant of it.
+                ModifiedFromUtc = From?.Date,
+                ModifiedToUtc = To?.Date.AddDays(1).AddTicks(-1),
+
+                MinSizeInBytes = MinSizeMb is { } min ? min * BytesPerMegabyte : null,
+                MaxSizeInBytes = MaxSizeMb is { } max ? max * BytesPerMegabyte : null,
+                MinWidth = MinWidth,
+                CodecContains = Codec,
+                AudioLanguages = AudioLanguages,
+                SubtitleLanguages = SubtitleLanguages,
+                HasMetadata = ToFlag(DetailsRead),
+                HasThumbnail = ToFlag(PreviewMade),
+                IsKeptInMemory = ToFlag(KeptInMemory),
+                Take = Take,
+            };
+        }
+    }
+}

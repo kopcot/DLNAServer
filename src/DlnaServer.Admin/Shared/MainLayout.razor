@@ -1,0 +1,28 @@
+@inherits LayoutComponentBase
+
+<div class="layout">
+    <nav class="sidebar">
+        <div class="brand">ZEN DLNA Server</div>
+        <NavMenu />
+        @* Held at the foot of the column by the menu growing above it, so it sits at the bottom of the
+           screen on a short menu and below the last item on a long one - never floating mid-column. It is
+           hidden in the phone layout, where the sidebar is a bar across the top and a copyright line would
+           push every page down for nothing; the About page carries the same notice there. *@
+        <div class="sitefoot">@Copyright.Notice</div>
+    </nav>
+    <main class="content">
+        @* An unhandled exception in any page otherwise tears down the whole Blazor circuit, leaving a
+           blank page and a reconnect banner. Keeping the shell and the navigation alive matters most in
+           the case that motivated this: a setting the server cannot accept makes every options read
+           throw, which is exactly when Settings has to stay reachable to undo it. *@
+        <ErrorBoundary>
+            <ChildContent>@Body</ChildContent>
+            <ErrorContent>
+                <Notice IsBad="true">
+                    Something went wrong on this page. The other pages still work - if you have just
+                    changed a setting, you can correct it in <a href="/admin/settings">Settings</a>.
+                </Notice>
+            </ErrorContent>
+        </ErrorBoundary>
+    </main>
+</div>
