@@ -139,7 +139,8 @@ namespace DlnaServer.Core.Uploads
                 return true;
             }
 
-            var relative = subFolder.Trim().Replace('\\', '/').Trim('/');
+            var normalised = subFolder.Trim().Replace('\\', '/');
+            var relative = normalised.Trim('/');
 
             if (relative.Length == 0)
             {
@@ -149,7 +150,10 @@ namespace DlnaServer.Core.Uploads
                 return true;
             }
 
-            if (Path.IsPathRooted(relative) || relative.Contains(':', StringComparison.Ordinal))
+            // Rootedness is tested before the separators are trimmed: Trim('/') turns "/tmp/x" into a
+            // relative path, which defeated this guard on Linux - the platform the NAS runs - while
+            // Windows happened to catch the same input on the ':' instead.
+            if (Path.IsPathRooted(normalised) || normalised.Contains(':', StringComparison.Ordinal))
             {
                 problem = "The folder inside it must be a relative path, not a full one.";
 
