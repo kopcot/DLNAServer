@@ -62,7 +62,7 @@ RUN dotnet publish src/DlnaServer.Host/DlnaServer.Host.csproj \
 # ---------------------------------------------------------------------------------------------------
 # Runtime
 # ---------------------------------------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
 # ffmpeg from the distribution, deliberately, so Thumbnails.DownloadFFmpeg can stay OFF. That setting
 # fetches an archive from whatever URL a third-party API names, verifies no hash or signature, and then
