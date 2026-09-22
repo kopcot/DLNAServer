@@ -30,7 +30,7 @@ jobs:
       # global.json pins the SDK band the NAS runs, so CI resolves the same one rather than whatever
       # the runner happens to carry.
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
