@@ -1,6 +1,250 @@
-gh api -X PUT repos/kopcot/DLNAServer/branches/main/protection \
-  -F required_status_checks.strict=true \
-  -F 'required_status_checks.contexts[]=Build and test' \
-  -F enforce_admins=false \
-  -F required_pull_request_reviews=null \
-  -F restrictions=null
+gh api -X PUT repos/kopcot/DLNAServer/branches/main/protection -F required_status_checks.strict=true -F 'required_status_checks.contexts[]=Build and test' -F enforce_admins=false -F required_pull_request_reviews=null -F restrictions=null
+
+
+{"message":"Invalid request.\n\n\"required_status_checks\" wasn't supplied.","documentation_url":"https://docs.github.com/rest/branches/branch-protection#update-branch-protection","status":"422"}
+
+
+1. Install gh on Windows
+
+winget install --id GitHub.cli --source winget
+
+Open a new terminal afterwards — PATH only refreshes for new processes.
+
+gh --version
+gh auth login
+
+Pick GitHub.com → HTTPS → Login with a web browser. Sign in as the account that can push to kopcot/DLNAServer. Worth noting: on this PC gh is authenticated as tomaskopil-ctrl, not kopcot — make sure the other PC uses whichever of those actually owns the repo.
+
+Alternatives if winget is unavailable: scoop install gh, choco install gh, or the MSI from github.com/cli/cli/releases.
+
+2. Install git-filter-repo (needed for the history rewrite)
+
+It is a Python script, so Python comes first:
+
+winget install --id Python.Python.3.13 --source winget
+
+New terminal, then:
+
+python -m pip install git-filter-repo
+git filter-repo --version
+
+Use python or py — never python3, which hits the Microsoft Store alias stub and fails. If git filter-repo --version says it is not a git command, the Scripts folder is off PATH:
+
+$scripts = python -c "import sysconfig; print(sysconfig.get_path('scripts'))"
+$env:PATH = "$scripts;$env:PATH"
+git filter-repo --version
+
+3. Before you leave this PC — push the cleanup
+
+The rewrite operates on what is on GitHub, so this work has to land first. Everything is verified: 0 warnings, 789 tests, formatter clean.
+
+Changed files:
+
+- .claude/settings.local.json (untracked)
+- .editorconfig
+- .gitattributes
+- .github/CODEOWNERS (new)
+- .github/ISSUE_TEMPLATE/bug_report.md (new)
+- .github/ISSUE_TEMPLATE/config.yml (new)
+- .github/ISSUE_TEMPLATE/feature_request.md (new)
+- .github/SECURITY.md (new)
+- .github/dependabot.yml (new)
+- .github/pull_request_template.md (new)
+- .github/workflows/SECURITY.md (deleted)
+- .github/workflows/dotnet.yml
+- .github/workflows/release.yml (new)
+- .gitignore
+- CLAUDE.md
+- CONTRIBUTING.md (new)
+- Directory.Build.props
+- Docker.usage.md
+- PLAN.md
+- missing_features.md (untracked, renamed to NOTES.local.md)
+- src/DlnaServer.Core/Configuration/ServerOptions.cs
+- src/DlnaServer.Host/Configuration/DlnaOptionsDefaults.cs
+- src/DlnaServer.Host/Delivery/Caching/ServedFileCache.cs
+- src/DlnaServer.Host/RejectCrossSiteEndpointFilter.cs
+- src/DlnaServer.Host/config.json
+- src/DlnaServer.Media/Watching/FileSystemChangeWatcher.cs
+- src/DlnaServer.Persistence/Repositories/MediaFileRepository.cs
+- tests/DlnaServer.IntegrationTests/GoldenFiles/reference-browse-response.xml
+- tests/DlnaServer.IntegrationTests/GoldenFiles/reference-description.xml
+- tests/DlnaServer.UnitTests/Upnp/DeviceDescriptionBuilderTest.cs
+
+Remove personal identifiers and enforce the repository's own invariants in CI
+
+- Remove every personal identifier from the tree: name, personal email, Windows username, desktop and NAS machine names, and the NAS LAN address
+    ManufacturerUrl is now the project URL, in ServerOptions, config.json, the unit test and the golden capture
+    Test fixtures keep their synthetic RFC1918 addresses - they identify nobody and churning 40 assertions buys nothing
+- Untrack the personal scratch backlog and de-reference it from CLAUDE.md and PLAN.md
+    Renamed to NOTES.local.md and ignored by a generic *.local.md rule, so no tracked file names it
+- Move SECURITY.md out of .github/workflows, where GitHub never looks for it, and replace the unedited template with a real policy
+    It lists the deliberate design decisions - no authentication, unauthenticated admin, upload off by default - so they are closed as intended rather than re-reported
+- Enforce the 0-warning and no-advisory rules in CI instead of leaving them to whoever last built locally
+    Release build with -warnaserror, dotnet format --verify-no-changes, NuGetAudit in all mode at moderate, SDK pinned from global.json, coverage collected, least-privilege permissions, cancel-in-progress concurrency
+    A second job builds the container image without pushing it
+- Align .editorconfig, .gitattributes and the working tree on LF
+    end_of_line = crlf against a repository that stores LF produced 29,224 formatter errors and made the format gate impossible to pass on a Linux runner
+- Add release.yml publishing the linux-x64 archive on a v* tag, mirroring what NasBuild.sh does by hand
+- Add dependabot.yml for nuget, github-actions and docker, holding System.Security.Cryptography.Xml on its 8.x pin
+- Add CONTRIBUTING.md, CODEOWNERS, a pull-request template and issue templates
+- Untrack .claude/settings.local.json, the machine-local half of the Claude Code settings
+- Correct the shipped config.json ports to 26852/26853, which is what CLAUDE.md, the Dockerfile and .env.example already assume
+- Bump the version to 1.1.0922
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+
+No release-notes.md entry: nothing here changes what an operator following the documentation would see.
+
+4. On the other PC — the rewrite
+
+cd C:\work
+
+# Backup first. This is the only undo.
+git clone --mirror https://github.com/kopcot/DLNAServer.git DLNAServer-backup.git
+
+# filter-repo insists on a fresh clone.
+git clone https://github.com/kopcot/DLNAServer.git DLNAServer-rewrite
+cd DLNAServer-rewrite
+
+Create ..\expressions.txt (outside the repo, so it is not itself rewritten). Order matters — the longer patterns must come first:
+
+regex:(?i)flyt-platform==>another project
+regex:(?i)flyt==>another project
+regex:(?i)visma==>the company
+mailto:kopco.t@gmail.com==>https://github.com/kopcot/DLNAServer
+kopco.t@gmail.com==>noreply@example.com
+Tomas Kopil==>kopcot
+Tomas's==>the maintainer's
+Tomas==>the maintainer
+tomas.kopil==>example
+KOPCO-DESKTOP==>MEDIA-PC
+NASKopcoTS464==>NAS
+192.168.1.200==>192.168.1.100
+
+And ..\mailmap.txt:
+
+kopcot <157985437+kopcot@users.noreply.github.com> Tomas Kopil <kopco.t@gmail.com>
+
+Then two passes — the file removal first, the content rewrite second:
+
+git filter-repo --invert-paths --path missing_features.md
+
+git filter-repo --force --replace-text ..\expressions.txt --replace-message ..\expressions.txt --mailmap ..\mailmap.txt
+
+Verify before pushing — this greps every blob in every commit:
+
+git log --format='%an <%ae>' | Sort-Object -Unique
+git grep -i -n -E "flyt|tomas|kopco\.t@|NASKopco|KOPCO-DESKTOP|192\.168\.1\.200" $(git rev-list --all)
+
+The first must show only kopcot. The second must print nothing.
+
+5. Push, tag, protect
+
+filter-repo deletes the remote on purpose, so add it back:
+
+git remote add origin https://github.com/kopcot/DLNAServer.git
+git push --force --all origin
+
+Then the tag, once you are happy:
+
+git tag v1.1.0922
+git push origin v1.1.0922
+
+For branch protection — the command in your New Text Document.txt will not run in PowerShell. It uses bash \ line continuations; PowerShell needs a backtick or one line. Wait until CI has run once on main so the check name exists, then:
+
+gh api -X PUT repos/kopcot/DLNAServer/branches/main/protection -F required_status_checks.strict=true -F 'required_status_checks.contexts[]=Build and test' -F enforce_admins=false -F required_pull_request_reviews=null -F restrictions=null
+
+And turn on the reporting channel .github/SECURITY.md points at:
+
+gh api -X PUT repos/kopcot/DLNAServer/private-vulnerability-reporting
+
+6. Afterwards
+
+Every existing clone is now incompatible — including the working copy on the NAS share. Delete and re-clone them rather than pulling; a pull will try to merge the old history back in. Keep DLNAServer-backup.git until you have confirmed the rewritten repo is right.
+
+Two things to be aware of: NOTES.local.md exists only on this PC and is ignored, so it will not follow you to the other machine — copy it by hand if you want it there. And New Text Document.txt in the repo root is untracked scratch; delete it or it will show up in git status forever.
+
+Want this as a page you can open directly on the other PC instead of copying out of the terminal? It contains your real name and email in the filter-repo config, so I'd rather you say so explicitly before I publish it.
+
+✻ Cogitated for 6m 10s · done 8:36
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+
+
+The fix is to send a real JSON body with --input.
+
+Working command
+
+$json = @'
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": ["Build and test", "Container builds"]
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": null,
+  "restrictions": null
+}
+'@
+Set-Content -Path protection.json -Value $json -Encoding ascii
+gh api -X PUT repos/kopcot/DLNAServer/branches/main/protection --input protection.json
+Remove-Item protection.json
+
+Two PowerShell 5.1 details that will bite if they slip: the closing '@ must sit at column 0 with nothing before it, and -Encoding ascii is deliberate — utf8 in 5.1 writes a BOM, which gh rejects as malformed JSON.
+
+Verify it took:
+
+gh api repos/kopcot/DLNAServer/branches/main/protection
+
+On the values
+
+┌───────────────────────────────┬──────────────────────────────────┬───────────────────────────────────────────────────────────────────────────────────────────┐
+│             Field             │              Value               │                                            Why                                            │
+├───────────────────────────────┼──────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────┤
+│ contexts                      │ Build and test, Container builds │ The two job name: values in dotnet.yml. These are the display names, not the job ids.     │
+├───────────────────────────────┼──────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────┤
+│ strict                        │ true                             │ A branch must be up to date with main before it can merge.                                │
+├───────────────────────────────┼──────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────┤
+│ enforce_admins                │ false                            │ You can still push directly when you need to. Set true to bind yourself too.              │
+├───────────────────────────────┼──────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────┤
+│ required_pull_request_reviews │ null                             │ No required reviewer — on a solo repo this would otherwise lock you out of your own main. │
+├───────────────────────────────┼──────────────────────────────────┼───────────────────────────────────────────────────────────────────────────────────────────┤
+│ restrictions                  │ null                             │ Push restrictions only work on organisation repos; null is the only valid value here.     │
+└───────────────────────────────┴──────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────┘
+
+Drop "Container builds" from contexts if you would rather not have a Docker build gate every merge.
+
+If it comes back 403 instead
+
+Classic branch protection on a private repo needs GitHub Pro or Team. Rulesets are the free equivalent and do the same job:
+
+$json = @'
+{
+  "name": "main protection",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["refs/heads/main"], "exclude": [] } },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "required_status_checks": [
+          { "context": "Build and test" },
+          { "context": "Container builds" }
+        ]
+      }
+    }
+  ]
+}
+'@
+Set-Content -Path ruleset.json -Value $json -Encoding ascii
+gh api -X POST repos/kopcot/DLNAServer/rulesets --input ruleset.json
+Remove-Item ruleset.json
+
+One thing either way: run this after CI has completed once on main. Naming a context that has never reported is accepted, but the branch then sits permanently blocked waiting for a check that does not exist yet.
