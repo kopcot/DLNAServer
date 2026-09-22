@@ -15,7 +15,8 @@ source. Documents here still cite it as *the reference*; read it there when a wi
 question needs settling, and write nothing into it.
 
 `README.md` documents the architecture and the list of behaviours that intentionally differ from
-that server. There is no git repository here yet.
+that server. `CONTRIBUTING.md` covers the build, the two hard rules and the release flow;
+`.github/SECURITY.md` covers reporting.
 
 ## The server
 
@@ -24,7 +25,7 @@ that server. There is no git repository here yet.
 > milestone status and checklists, the conventions and tooling traps that have cost time, and how to
 > resume. Read it before doing any work here, and update it as work completes.
 >
-> **Version `1.1.0917`.** Every change bumps the assembly version - the rule, and who may bump which part,
+> **Version `1.1.0922`.** Every change bumps the assembly version - the rule, and who may bump which part,
 > is in `PLAN.md` section 7 under "Assembly version". One `<Version>` property in
 > `Directory.Build.props` carries it for all nine projects. **`release-notes.md` is updated
 > in the same change** - operator-facing release notes, one entry per `Major.Minor`, in their terms, never
@@ -66,7 +67,7 @@ that server. There is no git repository here yet.
 > positive**: the naming is already correct and renaming would have introduced the inversion it claimed.
 >
 > **The newest work is `PLAN.md` section 6o (2026-09-17, `1.1.0917`)**, which empties the
-> `missing_features.md` open list again: a **deleted media file now takes its preview image with it** -
+> backlog's open list again: a **deleted media file now takes its preview image with it** -
 > the image sat in a folder scanning skips, so nothing would ever have found it again, and
 > `RemoveByPublicIdsAsync` therefore returns the abandoned paths the way `MoveOrRenameAsync` already did.
 > On top of that, a file's **type and compatibility profile can be corrected on its own page** (the UPnP
@@ -74,7 +75,7 @@ that server. There is no git repository here yet.
 > **let back in** from either the file or its folder, and *Search files* can list those files. The
 > upload-folder *Check* asked for in that batch was already shipped by 6n.
 >
-> **Section 6n (2026-09-15, `1.1.0915`)** was the previous batch: the whole `missing_features.md`
+> **Section 6n (2026-09-15, `1.1.0915`)** was the previous batch: the whole backlog
 > open list closed in one batch - a streamed multipart **file-upload page** (off by default, needs a
 > restart, its own security log, a `UploadDevices` table remembering each device's destination), collapsible
 > Library listings, **provenance tooltips** behind the Temporary-settings switch, an assembly table on
@@ -84,7 +85,7 @@ that server. There is no git repository here yet.
 > on `Provenance.Source`; follow it for any new annotation.
 >
 > **Work done 2026-09-07/08** is recorded in `PLAN.md` section 6g: the five customer items from
-> `missing_features.md` (all closed and deployed) plus an open-ended metadata feature. A file that moves
+> the backlog (all closed and deployed) plus an open-ended metadata feature. A file that moves
 > or is renamed keeps its row and its `PublicId` instead of being re-inserted; audio files extract their
 > embedded cover art; admin tiles carry a media-kind icon and fall back to the `Resources` icons; the
 > byte cache no longer records "too large" as permanent; and a `MediaFileTags` table stores every tag a
@@ -127,9 +128,9 @@ dotnet run --project src\DlnaServer.Host                                        
 
 **Configuration** is `config.json` next to the binaries, bound to `DlnaOptions` (section `Dlna`) through the normal `IConfiguration` pipeline and consumed via `IOptionsMonitor`, so most edits apply without a restart. The schema is grouped (`Server` / `Library` / `Thumbnails` / `FileCache` / `Compatibility` / `Database` / `Upload`) and is **not** compatible with the reference's flat `config.json`. `DlnaOptionsDefaults` runs between binding and validation: with **no source folder configured it serves the application's own folder**, excluding the thumbnail cache and `Resources` so neither the generated thumbnails nor the device icons are indexed as media. A fresh deployment therefore starts, with a warning naming the folder it fell back to. `DlnaOptionsValidator` then refuses to boot on: a missing source folder, equal ports, a blank `Thumbnails.SubFolderName`, a thumbnail cache inside a source folder that no `ExcludeFolders` entry covers, or an `Upload.DestinationFolder` outside every source folder.
 
-**A first fill dates rows from the filesystem, and only a first fill.** `CreatedUtc` is the row's own indexing time and is what *Recently added* orders by; `FileCreatedUtc` is the file's date and is what Browse's date sort uses, governed by `Library.UseFileCreationDateTime`. When a source folder has no indexed row yet - an empty database, or a folder just added to the configuration - every file found under it takes its `CreatedUtc` from the filesystem instead of from the clock, **regardless of that setting**. A bulk import otherwise stamps every row with one identical timestamp, so *Recently added* degenerates into insertion order; that is a customer-reported bug (`missing_features.md`) hit by recreating the database. A file arriving into an already-indexed folder is genuinely new and keeps the current time. The test is "does a row exist for this source folder", not `IsSourceRoot`, so a child promoted to a source folder is not re-dated. `LibraryScanner.ResolveFileSystemDate` falls back to the write time when a filesystem reports no birth time, which is common on Linux and would otherwise date every file to 1970.
+**A first fill dates rows from the filesystem, and only a first fill.** `CreatedUtc` is the row's own indexing time and is what *Recently added* orders by; `FileCreatedUtc` is the file's date and is what Browse's date sort uses, governed by `Library.UseFileCreationDateTime`. When a source folder has no indexed row yet - an empty database, or a folder just added to the configuration - every file found under it takes its `CreatedUtc` from the filesystem instead of from the clock, **regardless of that setting**. A bulk import otherwise stamps every row with one identical timestamp, so *Recently added* degenerates into insertion order; that is a customer-reported bug hit by recreating the database. A file arriving into an already-indexed folder is genuinely new and keeps the current time. The test is "does a row exist for this source folder", not `IsSourceRoot`, so a child promoted to a source folder is not re-dated. `LibraryScanner.ResolveFileSystemDate` falls back to the write time when a filesystem reports no birth time, which is common on Linux and would otherwise date every file to 1970.
 
-**`Library.ExcludeFolders` entries are folder names, partial paths or full paths, matched on whole path-segment boundaries.** `path1` hides `path1` and everything under it and does **not** touch `path1L` or `path10`; `Films/Private` hides one branch without hiding every other `Private`. Either separator may be used and the two are equivalent, so one `config.json` works on the NAS and on a Windows dev box. One rule governs both halves, and as of M1's fix that is structural rather than a convention: `PathExclusion.Canonicalise` is the single canonical form, `PathExclusion.TrimBoundaries` the single definition of an entry's boundaries, and `HiddenPathQuery` the single SQL predicate that all three repository sites call. The three hand-synced copies are gone. Matching is **ASCII-only for case**, deliberately: SQLite's `LIKE` folds ASCII and nothing else, and the NAS runs under `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT`, so an entry differing from the folder only in the case of a non-ASCII letter does not match. **This was a customer-reported bug** (`missing_features.md`): hiding used to be a raw substring over the whole path, matching the reference, so `path1` also hid `path1L` while scanning compared single segments and kept importing it, and a partial path was refused by validation outright. The operator got no sign that more was hidden than they had named.
+**`Library.ExcludeFolders` entries are folder names, partial paths or full paths, matched on whole path-segment boundaries.** `path1` hides `path1` and everything under it and does **not** touch `path1L` or `path10`; `Films/Private` hides one branch without hiding every other `Private`. Either separator may be used and the two are equivalent, so one `config.json` works on the NAS and on a Windows dev box. One rule governs both halves, and as of M1's fix that is structural rather than a convention: `PathExclusion.Canonicalise` is the single canonical form, `PathExclusion.TrimBoundaries` the single definition of an entry's boundaries, and `HiddenPathQuery` the single SQL predicate that all three repository sites call. The three hand-synced copies are gone. Matching is **ASCII-only for case**, deliberately: SQLite's `LIKE` folds ASCII and nothing else, and the NAS runs under `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT`, so an entry differing from the folder only in the case of a non-ASCII letter does not match. **This was a customer-reported bug**: hiding used to be a raw substring over the whole path, matching the reference, so `path1` also hid `path1L` while scanning compared single segments and kept importing it, and a partial path was refused by validation outright. The operator got no sign that more was hidden than they had named.
 
 **`Library.ExcludeFolders` carries no default on the property.** `ConfigurationBinder` *adds to* a non-empty `IList<string>` rather than replacing it, so a default declared there appended itself to whatever `config.json` named - and since the admin UI writes the bound list back, the file grew by two entries on every save. `DlnaOptionsDefaults` seeds `.@__thumb` and `@Recycle` after binding, only when configuration names none of its own, de-duplicates case-insensitively either way, and **always adds `Thumbnails.SubFolderName` whether or not it is listed** - a scan that does not skip that folder re-ingests every preview as media. Watch for the same shape anywhere else: a collection property with a non-empty initializer that is bound from configuration.
 
@@ -147,7 +148,7 @@ dotnet run --project src\DlnaServer.Host                                        
 
 ### Conventions for the rewrite
 
-- **Block-scoped namespaces**, per `.editorconfig`. The global `cs-writeguard` hook asks for file-scoped; it carries flyt-platform's rules and does not apply here.
+- **Block-scoped namespaces**, per `.editorconfig`. The global `cs-writeguard` hook asks for file-scoped; it carries another project's rules and does not apply here.
 - **Protocol DTOs document their wire contract on every property** — carried over from the reference's `BrowseItem.cs`, which is the clearest thing in that codebase. The wire name in bold, then a plain-language description, sitting next to the attribute that carries element name, namespace and order:
 
   ```csharp

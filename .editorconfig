@@ -114,7 +114,9 @@ dotnet_style_prefer_simplified_boolean_expressions = true:suggestion
 dotnet_style_operator_placement_when_wrapping = beginning_of_line
 tab_width = 4
 indent_size = 4
-end_of_line = crlf
+# LF, matching what git stores and what the Linux CI runner and the NAS check out. CRLF here made
+# `dotnet format --verify-no-changes` fail on every file outside a Windows working tree.
+end_of_line = lf
 dotnet_style_prefer_conditional_expression_over_assignment = true:silent
 dotnet_style_prefer_conditional_expression_over_return = true:silent
 dotnet_style_explicit_tuple_names = true:suggestion

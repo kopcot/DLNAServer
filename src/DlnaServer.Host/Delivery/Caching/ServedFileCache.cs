@@ -213,7 +213,7 @@ namespace DlnaServer.Host.Delivery.Caching
             entry.SlidingExpiration = ResolveSlidingExpiration(contentClass, options);
             entry.AbsoluteExpirationRelativeToNow = ResolveAbsoluteExpiration(contentClass);
             entry.Priority = ResolvePriority(contentClass);
-            
+
             if (contentClass == CachedContentClass.Media)
             {
                 entry.RegisterPostEvictionCallback(OnMediaEvicted);

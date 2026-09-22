@@ -186,7 +186,7 @@ publishing the admin port does not publish the management API.
 3. Put it in `.env`, doubling every `$` so compose does not read it as a variable:
    ```
    ADMIN_HOSTNAME=dlna.example.com
-   ADMIN_USER=tomas
+   ADMIN_USER=admin
    ADMIN_PASSWORD_HASH=$$2a$$14$$....
    ```
 

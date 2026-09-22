@@ -3,7 +3,7 @@
   <PropertyGroup>
     <!-- Major.Minor.MonthDate, bumped on every change - the scheme and who may bump which part
          are in PLAN.md section 7 under "Assembly version". One property for all nine projects. -->
-    <Version>1.1.0917</Version>
+    <Version>1.1.0922</Version>
     <TargetFramework>net8.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
@@ -14,6 +14,12 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- CS1591: XML docs are required on public API only where they add value, not everywhere. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- No package may carry a known advisory. Mode "all" covers transitive packages too, which is where
+         the last one arrived from - see the System.Security.Cryptography.Xml pin in
+         Directory.Packages.props. CI promotes these to errors with -warnaserror. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>moderate</NuGetAuditLevel>
     <!-- The server runs with InvariantGlobalization, so translated framework messages are never used.
          Keeping only English drops 13 satellite locale folders from the NAS deployment, and with them
          the 234 NETSDK1188 warnings SoapCore's WCF dependencies raise about locales .NET does not

@@ -3,10 +3,11 @@ bin/
 obj/
 publish/
 
-# IDE / editor state
+# IDE / editor state, and the machine-local half of the Claude Code settings.
 .vs/
 .idea/
 *.user
+.claude/settings.local.json
 
 # Runtime state - a database carrying somebody's library, its logs, generated previews,
 # and the ffmpeg binaries the provisioner downloads beside the binaries.
@@ -25,3 +26,6 @@ config.json.saved-*
 
 # Local media used for manual testing, and the knowledge graph, which is generated.
 graphify-out/
+
+# Personal working notes. Never part of the project.
+*.local.md

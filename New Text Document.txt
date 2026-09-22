@@ -1,0 +1,6 @@
+gh api -X PUT repos/kopcot/DLNAServer/branches/main/protection \
+  -F required_status_checks.strict=true \
+  -F 'required_status_checks.contexts[]=Build and test' \
+  -F enforce_admins=false \
+  -F required_pull_request_reviews=null \
+  -F restrictions=null

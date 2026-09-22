@@ -1,11 +1,11 @@
 {
   "Dlna": {
     "Server": {
-      "Port": 26855,
-      "AdminPort": 26856,
+      "Port": 26852,
+      "AdminPort": 26853,
       "ModelName": "1.0.0.0",
       "ManufacturerName": "Kopco",
-      "ManufacturerUrl": "mailto:kopco.t@gmail.com",
+      "ManufacturerUrl": "https://github.com/kopcot/DLNAServer",
       "DebugMode": false
     },
     "Database": {
