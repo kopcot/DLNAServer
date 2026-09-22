@@ -955,8 +955,10 @@ namespace DlnaServer.IntegrationTests
             var writeTime = new DateTime(2022, 5, 6, 7, 8, 9, DateTimeKind.Utc);
             var path = CreateFile(Path.Combine("movies", "nobirth.mkv"), sizeInBytes: 400);
 
-            File.SetLastWriteTimeUtc(path, writeTime);
+            // Creation time first: Linux has no API to set a birth time, so .NET sets the write time
+            // instead, and doing it second would overwrite the write time this test falls back to.
             File.SetCreationTimeUtc(path, DateTime.UnixEpoch);
+            File.SetLastWriteTimeUtc(path, writeTime);
 
             var options = CreateOptions();
             options.Library.UseFileCreationDateTime = true;
