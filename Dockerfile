@@ -18,7 +18,7 @@
 # `buildx --platform linux/arm64` from an x64 workstation runs the whole SDK under QEMU emulation, which
 # turns a 90-second build into tens of minutes. The publish below is architecture-neutral, so building
 # on x64 for arm64 is not merely allowed here - it is the fast path.
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Project files first, so a source-only change does not re-run restore. Every csproj is copied because
