@@ -21,7 +21,9 @@ using DlnaServer.Upnp.Soap.ConnectionManager;
 using DlnaServer.Upnp.Soap.ContentDirectory;
 using DlnaServer.Upnp.Soap.MediaReceiverRegistrar;
 using DlnaServer.Upnp.Ssdp;
+using Microsoft.AspNetCore.CookiePolicy;
 using Microsoft.AspNetCore.HostFiltering;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
 using Serilog;
 using Serilog.Core;
@@ -588,6 +590,22 @@ namespace DlnaServer.Host
                 },
             });
 
+            // Immediately inside the exception handler, so everything below reads the client's own scheme
+            // and address rather than the proxy's. docker-compose.admin-remote.yml puts Caddy in front of
+            // the admin port and terminates TLS there, so without this every request behind it looks like
+            // plain HTTP from 127.0.0.1 - which would silently reduce the cookie policy below to a no-op
+            // in the one deployment that has TLS, and reduce logs/uploadSecurity.log and the
+            // UploadDevices table to a column of loopback addresses.
+            //
+            // KnownProxies and KnownNetworks are deliberately left at their defaults, which trust loopback
+            // and nothing else. Caddy runs with network_mode: host, so it reaches the server over
+            // 127.0.0.1 and is trusted, while a device on the LAN is not and cannot spoof either header.
+            // Clearing those two collections is the usual way this middleware turns into a vulnerability.
+            _ = app.UseForwardedHeaders(new ForwardedHeadersOptions
+            {
+                ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor,
+            });
+
             // Response headers, before anything can serve. Cheap, and each closes a real gap:
             //
             // frame-ancestors / X-Frame-Options - the admin origin is unauthenticated by design, and its
@@ -647,6 +665,23 @@ namespace DlnaServer.Host
             // not the pipeline, so on a fresh deployment - and again right after Recreate database -
             // Kestrel accepted requests while migrations were still running and answered a bare 500.
             _ = app.UseMiddleware<DatabaseReadyMiddleware>();
+
+            // Above everything that can write a cookie, and stated once here rather than on each
+            // CookieOptions, so a cookie added by a future page inherits it instead of having to remember.
+            //
+            // SameAsRequest, NOT Always. The admin UI ships on plain HTTP, and Always would make the
+            // browser refuse to store the cookie there: the upload page's remembered destination would
+            // quietly stop working, with nothing in any log to say why and no test able to catch it,
+            // because it is the browser that drops it. Behind the TLS proxy the same cookie goes out
+            // Secure, which is the only place the flag does anything.
+            //
+            // HttpOnly is forced because this server has no JavaScript and no JS interop at all, so no
+            // cookie here is ever meant to be read by a script.
+            _ = app.UseCookiePolicy(new CookiePolicyOptions
+            {
+                Secure = CookieSecurePolicy.SameAsRequest,
+                HttpOnly = HttpOnlyPolicy.Always,
+            });
 
             // No UseResponseCaching. It was registered and in the pipeline, and it could never store a
             // single byte: the middleware caches only responses marked Cache-Control public, and all
