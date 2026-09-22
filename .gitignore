@@ -12,7 +12,6 @@ publish/
 # Runtime state - a database carrying somebody's library, its logs, generated previews,
 # and the ffmpeg binaries the provisioner downloads beside the binaries.
 logs/
-thumbnails/
 ffmpeg/
 backup/
 *.sqlite
