@@ -17,9 +17,11 @@
 	# single most common thing to get wrong here: with a proxy that does not, every admin page renders
 	# once, looks correct, and then does nothing when clicked, because the circuit never connected.
 	reverse_proxy 127.0.0.1:{$ADMIN_PORT} {
-		# The server reads none of these - every confinement control keys on the connection's local
-		# port, not on the Host header - but they keep the request honest for logging and for any
-		# redirect the framework generates.
+		# X-Forwarded-Proto is read: UseForwardedHeaders in Program.cs turns it into the request's
+		# scheme, which is what puts the Secure flag on cookies behind this proxy and what stops
+		# uploadSecurity.log recording every device as 127.0.0.1. Caddy adds X-Forwarded-For itself.
+		# No confinement control depends on any of them - those key on the connection's local port,
+		# not on a header - so a forged one cannot reach the media port or the admin surface.
 		header_up X-Forwarded-Proto {scheme}
 		header_up X-Real-IP {remote_host}
 	}
