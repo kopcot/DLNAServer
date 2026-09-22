@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # global.json pins the SDK band the NAS runs, so CI resolves the same one rather than whatever
       # the runner happens to carry.
@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Build only - nothing is pushed. The image is multi-stage and installs ffmpeg from Debian, so a
       # broken base image or a missing package surfaces here rather than on the next deploy.
