@@ -35,3 +35,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # The solution targets net8.0 and global.json pins the 8.0.4xx SDK, so a major bump of either
+      # image produces a container that cannot run what it just built.
+      - dependency-name: "mcr.microsoft.com/dotnet/aspnet"
+        update-types: [ "version-update:semver-major" ]
+      - dependency-name: "mcr.microsoft.com/dotnet/sdk"
+        update-types: [ "version-update:semver-major" ]

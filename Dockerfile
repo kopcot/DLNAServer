@@ -76,7 +76,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=build /publish ./
-COPY --from=build /app/config.json ./config.json
+COPY --from=build /src/app/config.json ./config.json
 
 # FFmpegProvisioner looks for an 'ffmpeg' folder beside the binaries and uses whatever is in it without
 # downloading. Symlinks rather than copies so an apt upgrade of ffmpeg is picked up.
