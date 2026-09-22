@@ -10,6 +10,13 @@ worth telling you about is added to the version it belongs to.
 
 ## 1.1
 
+**Behind the optional admin proxy, the server now sees who is really calling.** If you put the admin
+pages behind the TLS proxy, every request used to arrive looking as though it came from the proxy itself
+- so the upload security log and the remembered-devices list recorded the same local address for
+everyone, which made them useless for the one question they exist to answer. They now record the
+device's own address, and cookies the admin pages set are marked as secure over that connection. Nothing
+changes for a server reached directly on the local network.
+
 **These notes and the licence now ship with the server.** This file and a `LICENSE` file are copied in
 beside the program files, so whoever is running a deployment can read what changed and what the terms are
 without going back to the source. The server is under the **MIT licence** - free to use, change and pass
