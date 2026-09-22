@@ -104,9 +104,9 @@ namespace DlnaServer.Media.Watching
                 {
                     IncludeSubdirectories = true,
                     // Honoured only by the Windows ReadDirectoryChangesW backend; the Linux inotify
-            // implementation ignores it entirely, so in production the burst-loss mitigation is the
-            // resync escalation below, not this.
-            InternalBufferSize = WatcherBufferSize,
+                    // implementation ignores it entirely, so in production the burst-loss mitigation is the
+                    // resync escalation below, not this.
+                    InternalBufferSize = WatcherBufferSize,
                     NotifyFilter = NotifyFilters.FileName
                         | NotifyFilters.DirectoryName
                         | NotifyFilters.LastWrite

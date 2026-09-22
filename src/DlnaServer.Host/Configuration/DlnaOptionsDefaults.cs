@@ -67,7 +67,7 @@ namespace DlnaServer.Host.Configuration
 
             if (!HasUsableExclusion(configured))
             {
-                options.Library.ExcludeFolders = [.._defaultExclusions];
+                options.Library.ExcludeFolders = [.. _defaultExclusions];
                 Exclude(options.Library, options.Thumbnails.SubFolderName);
 
                 return;

@@ -29,7 +29,7 @@ namespace DlnaServer.Core.Configuration
         public string ManufacturerName { get; set; } = "Kopco";
 
         [Required]
-        public string ManufacturerUrl { get; set; } = "mailto:kopco.t@gmail.com";
+        public string ManufacturerUrl { get; set; } = "https://github.com/kopcot/DLNAServer";
 
         /// <summary>
         /// Raises every log category to Trace and enables verbose per-request diagnostics.

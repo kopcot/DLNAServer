@@ -18,7 +18,7 @@
 > **The `Migrations/` folder was squashed to a single `InitialSchema`**, which means the next deploy
 > discards the NAS database and rescans - deliberate, and costed in 6i.
 >
-> **DEPLOYED 2026-09-08 ~17:43 UTC and verified live on 192.168.1.200** - the server starts, reads the
+> **DEPLOYED 2026-09-08 ~17:43 UTC and verified live on 192.168.1.100** - the server starts, reads the
 > real `config.json`, rebuilt its database to 25,596 files, serves a correct SOAP Browse, and an LG
 > television plays films, photos and music from it. Section 6i carries what was checked and how.
 > A `FileCreatedUtc` anomaly spotted during that check was chased down and is **not a defect** - it
@@ -39,7 +39,7 @@
 >
 > **Everything else from the review documents is closed.** The 2026-09-08 pass fixed B3, B4, B6, B7, B8,
 > B9, B10 and B12, decided W6 and W10, added the missing `.AsSplitQuery()`, and covered the M2
-> unreadable-folder guard that had been called untestable. **It is deployed and live** - Tomas redeployed
+> unreadable-folder guard that had been called untestable. **It is deployed and live** - the maintainer redeployed
 > at 12:34 local (10:34 UTC) on 2026-09-08, confirmed by `/manage/thumbnail` answering with the
 > `nextAfter` and `mediaFileFullPath` that only the B8 fix produces.
 >
@@ -50,7 +50,7 @@
 > inversion it reported. Do not re-raise any of them without reading why.
 
 > **Five admin-UI asks landed 2026-09-12 - section 6m**, with the overlay's zoom corrected the same day
-> after Tomas found it enlarging photographs smaller than the screen and calling that 100%, and **corrected
+> after the maintainer found it enlarging photographs smaller than the screen and calling that 100%, and **corrected
 > again on 2026-09-14**: fitted and zoomed are now mutually exclusive modes rather than one expression
 > setting `zoom` and `max-width` together, which moved the cap with the level and squashed a growing
 > picture. A photograph opens larger on a click: an overlay
@@ -111,12 +111,12 @@ not cascade into content, and `excludeFolders` now reads four entries with no re
 How to tell which build is answering, without guessing - the older build has no such panel:
 
 ```bash
-curl -s http://192.168.1.200:26853/admin/maintenance | grep -c 'Rebuild from scratch'
+curl -s http://192.168.1.100:26853/admin/maintenance | grep -c 'Rebuild from scratch'
 ```
 
 **The one thing that matters more than any of it: ffmpeg is missing on the NAS, so the library has no
 video metadata at all** - no durations, resolutions, codecs, audio tracks or subtitles across 25,504
-files, and that is why the language filters had nothing to show. It needs a decision from Tomas rather
+files, and that is why the language filters had nothing to show. It needs a decision from the maintainer rather
 than code. **Section 6d, "What is still outstanding".**
 
 **A full `/review-all --full` pass was run and its findings fixed (2026-09-02).** 15 reviewers over the
@@ -273,7 +273,7 @@ one extra platter read per film, not the silence the cache exists to buy.
 
 ### Measured baseline (Reference, live, 11 days uptime, ~20,000 files)
 
-Source: `http://192.168.1.200:26851/manage/memory`
+Source: `http://192.168.1.100:26851/manage/memory`
 
 | Metric | Value |
 | --- | --- |
@@ -490,7 +490,7 @@ fragmentation) and never appears in GC statistics.
 | M5 + logging parity | 65 s | 135.5 MB | 85.2 MB | 23.2 MB | 0 / 0 / 0 | Debug, Server GC, 36 threads. Library: **empty**. |
 | M6 (delivery) | 60 s | 126.0 MB | 79.1 MB | 17.3 MB | 0 / 0 / 0 | Debug, Server GC, 38 threads. Library: 4 files (2 images, 2 videos), thumbnails generated. Shipped cache defaults (1240 / 512 MB), but **no media was served during the settle, so the byte cache is empty** - this row measures the server, not the cache. |
 | M7 (SOAP + GENA) | 60 s | 132.6 MB | 84.1 MB | 19.6 MB | 0 / 0 / 0 | Debug, Server GC, 39 threads. Same library and empty cache as the M6 row. The +6.6 MB covers three more SoapCore endpoints and their contract serialisers, which are built once at startup. |
-| **NAS, real library** | 1013 s | **391.1 MB** | 452.9 MB | **179.2 MB** | 13 / 10 / 9 | Release, Server GC, 27 threads, linux-x64 on the QNAP. First measurement against the real library and real renderers (VLC browsing, an LG television discovering). Read live from `http://192.168.1.200:26852/manage/memory`. **This is the number that matters and it misses both targets** - see the analysis below. |
+| **NAS, real library** | 1013 s | **391.1 MB** | 452.9 MB | **179.2 MB** | 13 / 10 / 9 | Release, Server GC, 27 threads, linux-x64 on the QNAP. First measurement against the real library and real renderers (VLC browsing, an LG television discovering). Read live from `http://192.168.1.100:26852/manage/memory`. **This is the number that matters and it misses both targets** - see the analysis below. |
 | **NAS, real library, after playback** | 2530 s | **5073.0 MB** | 5174.2 MB | **1128.2 MB** | 6 / 5 / 4 | Release, Server GC, 25 threads. Same box, index now 25,501 files in 1,070 directories. GC total committed **4901.8 MB**. Read again 316 s later: working set flat at 5073.5 MB, managed heap up to 1182.6 MB, **collection counts unchanged at 6/5/4**. See the analysis below - this is 13x the row above and the mechanism is understood. |
 | **NAS, post-fix, cold reprocess** | 200 s | **705.6 MB** | 777.7 MB | **30.7 MB** | 15 / 10 / 7 | Release, Server GC, 30 threads. First reading of the 2026-09-02 build. GC committed **486 MB**; **LOH 1.97 MB with 1.38 MB fragmentation** - essentially empty. `processorCount` **4**, `totalAvailableMemory` **39,907 MB**. Workload is NOT comparable to the row above: the database was absent at startup so this is a cold re-index of 25,501 files with metadata and thumbnail generation running flat out, an **empty byte cache and no playback**. Managed heap is under target for the first time; working set still 3.5x over it. |
 | **NAS, post-fix, 16 min** | 951 s | **350.6 MB** | 402.4 MB | 75.3 MB | 75 / 15 / 9 | Same instance as the row above, still re-processing. Working set **fell from 705.6 to 350.6 MB** as the GC caught up, so the earlier figure was cold-start churn rather than a steady state. GC committed 121.5 MB. **LOH 7.97 MB of which 6.38 MB is fragmentation** - only ~1.6 MB live, the miniature form of the 5 GB mechanism. Byte cache still empty, no playback. |
@@ -504,10 +504,10 @@ fragmentation) and never appears in GC statistics.
 
 | **NAS, deployed and restarted — THE AFTER-ROW** | 255 s | **177.7 MB** | 203.5 MB | 10.7 MB | 57 / 27 / 22 | Release, Workstation GC, 19 threads, read 2026-09-06 minutes after the deploy that finally carried the tuned `config.json`. GC committed **17.95 MB**, **LOH 0.49 MB with no fragmentation**. Against the before-row on the same box: **563.4 -> 177.7 MB**, and against the reference read at the same moment (**248.1 MB** working set, 27.1 MB committed) this server is now **below the one it replaces** rather than 2.3x it. The mechanism is confirmed: nothing changed but `mmap_size` 128 -> 0 and `cache_size` 32 -> 2 per pooled connection. **Caveat, and it matters: 255 s of uptime is a cold reading and the before-row was at 27 h.** A steady-state comparison still needs a day. |
 | **NAS, live, mid metadata pass** | 1891 s | **282.9 MB** | 287.5 MB | 25.4 MB | 21219 / 1527 / 125 | Release, Workstation GC, 24 threads, read 2026-09-08 straight off `/manage/memory` without disturbing the process. GC committed **41.0 MB** for a 25.4 MB heap; gen2 at 26.1 MB with 5.0 MB fragmentation. **A loaded reading, not steady state**: a metadata and preview pass was running over 25,532 files throughout, which is ffprobe, SkiaSharp and a write per file - so this is closer to a ceiling under work than to a resting figure. Live configuration at the time: byte cache 5120 / 512 and `mmap 64` / `cache 8`, both by choice (standing decisions 11 and 14), which is *not* the tuning the 177.7 MB row was taken under. Recorded because 31 minutes of uptime answers part of what the after-row's 255 s could not. **Still owed: one reading with the library quiet.** |
-| **NAS, after the 2026-09-08 redeploy** | 2982 s | **1205.9 MB** | n/a | 971.6 MB | 22508 / 1650 / 72 | Release, 19 threads, read after Tomas redeployed at 12:34 local. **The number is the byte cache and nothing else:** `/manage/filecache` reported **950.24 MB held** at the same moment (6,551 entries, 3 of them films, budget 5120 / 512 by choice). 950 of the 971 MB managed heap is cached payload, so this row measures the operator's cache decision, not the server - exactly the confusion the `/manage/filecache` path listing exists to settle, and the reason working set alone is not a verdict. **Not comparable with the rows above**, which were taken with a near-empty cache. |
+| **NAS, after the 2026-09-08 redeploy** | 2982 s | **1205.9 MB** | n/a | 971.6 MB | 22508 / 1650 / 72 | Release, 19 threads, read after the maintainer redeployed at 12:34 local. **The number is the byte cache and nothing else:** `/manage/filecache` reported **950.24 MB held** at the same moment (6,551 entries, 3 of them films, budget 5120 / 512 by choice). 950 of the 971 MB managed heap is cached payload, so this row measures the operator's cache decision, not the server - exactly the confusion the `/manage/filecache` path listing exists to settle, and the reason working set alone is not a verdict. **Not comparable with the rows above**, which were taken with a near-empty cache. |
 
 > **The byte-cache budget on this NAS is 5120 MB / 512 MB BY CHOICE. It is not drift, and it must not
-> be "corrected".** Tomas set it deliberately and restated it on 2026-09-06: he wants those numbers in
+> be "corrected".** The maintainer set it deliberately and restated it on 2026-09-06: they want those numbers in
 > `config.json`, and 256 / 32 only as the *code default*. This was misread as stale configuration twice
 > in one day and reverted twice; both reverts were wrong and both were undone. The box has ~40 GB and
 > reports no cgroup limit, so a multi-gigabyte film cache is a reasonable trade there.
@@ -738,7 +738,7 @@ a decision.
 ### Sixth reading, and the correction that followed it: the LOH was a ratchet, not a leak
 
 Measured 2026-09-04 on the NAS at **12.9 hours uptime** - by a wide margin the longest reading here, every
-earlier row being under 45 minutes - and then measured again 326 s later, after Tomas pressed
+earlier row being under 45 minutes - and then measured again 326 s later, after the maintainer pressed
 `/admin/cache` -> **Clear and collect**. The pair is what makes it conclusive; either reading alone is
 misleading.
 
@@ -793,7 +793,7 @@ mechanism that matters, not the absolute number.
 > **2026-09-04 09:27**, later than every assembly beside it, so it was written after the deploy - the admin
 > Settings page writes that file. **512 MB per file re-admits films to the cache, which is the 5,073 MB
 > mechanism M9 warns against.** It has not fired only because nothing has been retained yet (hits 30,
-> misses 882). Deciding that number is Tomas's call; it is recorded here because a reading taken against a
+> misses 882). Deciding that number is the maintainer's call; it is recorded here because a reading taken against a
 > 5 GB authorisation is not a reading of what this tree would do.
 
 ## 3c. Logging - compared against the reference
@@ -1525,7 +1525,7 @@ preview, so a folder of photos looks right before the thumbnail pass has reached
   is streaming. That was wrong: watching a film through the admin page is the same workload as watching it
   on a television, and the difference made the acoustic goal depend on which port the request arrived on.
   `MediaContentResolver` is now the single decision for both, covered by `MediaContentResolverTest`, and
-  the responsive layout, the thumbnail identifier and this all came from Tomas using the deployed UI -
+  the responsive layout, the thumbnail identifier and this all came from the maintainer using the deployed UI -
   none of the three was visible from a local run.
 - **The admin UI does not link to the media port at all.** `AdminMediaController` serves previews from
   `/admin/media/*`, reading the same sources as `FileServerController` - cache, then database copy, then
@@ -1585,7 +1585,7 @@ guessing, and this section's own rule already says a reading without a heap limi
       constrain a healthy GC. **So §3's <250 MB working set and <20 Gen2/day targets pull against each
       other on this workload, and this file has never reconciled them** - the low RSS reading came *from*
       collecting. Decide which target is real before treating 78/day as a defect.
-- [x] **The cache-architecture decision is settled: whole-file media buffering stays.** Tomas chose to
+- [x] **The cache-architecture decision is settled: whole-file media buffering stays.** The maintainer chose to
       keep `MediaCacheBacklog` / `MediaCacheFillHostedService` / `CachedContentClass.Media` rather than
       take the review's deletion, with the limits at 32 MB per file and a 256 MB budget - which admit no
       film, so a film is measured once, recorded as excluded, and never re-enqueued. The machinery is
@@ -1609,7 +1609,7 @@ guessing, and this section's own rule already says a reading without a heap limi
       instead of writing to a terminal that is about to close.
 - [x] **VLC**: discovers the server, browses the tree, plays files.
 - [x] **LG television**: lists the library, plays a file, shows thumbnails, and seeks - **confirmed by
-      Tomas 2026-09-04** against the 2026-09-03 23:11 build. The listing defect described below is history.
+      the maintainer 2026-09-04** against the 2026-09-03 23:11 build. The listing defect described below is history.
 - [x] Verify the rest against real TVs: playback, seek, thumbnails - **confirmed 2026-09-04** on the LG.
       Two limits on that evidence, stated rather than implied: which media *kinds* were played was not
       enumerated, and it was the 2026-09-03 23:11 build, so none of the 2026-09-04 work has been seen by
@@ -1690,12 +1690,11 @@ installation keeps the old value until that line is deleted by hand.
 
 ---
 
-## 6b. Backlog raised 2026-09-02 (`missing_features.md`)
+## 6b. Backlog raised 2026-09-02
 
-Tomas's notes from the night, each checked against the code and the reference before being written down
+The maintainer's notes from the night, each checked against the code and the reference before being written down
 here. The items that turned out to be defects were promoted into "Do these next" in section 8; what
-remains is real work with no urgency attached yet. `missing_features.md` itself can go once this section
-is agreed - it is a scratch file, and this is the source of truth.
+remains is real work with no urgency attached yet. This section is the source of truth.
 
 | # | Item | Verdict | Effort |
 | --- | --- | --- | --- |
@@ -1835,7 +1834,7 @@ another thread's `Cancel()`, which is why `ObjectDisposedException` needs its ow
 The cost is that the store is not injectable, so tests go through `IServedFileCache`. That is the seam
 they should use anyway, so nothing is lost.
 
-## 6c. Backlog raised 2026-09-03 (second `missing_features.md` batch) - ALL DONE
+## 6c. Backlog raised 2026-09-03 (second batch) - ALL DONE
 
 Four items, each verified against the code **and** against the live NAS before being worked on. Three were
 real defects, one was already correct and is now pinned by a test.
@@ -1876,7 +1875,7 @@ What stays unfiltered, and why each one matters:
   item 1b needed no change; `IndexAsync_WhenAHiddenFolderesFileIsDeleted_StillRemovesItsRow` now pins it,
   because nothing stopped a future change from "tidying" that filter in.
 
-**The exclusion MATCHING rule changed on 2026-09-03, from a customer report** (`missing_features.md`).
+**The exclusion MATCHING rule changed on 2026-09-03, from a customer report**.
 An entry is now a folder name, a partial path or a full path as it reads on the server, matched on
 **whole path-segment boundaries**, with both separators treated as equivalent. Before, hiding was a raw
 substring over the whole path - what the reference does - so an entry of `path1` also hid `path1L` and
@@ -2009,7 +2008,7 @@ Two consequences worth knowing:
   read-only media volume. The setting, its validation and the central-cache branch in
   `MediaProcessingHostedService.BuildThumbnailPath` are all **kept and marked as unreachable in their XML
   docs**, so restoring that path is a one-line change rather than a redesign. Removing them is a decision
-  for Tomas, not a tidy-up.
+  for the maintainer, not a tidy-up.
 - The name reaches `ExcludeFolders`, so it is written into `config.json` on the next save and shows on the
   settings page. That is once, de-duplicated, and self-documenting.
 
@@ -2046,7 +2045,7 @@ Local run on a purpose-built tree - `movies/action/film.mkv`, `Films/Private/hid
 **One trap the local run exposed that the NAS does not have.** The read-side exclusion is a plain substring
 test, so it is **separator-sensitive**: the entry `Films/Private` matches the stored path
 `/share/Media/Films/Private` on the NAS and matches nothing at all on a Windows host, where the same folder
-is stored as `...\Films\Private`. It fails silently - the folder simply stays visible. Tomas's live
+is stored as `...\Films\Private`. It fails silently - the folder simply stays visible. The maintainer's live
 configuration is fine because the NAS stores forward slashes. Worth fixing if this ever runs on Windows
 for real; the fix is normalising separators on both sides of the comparison, and in SQL that means
 `replace()` on the column, which these `instr` predicates already cannot index anyway.
@@ -2099,7 +2098,7 @@ Verified all three states by running it: with ffmpeg present, no warning; with i
 anything needed it, still no warning (`null`); after forcing a metadata pass with
 `/manage/recreateAllFilesInfo`, the warning appears.
 
-**What is still outstanding, and it is Tomas's call.** Getting the binaries onto the NAS is a deployment
+**What is still outstanding, and it is the maintainer's call.** Getting the binaries onto the NAS is a deployment
 decision, and the reason `DownloadFFmpeg` was turned off in the first place is that it downloads and
 executes an unverified binary from a third-party API:
 
@@ -2197,13 +2196,13 @@ experiment, not by argument: a plain `/manage/restart` with pending processing r
 looks alarming in a log. Worth a `catch` around the shutdown path in `MediaProcessingHostedService`
 sometime.
 
-## 6f. Backlog raised 2026-09-03, closed 2026-09-04 (third `missing_features.md` batch)
+## 6f. Backlog raised 2026-09-03, closed 2026-09-04 (third batch)
 
-Three items. One was Tomas's own fix needing verification, two were real gaps.
+Three items. One was the maintainer's own fix needing verification, two were real gaps.
 
 | # | Item | Verdict |
 | --- | --- | --- |
-| 1 | Recently added must stay in indexing order, not be re-sorted | **Tomas's fix is correct and live** - verified on the NAS, then pinned by a test |
+| 1 | Recently added must stay in indexing order, not be re-sorted | **The maintainer's fix is correct and live** - verified on the NAS, then pinned by a test |
 | 2 | Some `config.json` settings are not on `/admin/settings` (Database, for example) | **Fixed** - 11 settings added plus a full editor for the file-type map |
 | 3 | No way to search for files with no metadata or no preview | **Fixed** - two filters and a status column |
 
@@ -2229,7 +2228,7 @@ the recently added files. M5's table is annotated.
 
 **Still open, not applied:** `Sort` is now only ever called with an empty file list, so its file-sorting
 half is unreachable. Dropping it would remove the trap entirely rather than pin it - a change to committed
-code that wants Tomas's say-so, not a tidy-up.
+code that wants the maintainer's say-so, not a tidy-up.
 
 ### The settings page had eleven settings missing, and one of them can empty the library
 
@@ -2341,7 +2340,7 @@ for the new filters, because a filter added later could be written against an un
 | Preview page status rows | "no - 3 attempts failed" |
 | Console | no errors, no warnings |
 
-## 6g. Backlog raised 2026-09-06, closed 2026-09-08 (fourth `missing_features.md` batch)
+## 6g. Backlog raised 2026-09-06, closed 2026-09-08 (fourth batch)
 
 All five items are implemented, deployed and verified on the NAS. A sixth piece of work - open-ended
 file metadata - was asked for during the same session and is described below with them.
@@ -2371,7 +2370,7 @@ and carries the original row across. The insert-set test is what makes it safe: 
 not a hash, so two byte-identical copies share one - and without it, deleting one copy would "move" the
 deleted row onto the survivor and destroy an untouched file's identity. A test pins exactly that.
 
-Named after the watcher's own vocabulary, as Tomas asked: `MoveOrRenameAsync`, and the log says *moved*
+Named after the watcher's own vocabulary, as the maintainer asked: `MoveOrRenameAsync`, and the log says *moved*
 when the folder changed and *renamed* when only the name did.
 
 ### 3. Audio cover art was never extracted
@@ -2668,7 +2667,7 @@ rather than rebuilt, so that part is cheap; ffprobe metadata and tags are not.
 
 ### Deployed and verified live, 2026-09-08 ~17:43 UTC
 
-Tomas deployed 6i to the NAS (`192.168.1.200`, media 26852, admin 26853) and it came up. Checked over
+The maintainer deployed 6i to the NAS (`192.168.1.100`, media 26852, admin 26853) and it came up. Checked over
 HTTP while the metadata and thumbnail pass was still running, so every memory figure here is a **loaded**
 reading and none of it closes the quiet-reading item.
 
@@ -3027,7 +3026,7 @@ state).
 
 A number would be a lie there, which is the point: levels are percentages of the file's own size, and fitted
 is that size *capped to the stage*, so a picture wider than the screen is not at 100% of anything the operator
-can see. **Fitted is decided by the mode, never by measuring** - Tomas chose this explicitly over "the photo
+can see. **Fitted is decided by the mode, never by measuring** - the maintainer chose this explicitly over "the photo
 currently fits inside the stage", which would have needed JavaScript to measure and would have flipped the
 label back to `Fitting` on a big picture zoomed far enough out. So `25%` stays `25%` even when the result
 happens to fit, and `Fit to screen` is gated on `_viewerFitted` and never on `_zoomPercent == 100`: zooming
@@ -3040,7 +3039,7 @@ resolves against the containing block *divided by* the zoom and so always works 
 making every level a percentage of `min(natural, stage)`. The arithmetic is real and the rendered *width* is
 right at every level, which is exactly what the verification measured; what it never looked at was the
 *shape*. The cap moves with the level, so a picture growing past the stage is squashed rather than panned.
-Tomas reported it as "incorrect showing a scale". The lesson is recorded in the personal log: measuring the
+The maintainer reported it as "incorrect showing a scale". The lesson is recorded in the personal log: measuring the
 one number a hypothesis is about is not verifying the rendering.
 
 Verified 2026-09-14 twice. First against the CSS alone on a 600-pixel stage with a 2,000x1,000 and a 320x160
@@ -3139,7 +3138,7 @@ Checked at 390px: `.photozoom` and `.sitefoot` are both `display: none`, and tap
 `.avi`, so the ask's "all media-kind" is covered rather than assumed.
 
 **This paragraph used to record the upscaling as "one consequence worth knowing, not a defect" - reading the
-ask's "scale of the picture up to the width of the screen" as licence to enlarge a small photograph. Tomas
+ask's "scale of the picture up to the width of the screen" as licence to enlarge a small photograph. The maintainer
 called it on 2026-09-12 and he was right**, which is why the zoom paragraph above now describes a fitted
 default and percentages of the picture. Worth keeping as a reminder that "the ask literally says so" is a weak
 defence for behaviour that looks wrong on screen.
@@ -3159,7 +3158,7 @@ only other page with a top-level row is Settings, where the row is last and the 
 
 ## 6n. Uploading, folds and provenance tooltips, 2026-09-15 (`1.1.0915`)
 
-The whole of the `missing_features.md` open list, closed in one batch: collapsible listings (1), a file
+The whole of the backlog's open list, closed in one batch: collapsible listings (1), a file
 upload page with its own settings, remembered destination, security log, overwrite/skip and a report
 (2 and 2a-2f), provenance tooltips behind a temporary switch (3, 3a), an assembly table on About (4), and
 `release-notes.md` (5). Three of the five are admin-UI only and cannot regress a television. **Uploading is
@@ -3348,7 +3347,7 @@ operator reads to find out a feature exists, so a feature absent from it is, for
 
 ## 6o. Four operator asks, 2026-09-17 (`1.1.0917`)
 
-The `missing_features.md` open list, closed. One is a defect with a real cost on disc; three are admin-UI
+The backlog's open list, closed. One is a defect with a real cost on disc; three are admin-UI
 features. The fifth item on that list - a *Check* button for the upload folder - was **already built** on
 2026-09-16 and is described in 6n under "Checking the upload folder"; the inbox row was stale, and nothing
 was written for it.
@@ -3522,7 +3521,7 @@ running assembly rather than repeating the string.
 
 | Part | Who may bump it | How often |
 | --- | --- | --- |
-| Major | Tomas only - by hand or on his explicit request | never on my own initiative |
+| Major | The maintainer only - by hand or on their explicit request | never on my own initiative |
 | Minor | me | at most once per two weeks - read the last `MonthDate` to tell when the previous bump was |
 | MonthDate | me | daily, and on every change |
 
@@ -3572,7 +3571,7 @@ licence and points at the file rather than reproducing its text.
 
 ### Code conventions
 - **Block-scoped namespaces** (`.editorconfig`). The global `cs-writeguard` hook asks for
-  file-scoped; it carries flyt-platform's rules and does not apply here.
+  file-scoped; it carries another project's rules and does not apply here.
 - **`is null` is a compile error inside an EF expression tree.** Use `!= null` in projections. The hook's
   `null-pattern` warning is wrong there.
 - **A private or internal `async` helper takes a REQUIRED `CancellationToken`, with no `= default`.**
@@ -3661,7 +3660,7 @@ that renders wrongly rather than an error:
   that page renders its Folders heading only when there are folders, and shows one page-level
   "Nothing indexed here yet." panel for the whole directory, so an `EmptyContent` there would be
   unreachable markup or a second empty message beside the existing one. Changing that page's empty-state
-  handling is a decision for Tomas rather than a side effect of adding virtualization.
+  handling is a decision for the maintainer rather than a side effect of adding virtualization.
 - Blazor Server is the render mode throughout, so all of this runs over the circuit - a scroll fetches
   rows over the websocket rather than from a client-side collection.
 
@@ -3681,7 +3680,7 @@ that renders wrongly rather than an error:
   output is unverified until a TV has seen it.
 
 ### The cs-writeguard hook
-Global, and written for flyt-platform, so most of what it says does not apply here. Two exceptions:
+Global, and written for another project, so most of what it says does not apply here. Two exceptions:
 - **`async-blocking` is real and worth obeying.** It caught genuine sync-over-async in the SOAP service.
 - `braces`, `distinct` and `missing-ct` are usually fair.
 - `xmldoc-private` and `filescoped-namespace` are noise in this repo - say so and move on rather than
@@ -3988,7 +3987,7 @@ something: `GetPendingProcessingAsync` skips a suppressed row.
   ffmpeg -y -f lavfi -i "testsrc=size=320x240:rate=10:duration=3"     -f lavfi -i "sine=frequency=440:duration=3" -f lavfi -i "sine=frequency=660:duration=3"     -map 0:v -map 1:a -map 2:a -c:v libx264 -c:a aac     -metadata:s:a:0 language=eng -metadata:s:a:0 title="English original" -disposition:a:0 default     -metadata:s:a:1 language=ces -metadata:s:a:1 title="Czech dub" Dubbed.mkv
   ```
 - **A small real video** can be pulled off the running NAS rather than hunted for:
-  `curl -o sample.mkv http://192.168.1.200:26852/fileserver/file/<publicId>`.
+  `curl -o sample.mkv http://192.168.1.100:26852/fileserver/file/<publicId>`.
 - Scratch libraries were built under the session scratchpad; nothing in the repository depends on them.
 
 #### Running a throwaway instance that touches nothing in the repository
@@ -4220,7 +4219,7 @@ one place, and that reporting something in it as a defect is a known false posit
 
 ### Standing decisions — reporting one of these as a defect is a FALSE POSITIVE
 
-From the round-2 fact sheet, decided by Tomas with reasons:
+From the round-2 fact sheet, decided by the maintainer with reasons:
 
 1. **No authentication anywhere.** LAN appliance, by design. Do not propose adding auth.
 2. **`appsettings.json` reads `"AllowedHosts": "*"` on purpose.** That value is the SIGNAL that makes
@@ -4588,7 +4587,7 @@ This file is written to be the only context needed. Work through it in order.
 and real memory readings reveal.
 
 **The NAS is one batch behind the tree.** Checked 2026-09-15 against
-`http://192.168.1.200:26853/admin/about`, which is served from the `publishNAS` folder: the page answers,
+`http://192.168.1.100:26853/admin/about`, which is served from the `publishNAS` folder: the page answers,
 and it reports **version `1.0.0`**. Both halves of that are evidence. The page existing means the deployed
 build carries **section 6m** - About arrived with it on 2026-09-12 - and the version reading `1.0.0`, the
 implicit default, means it predates the `<Version>` property added on 2026-09-15. So everything through 6m
@@ -4649,7 +4648,7 @@ source-folders restart note.
 How to tell without guessing - fetch the stylesheet and look for a rule only the newer build has:
 
 ```bash
-curl -s http://192.168.1.200:26853/_content/DlnaServer.Admin/admin.css | grep -c 'collapse-toggle'
+curl -s http://192.168.1.100:26853/_content/DlnaServer.Admin/admin.css | grep -c 'collapse-toggle'
 ```
 
 That is how the "I still see an empty line" report was resolved: the NAS was serving the pre-fix CSS, so
@@ -4670,7 +4669,7 @@ with "include every subfolder" ticked on a source root, is the way to backfill i
 
 **A. Decide about ffmpeg on the NAS (section 6d).** Nothing else on this list is worth as much. Until the
    binaries are there, a 25,504-file library has no video metadata and never will. Two routes, both
-   Tomas's call: drop `ffmpeg` and `ffprobe` into `publishNAS/ffmpeg/` (and check `NasBuild.sh` does not
+   the maintainer's call: drop `ffmpeg` and `ffprobe` into `publishNAS/ffmpeg/` (and check `NasBuild.sh` does not
    wipe that folder on redeploy), or turn `Thumbnails.DownloadFFmpeg` on once, knowingly, and off again.
    Then *Recreate metadata* on Maintenance, or `POST /manage/recreateAllFilesInfo`, and expect it to take
    a long while. Expect the language lists to stay short even afterwards - a stream contributes a language
@@ -4750,7 +4749,7 @@ with "include every subfolder" ticked on a source root, is the way to backfill i
    thumbnails and static assets. They all sit under the 85,000-byte large-object threshold, so the LOH
    problem ends by construction, and they are what actually gets re-served. The measurement below is worth
    running afterwards as confirmation. The older readings, kept for the reasoning: Section 3 carries the
-   2-4 GB production constraint and Tomas's decision to keep 1024 MB total / 512 MB per file anyway.
+   2-4 GB production constraint and the maintainer's decision to keep 1024 MB total / 512 MB per file anyway.
    What has to be decided, with a measurement rather than an argument:
 
    - Does the working set on a **constrained** run stay inside what a 2-4 GB machine can give? Run under
@@ -4765,7 +4764,7 @@ with "include every subfolder" ticked on a source root, is the way to backfill i
      GC" rule was written on the wrong evidence and must not be quoted against that option without
      reading the third-reading analysis first.
 
-2. **`missing_features.md` items 8 and 12**, both still blocked on Tomas rather than on work:
+2. **Backlog items 8 and 12**, both still blocked on the maintainer rather than on work:
    - **8, resource translations**: needs the first admin string worth translating, plus a decision on
      `InvariantGlobalization=true` and `SatelliteResourceLanguages=en` in `Directory.Build.props` - the
      second silently strips any non-English satellite assembly at publish, so translations would work
@@ -4937,7 +4936,7 @@ Abstractions now live in Core so the Razor class library can use them: `IServedF
 - **A local `dotnet run` writes into the same `bin/` the NAS build uses.** Harmless, but a deployment
   immediately afterwards recompiles from scratch.
 - **The NAS repo and the development tree are the same files.** `T:\repos\DLNAServer` is the NAS
-  share `\\NASKopcoTS464\Public` (`/share/Public`), so the deployment folder and the NAS's own `obj/` are
+  share `\\NAS\Public` (`/share/Public`), so the deployment folder and the NAS's own `obj/` are
   directly readable - which is how several of this session's diagnoses were made. It also means a local
   build overwrites the NAS's `obj/` state. The folder was `DLNAServer_Claude` until 2026-09-21.
 - **The deployment folder moved on 2026-09-21**, out of the repository and up to `T:\apps\Dlna-server`

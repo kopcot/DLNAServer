@@ -1,0 +1,37 @@
+version: 2
+
+updates:
+  # The transitive advisory that reached the NAS is the reason this file exists - see the
+  # System.Security.Cryptography.Xml pin in Directory.Packages.props.
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      microsoft:
+        patterns:
+          - "Microsoft.*"
+          - "System.*"
+      test:
+        patterns:
+          - "NUnit*"
+          - "FluentAssertions"
+          - "coverlet.*"
+          - "NetArchTest.*"
+    ignore:
+      # Deliberately held in the 8.x band: net8.0 is the target and the 9.x line still carries most of
+      # the same advisories, so moving forward is not the fix.
+      - dependency-name: "System.Security.Cryptography.Xml"
+        update-types: [ "version-update:semver-major" ]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Base images in Dockerfile - the runtime image is what ships to the NAS.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

@@ -27,7 +27,7 @@
     /// <b>On this server the Origin branch is not the fallback - it is the only branch.</b> Fetch
     /// metadata is sent only to potentially-trustworthy origins, and this server is plain HTTP on a LAN
     /// address, so no browser sends <c>Sec-Fetch-Site</c> here at all. Confirmed against Chrome 153 on
-    /// 2026-09-16: neither a form post nor a <c>fetch</c> to <c>http://192.168.1.200:26853</c> carried
+    /// 2026-09-16: neither a form post nor a <c>fetch</c> to <c>http://192.168.1.100:26853</c> carried
     /// one. The Safari 15.x reasoning above therefore understates it - every browser takes that path.
     /// </para>
     /// <para>

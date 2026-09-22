@@ -1321,7 +1321,7 @@ namespace DlnaServer.Persistence.Repositories
                 ThumbnailStamp = f.ThumbnailStamp,
                 IsMetadataSuppressed = f.IsMetadataSuppressed,
                 IsThumbnailSuppressed = f.IsThumbnailSuppressed,
-                        IsThumbnailRebuildForced = f.IsThumbnailRebuildForced,
+                IsThumbnailRebuildForced = f.IsThumbnailRebuildForced,
                 MetadataFailureCount = f.MetadataFailureCount,
                 ThumbnailFailureCount = f.ThumbnailFailureCount,
                 ThumbnailPublicId = f.Thumbnail != null ? f.Thumbnail.PublicId : null,
@@ -1658,37 +1658,37 @@ namespace DlnaServer.Persistence.Repositories
                             .Select(a => a.Duration)
                             .FirstOrDefault(),
                     Width = f.Video != null ? f.Video.Width : null,
-                Height = f.Video != null ? f.Video.Height : null,
-                Bitrate = f.Video != null ? f.Video.Bitrate : null,
-                VideoCodec = f.Video != null ? f.Video.Codec : null,
+                    Height = f.Video != null ? f.Video.Height : null,
+                    Bitrate = f.Video != null ? f.Video.Bitrate : null,
+                    VideoCodec = f.Video != null ? f.Video.Codec : null,
 
-                // The same track Duration falls back to - flagged default first, then container order -
-                // so every audio attribute in one DIDL response describes one track rather than three.
-                AudioChannels = f.AudioStreams
+                    // The same track Duration falls back to - flagged default first, then container order -
+                    // so every audio attribute in one DIDL response describes one track rather than three.
+                    AudioChannels = f.AudioStreams
                     .OrderByDescending(a => a.IsDefault)
                     .ThenBy(a => a.StreamIndex)
                     .Select(a => a.Channels)
                     .FirstOrDefault(),
-                AudioSampleRate = f.AudioStreams
+                    AudioSampleRate = f.AudioStreams
                     .OrderByDescending(a => a.IsDefault)
                     .ThenBy(a => a.StreamIndex)
                     .Select(a => a.SampleRate)
                     .FirstOrDefault(),
-                AudioCodec = f.AudioStreams
+                    AudioCodec = f.AudioStreams
                     .OrderByDescending(a => a.IsDefault)
                     .ThenBy(a => a.StreamIndex)
                     .Select(a => a.Codec)
                     .FirstOrDefault(),
-                FileCreatedUtc = f.FileCreatedUtc,
+                    FileCreatedUtc = f.FileCreatedUtc,
                     FileModifiedUtc = f.FileModifiedUtc,
                     CreatedUtc = f.CreatedUtc,
                     IsExcludedFromCache = f.IsExcludedFromCache,
                     ContentStamp = f.ContentStamp,
                     MetadataStamp = f.MetadataStamp,
                     ThumbnailStamp = f.ThumbnailStamp,
-                IsMetadataSuppressed = f.IsMetadataSuppressed,
-                IsThumbnailSuppressed = f.IsThumbnailSuppressed,
-                        IsThumbnailRebuildForced = f.IsThumbnailRebuildForced,
+                    IsMetadataSuppressed = f.IsMetadataSuppressed,
+                    IsThumbnailSuppressed = f.IsThumbnailSuppressed,
+                    IsThumbnailRebuildForced = f.IsThumbnailRebuildForced,
                     MetadataFailureCount = f.MetadataFailureCount,
                     ThumbnailFailureCount = f.ThumbnailFailureCount,
                     ThumbnailPublicId = f.Thumbnail != null ? f.Thumbnail.PublicId : null,

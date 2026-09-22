@@ -18,7 +18,7 @@ namespace DlnaServer.UnitTests.Upnp
                 _deviceId,
                 FriendlyName: "ZEN DLNA Server (TESTBOX)",
                 ManufacturerName: "Kopco",
-                ManufacturerUrl: "mailto:kopco.t@gmail.com",
+                ManufacturerUrl: "https://github.com/kopcot/DLNAServer",
                 ModelName: "1.0.0.0");
         }
 

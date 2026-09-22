@@ -61,3 +61,39 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+###############################################################################
+# Line endings the runtime depends on.
+#
+# `* text=auto` at the top of this file normalises to LF in the repository but
+# checks out CRLF on Windows. NasBuild.sh runs on the NAS and the container
+# build copies from the working tree, so a CRLF checkout reaches a Linux shell
+# as `/bin/sh^M`. These entries pin the ending per file type instead.
+###############################################################################
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+Caddyfile       text eol=lf
+.env.example    text eol=lf
+.dockerignore   text eol=lf
+
+# Source and project files are LF everywhere, so a checkout always matches `.editorconfig`.
+*.cs            text eol=lf
+*.razor         text eol=lf
+*.csproj        text eol=lf
+*.props         text eol=lf
+*.editorconfig  text eol=lf
+*.json          text eol=lf
+*.xml           text eol=lf
+*.md            text eol=lf
+
+# Windows PowerShell 5.1 tooling stays CRLF.
+*.ps1           text eol=crlf
+
+# Binary - never normalise, never diff as text.
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
