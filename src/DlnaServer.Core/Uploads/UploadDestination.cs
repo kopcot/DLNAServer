@@ -191,6 +191,13 @@ namespace DlnaServer.Core.Uploads
                 return false;
             }
 
+            if (HasLinkedSegment(root, resolved))
+            {
+                problem = "That folder is reached through a link, which this server does not upload into.";
+
+                return false;
+            }
+
             combined = resolved;
             problem = string.Empty;
 
@@ -223,6 +230,48 @@ namespace DlnaServer.Core.Uploads
                 }
 
                 start = index + 1;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Whether any folder between the root and the resolved destination is a link.
+        /// </summary>
+        /// <remarks>
+        /// The containment test above is lexical: <see cref="Path.GetFullPath(string)"/> collapses <c>.</c>
+        /// and <c>..</c> as text and never touches the filesystem, so a sub-folder that is a symlink out of
+        /// the tree spells like an ordinary segment and passes. This is the half that looks at the disc.
+        /// A linked folder is also invisible to the library - the scanner puts
+        /// <see cref="FileAttributes.ReparsePoint"/> in its skip list - so a file written through one would
+        /// never be indexed, and refusing it costs nothing an operator would want.
+        /// </remarks>
+        private static bool HasLinkedSegment(string root, string resolved)
+        {
+            if (string.Equals(root, resolved, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var current = root;
+
+            foreach (var segment in resolved[(root.Length + 1)..].Split(Path.DirectorySeparatorChar))
+            {
+                current = Path.Combine(current, segment);
+
+                var folder = new DirectoryInfo(current);
+
+                // The first segment that does not exist ends the walk: nothing under it exists either,
+                // so there is no link left to find.
+                if (!folder.Exists)
+                {
+                    return false;
+                }
+
+                if (folder.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                {
+                    return true;
+                }
             }
 
             return false;

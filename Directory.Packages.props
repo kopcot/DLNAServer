@@ -16,8 +16,13 @@
     <PackageVersion Include="MetadataExtractor" Version="2.9.3" />
     <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageVersion Include="SkiaSharp" Version="3.119.1" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
+    <!--
+      These two move together, always. SkiaSharp checks the native library's version at first use and
+      throws a TypeInitializationException when it is outside the band the managed package expects, so a
+      bump to one of them alone builds clean and fails at runtime - PR #11 bumped only the first.
+    -->
+    <PackageVersion Include="SkiaSharp" Version="4.152.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.152.1" />
     <PackageVersion Include="SoapCore" Version="1.2.1.11" />
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <!--

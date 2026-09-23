@@ -3,7 +3,7 @@
   <PropertyGroup>
     <!-- Major.Minor.MonthDate, bumped on every change - the scheme and who may bump which part
          are in PLAN.md section 7 under "Assembly version". One property for all nine projects. -->
-    <Version>1.1.0922</Version>
+    <Version>1.1.0923</Version>
     <TargetFramework>net8.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
