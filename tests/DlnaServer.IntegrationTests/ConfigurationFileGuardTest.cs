@@ -53,6 +53,44 @@ namespace DlnaServer.IntegrationTests
                 "because the user's settings must survive startup byte for byte");
         }
 
+        /// <summary>
+        /// The reference server's <c>config.json</c> is flat, so every key sits at the root. Dropped in
+        /// here it parses, binds to nothing, and the server runs entirely on defaults looking healthy.
+        /// </summary>
+        [Test]
+        public void EnsureUsable_WhenTheFileCarriesNoDlnaSection_SaysSoAndKeepsIt()
+        {
+            // Arrange
+            const string original = """{ "ServerName": "DLNAServer", "ServerPort": 26851 }""";
+            File.WriteAllText(_configPath, original);
+
+            // Act
+            var result = ConfigurationFileGuard.EnsureUsable(_configPath, TimeProvider.System);
+
+            // Assert
+            result.Status.Should().Be(ConfigurationFileStatus.Unrecognised,
+                "because settings that bind to nothing are worth reporting, and are not the same failure "
+                + "as a file that cannot be parsed");
+            File.ReadAllText(_configPath).Should().Be(original,
+                "because nothing is wrong with the file as a file - replacing it would destroy settings "
+                + "the operator may only have mis-shaped");
+        }
+
+        [Test]
+        public void EnsureUsable_WhenTheFileIsAnEmptyObject_IsStillValid()
+        {
+            // Arrange
+            File.WriteAllText(_configPath, "{}");
+
+            // Act
+            var result = ConfigurationFileGuard.EnsureUsable(_configPath, TimeProvider.System);
+
+            // Assert
+            result.Status.Should().Be(ConfigurationFileStatus.Valid,
+                "because an empty object carries no settings to lose, and the missing source folder it "
+                + "produces is already reported on its own");
+        }
+
         [TestCase("{ this is not json", TestName = "EnsureUsable_WhenFileIsMalformedJson_BacksUpAndReplaces")]
         [TestCase("", TestName = "EnsureUsable_WhenFileIsEmpty_BacksUpAndReplaces")]
         [TestCase("[1, 2, 3]", TestName = "EnsureUsable_WhenRootIsNotAnObject_BacksUpAndReplaces")]

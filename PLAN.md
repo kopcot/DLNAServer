@@ -3614,6 +3614,54 @@ The timers hang off the existing `AdminPageBase` plumbing rather than new lifeti
 `PageToken`, which the base already cancels on dispose, and each page overrides `Dispose(bool)` to call
 base first - so the token is cancelled and the loop unwinding before the timer it waits on goes away.
 
+## 6r. What is being served, and what the configuration file did, 2026-09-23 (`1.1.0923`)
+
+Two logging asks. Neither adds a mechanism; both make something the server already knew say so.
+
+### Serving a media file is now Information
+
+`MediaContentResolver.Resolve` already returned `MediaContentSource.IsCached`, and
+`FileServerController.LogServed` already fanned out to a transfer line and a range line carrying a
+`cache` / `disc` / `database` label. Only the level changed.
+
+**On the maintainer's decision, both lines moved to Information** - the range line as well as the
+transfer. The two costs recorded at those declarations were put to him and are unchanged by the decision:
+one line per file served, kept for a rolling week, is a viewing history in plaintext on a share anyone on
+the LAN can read; and a renderer issues one request per byte range, so a single film produces hundreds of
+the range line, which is how 32 MB of `app.log` filled in a day the last time this was at Information.
+
+Thumbnails stay at Debug, as asked, and that is the only reason `LogServedThumbnail` exists as a second
+fan-out: `[LoggerMessage]` fixes the level at compile time, so one shared pair of declarations could not
+carry two levels. A browsing television asks for a preview per tile, so those outnumber the media lines by
+orders of magnitude and none of them says anything about what is being watched.
+
+**The retention note this forces.** `app.log` rolls daily at a 32 MB cap with
+`retainedFileCountLimit: 14` and `retainedFileTimeLimit: 7 days`, and Serilog applies both. The comment on
+that constant said the count "only bounds a pathological day" - which was true only because the measured
+32 MB day had this logging ON. Several segments a day is now the ordinary case, so **the count can reach
+back less than seven days on a busy one**. Left at 14 rather than raised: 14 x 32 MB is already 448 MB in
+a publish folder on an SMB share, so the trade taken is a shorter window on heavy days, not more disc.
+Raising the count, lowering the per-file cap, or accepting the shorter window is the open choice.
+
+### The configuration file says what happened to it
+
+`ConfigurationFileGuard` already backed up and replaced an unusable `config.json` (Warning, naming the
+backup) and already wrote defaults when none existed (Information). Two cases were missing.
+
+**A clean read said nothing at all**, so "the file was read and taken" was indistinguishable from the
+guard never having run. `ConfigurationFileStatus.Valid` now logs at Information.
+
+**A file that parses but carries no `Dlna` section** bound to nothing and the server ran entirely on
+defaults looking healthy. The likeliest cause is named in `CLAUDE.md`: the reference server's
+`config.json` is flat, every key at the root, and the two schemas are not compatible. The new
+`Unrecognised` status reports it and **leaves the file exactly as it was** - nothing is wrong with it as a
+file, so replacing it would destroy settings the operator may only have mis-shaped, which is what makes
+this a different outcome from `Replaced` rather than another reason for it.
+
+An empty object is deliberately still `Valid`: it carries no settings to lose, and the missing source
+folder it produces is already reported by `ReportSourceFolderFallback`. Two warnings for one situation is
+noise.
+
 ## 7. Conventions and gotchas
 
 Full conventions live in `CLAUDE.md`. These are the ones that have actually cost time.

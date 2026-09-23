@@ -90,8 +90,16 @@ namespace DlnaServer.Host
         /// Segments kept once the size cap starts rolling within a single day.
         /// </summary>
         /// <remarks>
-        /// Retention is normally the seven-day time limit; this only bounds a pathological day. Serilog
-        /// applies both, and its count default of 31 would keep a gigabyte of one bad afternoon.
+        /// Serilog applies this and the seven-day time limit together, and its count default of 31 would
+        /// keep a gigabyte of one bad afternoon.
+        /// <para>
+        /// This used to say the count "only bounds a pathological day". That stopped being true on
+        /// 2026-09-23, when serving a media file moved to Information: the 32 MB day that produced this
+        /// cap was measured with exactly that logging on, so several segments a day is now the ordinary
+        /// case and the COUNT can reach back less than seven days on a busy one. Left at 14 rather than
+        /// raised, because 14 x 32 MB is already 448 MB in a publish folder on an SMB share - the
+        /// trade is a shorter window on heavy days, not more disc.
+        /// </para>
         /// </remarks>
         private const int AppLogRetainedFileCountLimit = 14;
 
@@ -529,6 +537,24 @@ namespace DlnaServer.Host
         {
             switch (result.Status)
             {
+                // Said out loud rather than inferred from the absence of a warning: an operator reading
+                // the log after an edit needs to see that the file was read and taken, and "no complaint"
+                // is indistinguishable from the guard never having run.
+                case ConfigurationFileStatus.Valid:
+                    logger.Information(
+                        "Configuration file {FilePath} was read and is well-formed.",
+                        result.FilePath);
+                    break;
+
+                case ConfigurationFileStatus.Unrecognised:
+                    logger.Warning(
+                        "Configuration file {FilePath} parses but has no Dlna section, so every setting in "
+                        + "it is being ignored and defaults are in use. This server's schema is grouped "
+                        + "under Dlna - the reference server's flat file is not compatible. The file has "
+                        + "been left exactly as it is.",
+                        result.FilePath);
+                    break;
+
                 case ConfigurationFileStatus.Created:
                     logger.Information(
                         "No configuration file found. Wrote defaults to {FilePath}. "
