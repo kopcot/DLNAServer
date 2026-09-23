@@ -4611,6 +4611,45 @@ Decided 2026-09-08, during the fix pass for the third `/review-all --full` (sect
     copy of every generated thumbnail at the persistence boundary, where EF wants an array - in the one
     project whose hard constraint is memory. A **new** array on a DTO still fails the test.
 
+### Open work from the 2026-09-23 batches (6p to 6s)
+
+**Host-level tests are decided but NOT written.** Section 7 records the rule as lifted; the tests do not
+exist. Three concrete obstacles were found while scoping them, and they are the reason this is its own
+piece of work rather than an afternoon - start from these rather than re-deriving them:
+
+- **`WebApplicationFactory`'s TestServer will not work as-is.** `RequirePortEndpointFilter` gates every
+  endpoint on `HttpContext.Connection.LocalPort`, which TestServer leaves at `0`, so every port-filtered
+  endpoint answers 404 and the whole suite would appear to pass nothing. The harness needs **real
+  Kestrel on real ports**, not the default in-memory server. This is the finding that matters.
+- **`Program.Main` is not reusable from a test.** It calls `Directory.SetCurrentDirectory` - which is
+  process-global and hostile to parallel fixtures - and owns the restart loop, and `BuildApplication` is
+  `private`. Widening it and taking the content root as a parameter is the likely shape.
+- **Startup binds SSDP multicast and starts the scanner, the watcher and the cache fill.** A host test
+  needs those either pointed at a temporary tree or suppressed, or the suite touches the real network and
+  real folders.
+
+Ten to twenty tests remains the right size. `Microsoft.AspNetCore.Mvc.Testing` is already referenced.
+
+**Two measurements are owed and neither can be taken from a development machine:**
+
+- the steady-state / soak memory reading, which needs the NAS and a real workload over hours. It is born
+  with its conditions attached - machine, OS, RAM, .NET version, build configuration, dataset,
+  measurement time, workload - because the existing `563.4 MB` to `177.7 MB` figures carry none of them
+  and cannot be compared against a later run. The question is not "does memory go up" but "does it
+  stabilise".
+- the served-bytes cache benchmark, 512 MB contiguous against 64 x 8 MB and 32 x 16 MB under constrained
+  RAM. **Measurement only** - the cache is not to be changed before there are numbers.
+
+**Smaller, from 6p to 6s:**
+
+- pull request #11 is still open and still red. The fix is committed here; the PR needs the second
+  package line pushed onto its branch or closing in favour of this commit.
+- `THIRD-PARTY-NOTICES.md` is not copied into the build output, while `release-notes.md` and `LICENSE`
+  are. Arguably it should be if the server is ever redistributed.
+- `app.log` retention was left at 14 segments with serving now at Information, so on a busy day the count
+  limit can reach back less than the seven-day time limit. Raising the count, lowering the per-file cap,
+  or accepting the shorter window is an open choice.
+
 ### Open work raised by the second review pass, 2026-09-17 (section 6o)
 
 Everything below was found by a `/review-all --full` re-run and deliberately NOT fixed in that batch.
