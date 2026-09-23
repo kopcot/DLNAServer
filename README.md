@@ -21,13 +21,13 @@ today keep working. The internals are new.
 > **Version `1.1.0923`.** It is `Major.Minor.MonthDate`, and each project carries its own, so a number
 > says which assembly changed. The one on the About page is the host's, which is the product version;
 > the assembly table on that page lists the rest. `release-notes.md` says what changed for whoever runs the server,
-> one entry per `Major.Minor`; `PLAN.md` holds everything internal. `release-notes.md` and `LICENSE` are
+> one entry per `Major.Minor`; `docs/` holds everything internal. `release-notes.md` and `LICENSE` are
 > both copied into the build and publish output, so a deployment carries them beside the binaries.
 >
 > **Licence: [MIT](LICENSE).** Free to use, change and pass on, with no warranty.
 >
-> **`PLAN.md` is the single source of truth**, and its section 7b carries the open work, the standing
-> decisions and the traps inherited from the deleted documents.
+> **`docs/decisions.md` carries the conventions, the standing decisions and the traps**, and its section 7b
+> is the open-work list. `docs/history.md` is the batch-by-batch record of what changed and when.
 
 ## What it does
 
@@ -85,7 +85,8 @@ bridge does not forward it.
 | [docs/operations.md](docs/operations.md) | Running it, uploading, rebuilding, the admin UI, the management endpoints |
 | [docs/performance.md](docs/performance.md) | The served-bytes cache and what it costs |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | It is not working - start here |
-| `PLAN.md` | The internal record: decisions, measurements, traps, open work |
+| [docs/decisions.md](docs/decisions.md) | Why it is built this way: decisions, conventions, traps, open work |
+| [docs/history.md](docs/history.md) | Status, milestones, and the batch-by-batch record |
 | `release-notes.md` | What changed, for whoever runs the server |
 | `CONTRIBUTING.md` | Build, the two hard rules, versioning, releases |
 

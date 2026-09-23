@@ -53,7 +53,7 @@ namespace DlnaServer.Host.Controllers
         /// <remarks>
         /// The buffer is rented rather than allocated: this server's hard constraint is memory, and an
         /// upload of fifty files would otherwise be fifty buffers for the collector to deal with. Section
-        /// 3 of PLAN.md is the history behind that.
+        /// 3 of docs/decisions.md is the history behind that.
         /// </remarks>
         private const int CopyBufferSize = 64 * 1024;
 

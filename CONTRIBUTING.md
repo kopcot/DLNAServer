@@ -51,7 +51,7 @@ persistence assembly, reads projected straight into DTOs. Read it before the fir
 architecture tests in `tests/DlnaServer.ArchitectureTests` fail the build if the layering is broken,
 so several of those conventions are enforced rather than merely documented.
 
-`PLAN.md` is the decision record. If a change comes out of a decision, or if it cost time because of
+`docs/decisions.md` is the decision record. If a change comes out of a decision, or if it cost time because of
 a trap worth remembering, that is where it goes.
 
 ## Tests
@@ -85,7 +85,7 @@ a build log.
 
 **Two documents state the current version and must move with it**: the version line near the top of
 `README.md`, and the example release tag in this file. `.github/SECURITY.md` carries a `Major.Minor`
-support table that moves on a Minor bump only. Everything else that names a version - `PLAN.md`'s batch
+support table that moves on a Minor bump only. Everything else that names a version - `docs/history.md`'s batch
 headings, its trap entries, `release-notes.md`'s section headings - is a **historical reference** and is
 correct as written. Do not sweep those; rewriting history to match the present is how a decision record
 stops being one.

@@ -185,7 +185,7 @@ namespace DlnaServer.Host.Controllers
         /// </summary>
         /// <remarks>
         /// This is the one place a collection is forced, and it is deliberate. Section 3 of
-        /// <c>PLAN.md</c> forbids forcing a GC, and that rule stands for the automatic case - the
+        /// <c>docs/decisions.md</c> forbids forcing a GC, and that rule stands for the automatic case - the
         /// reference collects on <b>every eviction</b> through an unbounded <c>Task.Run</c> chain, which
         /// is what its 727 Gen2 collections in twelve days are. An operator asking for the memory back is
         /// a different thing: cached payloads above 85 KB live on the large object heap, which is

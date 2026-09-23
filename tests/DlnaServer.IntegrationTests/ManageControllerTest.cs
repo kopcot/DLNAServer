@@ -13,7 +13,7 @@ namespace DlnaServer.IntegrationTests
 {
     /// <summary>
     /// Covers the management endpoints that change process state. <c>/manage/memory</c> is a pure read and
-    /// is exercised by the memory protocol in <c>PLAN.md</c> section 3b instead.
+    /// is exercised by the memory protocol in <c>docs/decisions.md</c> section 3b instead.
     /// </summary>
     [TestFixture]
     internal sealed class ManageControllerTest

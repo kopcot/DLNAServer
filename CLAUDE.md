@@ -17,19 +17,19 @@ question needs settling, and write nothing into it.
 `README.md` is the landing page and was cut to that on 2026-09-23; the detail moved to `docs/` -
 `architecture.md`, `dlna-compatibility.md` (the behaviours that intentionally differ from that server),
 `configuration.md`, `operations.md`, `performance.md` and `troubleshooting.md`, indexed by
-`docs/README.md`. There is deliberately no `docs/decisions/` ADR tree: `PLAN.md` section 7b is the
+`docs/README.md`. There is deliberately no `docs/decisions/` ADR tree: `docs/decisions.md` section 7b is the
 decision record and running two of them is how they drift apart. `CONTRIBUTING.md` covers the build, the two hard rules and the release flow;
 `.github/SECURITY.md` covers reporting.
 
 ## The server
 
-> **Start here: `PLAN.md`.** It is now the only project document and the single source of truth
+> **Start here: `docs/decisions.md`.** It is now the only project document and the single source of truth
 > for this rewrite - decisions and their rationale, the memory budget and its measured baselines,
 > milestone status and checklists, the conventions and tooling traps that have cost time, and how to
 > resume. Read it before doing any work here, and update it as work completes.
 >
 > **Version `1.1.0923`.** Every change bumps the assembly version - the rule, and who may bump which part,
-> is in `PLAN.md` section 7 under "Assembly version". Each project under `src/` carries its **own**
+> is in `docs/decisions.md` section 7 under "Assembly version". Each project under `src/` carries its **own**
 > `<Version>` as of 2026-09-23, so bump only the projects the change touched; `DlnaServer.Host` is the
 > product version, and test projects take it from `Directory.Build.props`. **`release-notes.md` is updated
 > in the same change** - operator-facing release notes, one entry per `Major.Minor`, in their terms, never
@@ -44,12 +44,12 @@ decision record and running two of them is how they drift apart. `CONTRIBUTING.m
 > **State.** Running on the NAS, working set 563.4 MB → **177.7 MB** after the memory pass, a television
 > plays from it, **789 tests at 0 warnings**, no vulnerable packages. **The NAS is several batches behind
 > this tree**: its About page answers and reported `1.0.0` on 2026-09-15, so it carries everything through
-> section 6m but not 6n, 6o or `1.1.0917`. See "Where things stand" in PLAN.md section 8. Three `/review-all --full`
+> section 6m but not 6n, 6o or `1.1.0917`. See "Where things stand" in docs/decisions.md section 8. Three `/review-all --full`
 > passes and a deduplication pass have run and everything they raised is closed except the items listed
 > below. The third pass (2026-09-08, whole-tree) found two Blockers in the configuration-reload path -
 > a failed or missing re-read blanked every setting and the next scan cascade-deleted the index, and one
 > invalid value poisoned `IOptionsMonitor` for the life of the process. Both are fixed and covered by
-> tests; see PLAN.md section 7 and the `LastGood*` types in `Host/Configuration`.
+> tests; see docs/decisions.md section 7 and the `LastGood*` types in `Host/Configuration`.
 >
 > **The migration history was squashed to a single `InitialSchema` on 2026-09-08**, per an explicit
 > decision that this is pre-customer. A deployment carrying an older database will fail to migrate, be
@@ -70,7 +70,7 @@ decision record and running two of them is how they drift apart. `CONTRIBUTING.m
 > limitation is commented at the call site), and the `DLNA.ORG_OP` bit rename, which was a **false
 > positive**: the naming is already correct and renaming would have introduced the inversion it claimed.
 >
-> **The newest work is `PLAN.md` section 6o (2026-09-17, `1.1.0917`)**, which empties the
+> **The newest work is `docs/history.md` section 6o (2026-09-17, `1.1.0917`)**, which empties the
 > backlog's open list again: a **deleted media file now takes its preview image with it** -
 > the image sat in a folder scanning skips, so nothing would ever have found it again, and
 > `RemoveByPublicIdsAsync` therefore returns the abandoned paths the way `MoveOrRenameAsync` already did.
@@ -88,7 +88,7 @@ decision record and running two of them is how they drift apart. `CONTRIBUTING.m
 > the server booting with uploads OFF - and all three are in section 7's trap list. The tooltip grammar is
 > on `Provenance.Source`; follow it for any new annotation.
 >
-> **Work done 2026-09-07/08** is recorded in `PLAN.md` section 6g: the five customer items from
+> **Work done 2026-09-07/08** is recorded in `docs/history.md` section 6g: the five customer items from
 > the backlog (all closed and deployed) plus an open-ended metadata feature. A file that moves
 > or is renamed keeps its row and its `PublicId` instead of being re-inserted; audio files extract their
 > embedded cover art; admin tiles carry a media-kind icon and fall back to the `Resources` icons; the
@@ -146,7 +146,7 @@ dotnet run --project src\DlnaServer.Host                                        
 
 **The Maintenance page has two rebuilds.** *Rebuild index* deletes every row, runs `VACUUM` and asks for a scan - no restart. *Recreate database* deletes the file and restarts. The file is deleted **at startup, not when the button is pressed**: `IDatabaseResetSignal` carries the request across the restart the way `IRestartSignal` does, because the safe moment to remove a database file is when nothing holds it open. `ILibraryScanSignal` is what lets the admin UI start a scan at all, since scanning lives in the host and `DlnaServer.Admin` references only Core and Persistence.
 
-**Uploading is the only path that writes into the media tree, and it ships off.** `Dlna.Upload.Enabled` is read **once at startup** - the endpoint is created then or not at all, which is what makes the setting's "needs a restart" real rather than a note in the page - so with it off there is no route that accepts a file. On, `/admin/upload` is a statically rendered page posting a plain `multipart/form-data` form to `UploadController` at `/admin/upload/files`, which streams each part to disc with `MultipartReader`; nothing travels over the Blazor circuit and there is still no JavaScript. `UploadDestination` re-derives the allowed folders from configuration rather than trusting the form, `UploadFileName` accepts only extensions the library would index, and every file is recorded in `logs/uploadSecurity.log`. See `PLAN.md` section 6n for the three defects that only running it found.
+**Uploading is the only path that writes into the media tree, and it ships off.** `Dlna.Upload.Enabled` is read **once at startup** - the endpoint is created then or not at all, which is what makes the setting's "needs a restart" real rather than a note in the page - so with it off there is no route that accepts a file. On, `/admin/upload` is a statically rendered page posting a plain `multipart/form-data` form to `UploadController` at `/admin/upload/files`, which streams each part to disc with `MultipartReader`; nothing travels over the Blazor circuit and there is still no JavaScript. `UploadDestination` re-derives the allowed folders from configuration rather than trusting the form, `UploadFileName` accepts only extensions the library would index, and every file is recorded in `logs/uploadSecurity.log`. See `docs/history.md` section 6n for the three defects that only running it found.
 
 `Dlna.Compatibility` holds the device escape hatches — `SendDlnaResponseHeaders` and `UseLegacyInvertedSearchTargetMatch` restore the reference's behaviour if a TV regresses.
 

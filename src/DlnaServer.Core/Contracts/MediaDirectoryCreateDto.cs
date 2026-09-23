@@ -23,7 +23,7 @@ namespace DlnaServer.Core.Contracts
         /// </summary>
         /// <remarks>
         /// Optional and nullable rather than required, so no existing construction site changes - a
-        /// <c>required</c> member on a DTO breaks every one of them (<c>PLAN.md</c> section 7b).
+        /// <c>required</c> member on a DTO breaks every one of them (<c>docs/decisions.md</c> section 7b).
         /// <para>
         /// The folder half of the first-fill rule, and it arrived later than the file half: without it
         /// <c>DlnaDbContext.StampTimestamps</c> filled every folder's <c>CreatedUtc</c> from one

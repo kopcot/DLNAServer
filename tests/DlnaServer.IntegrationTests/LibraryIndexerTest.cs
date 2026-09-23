@@ -1243,7 +1243,7 @@ namespace DlnaServer.IntegrationTests
         /// empty, and "every file is gone" is exactly what that looks like to reconciliation. Reaching it
         /// needs no unreadable folder - <c>LibraryIndexer.FindUnusableSourceFolders</c> asks
         /// <see cref="ISourceFolderChecker"/>, so a checker reporting the folder unusable exercises the
-        /// guard on Windows and on the NAS alike. <c>PLAN.md</c> recorded this as not portable; the seam
+        /// guard on Windows and on the NAS alike. <c>docs/decisions.md</c> recorded this as not portable; the seam
         /// is what makes it portable.
         /// </remarks>
         [Test]

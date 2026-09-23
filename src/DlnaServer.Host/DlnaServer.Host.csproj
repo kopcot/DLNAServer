@@ -77,7 +77,7 @@
 
   <!-- The two documents an operator is owed beside the binaries: what changed in this version, and the
        terms it is under. They stay at the solution root, where a reader of the repository finds them
-       next to README.md, and are LINKED here rather than moved - so PLAN.md's rule that release-notes.md
+       next to README.md, and are LINKED here rather than moved - so docs/decisions.md's rule that release-notes.md
        is updated as part of every change still points at one file in one place.
 
        Link is what puts them in the output ROOT rather than under a `../../` path, the same reason the

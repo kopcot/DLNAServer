@@ -62,7 +62,7 @@ namespace DlnaServer.Core.Configuration
         /// <para>
         /// So this is a backstop against a nonsensical configured value, not the control. The control is
         /// <see cref="MaxTotalSizeInMegabytes"/>. Measure a constrained run before changing either: see
-        /// the emulated-limit note in <c>PLAN.md</c> section 3b.
+        /// the emulated-limit note in <c>docs/decisions.md</c> section 3b.
         /// </para>
         /// </remarks>
         public const int AvailableMemoryDivisor = 2;
