@@ -3566,13 +3566,46 @@ native package, so the half that was actually broken is verified by CI, not here
 
 Full conventions live in `CLAUDE.md`. These are the ones that have actually cost time.
 
+### Host-level tests - the "no WebApplicationFactory" rule is lifted
+
+Decided 2026-09-23. `CONTRIBUTING.md` and `CLAUDE.md` have both said "real components wired through DI -
+no host, no `WebApplicationFactory`", and two independent reviews named the absence of host-level coverage
+as the one real testing gap. The rule is lifted for a **small, deliberate** set: ten to twenty tests that
+boot the host and prove the assembled application, not a second copy of the suite.
+
+What only a host test can prove is the wiring the unit and integration projects deliberately exclude -
+endpoint routing, the port filters, middleware order, model binding, and the status codes and headers a
+renderer actually receives. `Microsoft.AspNetCore.Mvc.Testing` is **already** referenced in
+`Directory.Packages.props`, so nothing new is taken on.
+
+The boundary that stays: anything provable without a host still goes in `DlnaServer.IntegrationTests`. A
+host test that duplicates an existing one earns nothing and costs startup on every run. The two
+convention documents are updated when the tests land, not before.
+
 ### Assembly version - bump it on EVERY change
 
 Asked for on 2026-09-15 and binding from then on: **every change to this project bumps the assembly
-version**, in the form `Major.Minor.MonthDate` - `1.0.0915` is a change made on 15 September. One
-`<Version>` property in `Directory.Build.props` carries it for all nine projects; nothing else
-declares a version, and the About page reads `AssemblyInformationalVersionAttribute` back off the
-running assembly rather than repeating the string.
+version**, in the form `Major.Minor.MonthDate` - `1.0.0915` is a change made on 15 September.
+
+**Changed 2026-09-23, on the maintainer's decision: each project under `src/` carries its OWN
+`<Version>`, and only the ones a change actually touches are bumped.** The single property in
+`Directory.Build.props` is gone. The question the number answers is now "which assembly changed", not
+"when was the solution last touched" - the old scheme bumped `DlnaServer.Upnp` for a change that only
+edited the admin UI, which is what prompted this. `DlnaServer.Host` is the **product version**: the only
+executable, what the release tag names, what `release-notes.md` and the `.github/SECURITY.md` support
+table track, and what the About page shows. Test projects are not versioned individually - a test
+assembly ships to nobody - and take the product version from the `Tests`-conditioned group in
+`Directory.Build.props`, which is the one place a version is still set centrally.
+
+The About page reads `AssemblyInformationalVersionAttribute` off the **entry** assembly rather than its
+own. That distinction did not matter while every assembly carried the same number and it is load-bearing
+now: `typeof(About).Assembly` is `DlnaServer.Admin`, so the page would have reported the admin library's
+version as the product's the moment the two diverged. The assembly table further down that page is where
+the per-project numbers belong, and it becomes worth reading for the first time.
+
+**Known limit of the scheme, accepted rather than solved:** `MonthDate` has a day's resolution, so two
+batches on the same day produce the same number for a project whether it changed in both or one. The
+per-project signal is a cross-day signal.
 
 | Part | Who may bump it | How often |
 | --- | --- | --- |
@@ -3591,7 +3624,9 @@ reliably regenerate `obj/<config>/net8.0/<Project>.AssemblyInfo.cs` when only th
 2026-09-15 `dotnet msbuild -getProperty:Version` answered `1.0.0915` for every project while eight of
 the nine DLLs still carried `1.0.0.0`, at 0 warnings. Delete the generated `*.AssemblyInfo.cs` and
 `*.AssemblyInfoInputs.cache` under `src` and `tests`, rebuild, then read `ProductVersion` back off the
-DLLs.
+DLLs. **Per-project versions make this worse, not better** - nine numbers moving independently means a
+stale one no longer stands out by disagreeing with its neighbours, so the read-the-DLL step is the only
+check there is.
 
 **`release-notes.md` is updated as part of the change, not afterwards** - the same rule as the
 version itself. A change an operator would notice adds its line to the entry for the current

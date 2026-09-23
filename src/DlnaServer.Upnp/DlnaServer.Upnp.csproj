@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <Version>1.1.0923</Version>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="SoapCore" />
   </ItemGroup>
