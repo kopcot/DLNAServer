@@ -66,6 +66,11 @@ Temporary*, because it underlines a large part of every page.
 **Help covers all of the above** - including what uploading does, how to turn it on, and where the upload
 log is kept.
 
+**Uploads no longer follow a shortcut out of your library.** If a folder inside your upload destination is
+a link to somewhere else on the machine, *Add files* now refuses it and says so instead of writing there.
+Nothing put behind such a link had ever shown up in the library anyway - the scanner skips them - so this
+only closes the gap between what was refused and what was reachable.
+
 Upgrading from 1.0 keeps your index. Nothing is rebuilt and no rescan is needed.
 
 ## 1.0

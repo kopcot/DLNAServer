@@ -3507,6 +3507,61 @@ which made `MediaCacheFillHostedService` record the exclusion through its own co
 Nothing in the repository was touched by the run: the database, the thumbnail cache, the source folder and
 both ports were all overridden to the scratchpad, per section 7's "Running a throwaway instance".
 
+## 6p. Upload containment and a split package pair, 2026-09-23 (`1.1.0923`)
+
+Two items, both small, neither a feature. The first is the only genuine defect the external review pass of
+2026-09-23 produced; the second is why pull request #11 had been sitting red.
+
+### An upload could be written through a symlink, out of the library
+
+`UploadDestination` did every containment check on the spelling of the path. `Path.GetFullPath` makes a
+path absolute and collapses `.` and `..` **as text** - it never reads the filesystem - so the ordinal
+prefix test in `TryCombine` compared two strings that both began with the root and passed. A sub-folder
+that happened to be a symlink was an ordinary segment to every guard in the file: not rooted, no dot
+segment, inside the root by prefix. The write then followed the link.
+
+The fix is one filesystem check, `HasLinkedSegment`, walking the segments between the root and the resolved
+destination and refusing the first one carrying `FileAttributes.ReparsePoint`. The root itself is
+deliberately exempt - an operator may configure a link as a source or upload folder, and the string it
+resolves to is shared by both sides of the comparison anyway.
+
+**Refusing links here is consistent with the scanner rather than in tension with it**, and that is what
+makes the fix safe to take. `LibraryScanner` puts `ReparsePoint` in `AttributesToSkip`, so a folder reached
+through a link is never enumerated and never indexed. A file uploaded behind one would not have appeared in
+the library under any circumstances, so nothing an operator wants is lost. It was briefly read the other
+way while planning this batch - as though the scanner followed links and the fix would break a normal QNAP
+layout - which is worth recording because the comment at that call site explains at length why skipping is
+a *downside*, and it reads as though it describes the behaviour rather than the cost of it.
+
+The file-name half needed the same treatment for a narrower reason: on Linux
+`Path.GetInvalidFileNameChars()` is only `{'\0', '/'}`, so a name is not a way out, but `FileMode.Create`
+follows a link sitting at that name and writes through it. `UploadController` now clears whatever is at the
+`.uploading` path first - deleting a link removes the link, not its target - and opens with
+`FileMode.CreateNew`, so anything still there is an error rather than a target.
+
+**Severity, recorded so it is not re-litigated:** uploading ships off, needs a restart to enable, is
+refused off-LAN, and planting the link needs write access to the media tree already, which the upload
+endpoint itself cannot grant. Defence in depth, not a remote hole.
+
+Covered by `UploadDestinationLinkTest` in the integration project rather than beside the nine existing
+cases in `UploadDestinationTest`: that fixture works on strings that are never created on disc, which is
+exactly why it could not have caught this. One of its assertions pins the premise - the lexical check still
+passes for the linked path - so a later reader can see which check is doing the refusing. Creating a
+symbolic link needs developer mode or elevation on Windows, so the helper calls `Assert.Ignore` with the
+reason rather than failing; on this machine the three cases ran rather than skipping.
+
+### SkiaSharp 3 to 4, both halves of it
+
+Pull request #11 bumped `SkiaSharp` to `4.152.1` and left
+`SkiaSharp.NativeAssets.Linux.NoDependencies` at `3.119.1`. SkiaSharp checks the native library's version
+the first time anything touches it, so the build was clean and two tests died at run time in
+`ImageTagReaderTest.CreateJpeg` constructing an `SKBitmap`: *the version of the native libSkiaSharp library
+(119.0) is incompatible ... supported versions are in the range [152.0, 153.0)*.
+
+Both versions now move together and a comment in `Directory.Packages.props` says why, since the failure
+mode is a green build. Note what the local suite does **not** prove: a Windows run never loads the Linux
+native package, so the half that was actually broken is verified by CI, not here.
+
 ## 7. Conventions and gotchas
 
 Full conventions live in `CLAUDE.md`. These are the ones that have actually cost time.
