@@ -20,6 +20,16 @@ namespace DlnaServer.Core.Hosting
     public interface IDatabaseReadySignal
     {
         /// <summary>
+        /// Whether the schema is usable, answered without waiting.
+        /// </summary>
+        /// <remarks>
+        /// For a caller that must report the current state rather than block until it changes - the
+        /// readiness endpoint is the one that needs this. Everything that can wait uses
+        /// <see cref="WaitAsync"/>, which is the safer default.
+        /// </remarks>
+        bool IsReady { get; }
+
+        /// <summary>
         /// Completes once the schema is usable, and stays completed for every later caller.
         /// </summary>
         Task WaitAsync(CancellationToken cancellationToken = default);
