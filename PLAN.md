@@ -3662,6 +3662,72 @@ An empty object is deliberately still `Valid`: it carries no settings to lose, a
 folder it produces is already reported by `ReportSourceFolderFallback`. Two warnings for one situation is
 noise.
 
+## 6s. The README split into docs/, 2026-09-23 (`1.1.0923`)
+
+Both external reviews of 2026-09-23 reached the same conclusion independently, and it was already open in
+the inbox: a 494-line README was carrying architecture, conventions, an operator manual, protocol
+compatibility, performance rationale and implementation history at once. It is now 94 lines and links out.
+
+### What moved, and what deliberately did not
+
+Six documents under `docs/`, indexed by `docs/README.md`: `architecture.md`, `dlna-compatibility.md`,
+`configuration.md`, `operations.md`, `performance.md` and a new `troubleshooting.md`.
+
+**The moved prose was moved, not rewritten.** The sections were relocated by line range so the committed
+text survives byte for byte - the point of the exercise is where a reader finds something, not a fresh
+pass over wording that was already good. One thing genuinely changed place: a blockquote about the
+grouped configuration schema had been sitting at the end of the library-filtering section, and it now
+sits under `## Configuration` where it belongs.
+
+**The review proposed about 35 files across six folders plus nine ADRs. That was cut to six documents and
+no ADRs at all.** `PLAN.md` section 7b is already the decision record; a second one in `docs/decisions/`
+would drift from it, and the drift would be silent. For a single-maintainer repository the 35-file tree is
+a maintenance liability rather than an information architecture.
+
+`troubleshooting.md` is the only document that is new writing. Its seven symptoms are the failure modes
+this project has actually hit - bridge networking swallowing SSDP, ffmpeg absent and silent, cache churn
+in the working set, a setting that needs a restart - not a generic checklist.
+
+### The rules that keep it from growing back
+
+Two paragraphs were added to `CONTRIBUTING.md` rather than to a document nobody reads before writing code.
+
+**Documentation explains *why*, tests enforce *what*.** Anything `ArchitectureTests`, a golden wire test
+or a migration already guarantees is stated in `docs/` as a fact with its reasoning and never restated as
+a rule. A rule written twice eventually disagrees with itself, and the prose copy is the one that goes
+stale without anything failing.
+
+**The abstraction threshold**, which is the one recommendation from the review pass worth taking wholesale:
+a new abstraction needs a real boundary, more than one implementation, an independent lifetime,
+independently testable behaviour, a dependency violation it prevents, or a meaningful domain concept. It
+is a brake on adding rules, not a loosening of the existing ones.
+
+### Version statements, and the ones that must not be swept
+
+Inbox item 3a asked for "updating all other notes, readme-files and other md-files" on a version bump.
+Taken literally that corrupts the record: `PLAN.md`'s batch headings and trap entries, and
+`release-notes.md`'s section headings, are **historical references** and are correct as written.
+
+Exactly two statements track the current build - the version line near the top of `README.md`, which was
+stale at `1.1.0917` against `1.1.0922` when this started, and the example release tag in
+`CONTRIBUTING.md`. `.github/SECURITY.md` carries a `Major.Minor` support table that moves on a Minor bump
+only. That distinction is now written into `CONTRIBUTING.md` under "Versioning and releases".
+
+### THIRD-PARTY-NOTICES.md
+
+The one commercial-legal item that applies to a public MIT repository. **Every row was read from the
+`<license>` element of the package's own `.nuspec` in the local NuGet cache rather than asserted from
+memory**, which is what caught the three that do not declare a plain SPDX expression: SQLitePCLRaw ships
+a licence file, Xabe.FFmpeg points at a URL, and NetArchTest declares nothing at all.
+
+Two are not simply permissive and are called out: **Xabe.FFmpeg**'s free tier is non-commercial, and
+**FluentAssertions** became paid for commercial use at version 8 - test-only, so not distributed, but a
+commercial build pipeline is still a use of it. ffmpeg itself is not distributed at all.
+
+**Not done, and a judgement call left open:** `DlnaServer.Host.csproj` copies `release-notes.md` and
+`LICENSE` into the output so a deployment carries them. `THIRD-PARTY-NOTICES.md` is not in that list. It
+arguably should be if the server is ever redistributed.
+
 ## 7. Conventions and gotchas
 
 Full conventions live in `CLAUDE.md`. These are the ones that have actually cost time.

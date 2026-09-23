@@ -14,8 +14,11 @@ on 2026-09-21 because its own repository, `T:\repos\DLNAServer_Legacy`, carries 
 source. Documents here still cite it as *the reference*; read it there when a wire-behaviour
 question needs settling, and write nothing into it.
 
-`README.md` documents the architecture and the list of behaviours that intentionally differ from
-that server. `CONTRIBUTING.md` covers the build, the two hard rules and the release flow;
+`README.md` is the landing page and was cut to that on 2026-09-23; the detail moved to `docs/` -
+`architecture.md`, `dlna-compatibility.md` (the behaviours that intentionally differ from that server),
+`configuration.md`, `operations.md`, `performance.md` and `troubleshooting.md`, indexed by
+`docs/README.md`. There is deliberately no `docs/decisions/` ADR tree: `PLAN.md` section 7b is the
+decision record and running two of them is how they drift apart. `CONTRIBUTING.md` covers the build, the two hard rules and the release flow;
 `.github/SECURITY.md` covers reporting.
 
 ## The server
