@@ -51,12 +51,17 @@ that televisions reject, so VLC alone does not settle it.
 
 ## Versioning and releases
 
-One `<Version>` property in `Directory.Build.props` carries all projects, in the form
-`Major.Minor.MonthDate`. Bump it with the change. If an operator would notice the change, add an
-entry to `release-notes.md` in their terms - it is not a build log.
+Each project under `src/` carries its own `<Version>`, in the form `Major.Minor.MonthDate`. Bump the
+ones your change actually touched, and leave the rest alone - that is the whole point of the number.
+`DlnaServer.Host` is the product version: it is what the release tag names and what the About page
+shows. Test projects are not versioned individually and take the product version from
+`Directory.Build.props`.
 
-A release is a `v`-prefixed tag on the version (`v1.1.0917`); pushing it builds, tests and attaches
-the linux-x64 archive.
+If an operator would notice the change, add an entry to `release-notes.md` in their terms - it is not
+a build log.
+
+A release is a `v`-prefixed tag on the host's version (`v1.1.0923`); pushing it builds, tests and
+attaches the linux-x64 archive.
 
 ## Pull requests
 

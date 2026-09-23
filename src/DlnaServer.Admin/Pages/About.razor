@@ -140,12 +140,14 @@
 
     /// <remarks>
     /// The informational version, which is what carries a suffix such as a build or commit when one is
-    /// set. The number itself comes from the single <c>Version</c> property in
-    /// <c>Directory.Build.props</c>, so no version string is duplicated here.
+    /// set. Read off the ENTRY assembly, not this one: each project carries its own <c>Version</c>, so
+    /// <c>typeof(About).Assembly</c> would report the admin library's number as the product's the moment
+    /// the two diverge. The entry assembly is the host, which is what a version means to an operator.
+    /// The table below is where the per-assembly numbers belong.
     /// </remarks>
     private static string Version()
     {
-        var assembly = typeof(About).Assembly;
+        var assembly = Assembly.GetEntryAssembly() ?? typeof(About).Assembly;
 
         return assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? assembly.GetName().Version?.ToString()

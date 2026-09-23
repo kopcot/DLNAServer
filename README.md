@@ -18,8 +18,9 @@ today keep working. The internals are new.
 > 177.7 MB was taken 255 s after a restart — and confirmation on a real television of the four DIDL
 > fields added on 2026-09-06.
 >
-> **Version `1.1.0917`.** It is `Major.Minor.MonthDate`, set once in `Directory.Build.props` for every
-> project and shown on the About page. `release-notes.md` says what changed for whoever runs the server,
+> **Version `1.1.0923`.** It is `Major.Minor.MonthDate`, and each project carries its own, so a number
+> says which assembly changed. The one on the About page is the host's, which is the product version;
+> the assembly table on that page lists the rest. `release-notes.md` says what changed for whoever runs the server,
 > one entry per `Major.Minor`; `PLAN.md` holds everything internal. `release-notes.md` and `LICENSE` are
 > both copied into the build and publish output, so a deployment carries them beside the binaries.
 >
