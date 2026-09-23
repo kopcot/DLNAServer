@@ -4,7 +4,7 @@ namespace DlnaServer.Core.Gena
     /// Holds the live GENA subscriptions.
     /// </summary>
     /// <remarks>
-    /// Nothing reads these to send events yet - no NOTIFY is pushed, by decision (<c>PLAN.md</c> section
+    /// Nothing reads these to send events yet - no NOTIFY is pushed, by decision (<c>docs/decisions.md</c> section
     /// 2). The store exists so the subscription handshake is honest: an identifier the server hands out
     /// is one it recognises on renewal, and one it forgets on UNSUBSCRIBE.
     /// </remarks>

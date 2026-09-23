@@ -6,7 +6,7 @@ namespace DlnaServer.Core.Delivery
     /// <remarks>
     /// The purpose is acoustic rather than throughput. The NAS drives are mechanical and audible in the
     /// room, so waking a spun-down disc to re-read a file the server has already sent is noise. Memory
-    /// held here buys silence, deliberately - see <c>PLAN.md</c> section 6, M6.
+    /// held here buys silence, deliberately - see <c>docs/history.md</c> section 6, M6.
     /// <para>
     /// The cache owns its own store with its own byte budget, separate from any other memory cache in
     /// the process, so a file payload can never evict something unrelated and vice versa.

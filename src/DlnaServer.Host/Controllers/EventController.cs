@@ -12,7 +12,7 @@ namespace DlnaServer.Host.Controllers
     /// renderer subscribes here before it browses. Nothing in this rewrite served that path until now,
     /// which means every SUBSCRIBE was answered with a 404.
     /// <para>
-    /// <b>No NOTIFY is ever sent.</b> That is a recorded decision (<c>PLAN.md</c> section 2), not an
+    /// <b>No NOTIFY is ever sent.</b> That is a recorded decision (<c>docs/decisions.md</c> section 2), not an
     /// oversight: the library changes rarely and a renderer re-browses anyway. What this endpoint owes a
     /// renderer is an honest handshake - an identifier the server recognises later, a lifetime in the
     /// form the header grammar defines, and an UNSUBSCRIBE that actually forgets.

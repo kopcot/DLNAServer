@@ -29,7 +29,7 @@ observable rather than inferred.
 A cached film is one contiguous 512 MB array on the large object heap, and that churn is what took the
 working set to 5073 MB on a box reporting 40 GB free, where the GC had no reason to compact. The budget and
 the per-file share bound how many such payloads can be held at once; whether that is enough on a 2 GB
-machine is a question for a measured constrained run, not for a default - see `PLAN.md` section 3b.
+machine is a question for a measured constrained run, not for a default - see `docs/decisions.md` section 3b.
 
 **Payloads are `ReadOnlyMemory<byte>` and are served with `AsStream()`** from
 `CommunityToolkit.HighPerformance`. There is no `File(ReadOnlyMemory<byte>, …)` overload, and the
