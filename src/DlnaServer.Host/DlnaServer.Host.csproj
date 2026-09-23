@@ -59,7 +59,20 @@
 
   <ItemGroup>
     <Content Update="appsettings.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
-    <Content Update="config.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+
+    <!-- config.json is NOT shipped from the repository. The one in this folder is the reference copy;
+         ConfigurationFileGuard writes a fresh one at startup when none is there, and when one IS there it
+         validates it, backs it up and replaces it only if it is unusable. Copying the repository's file
+         over a deployment would undo exactly that, and a PreserveNewest copy did it whenever the repo
+         file was the newer of the two.
+         BOTH attributes are needed and only the first is obvious: CopyToOutputDirectory governs bin,
+         CopyToPublishDirectory governs publish, and Content publishes by default - so setting only the
+         first leaves `dotnet publish` still emitting the file, which is the path NasBuild.sh deploys
+         with. Verified by publishing and listing the output, not by reading this. -->
+    <Content Update="config.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <!-- The two documents an operator is owed beside the binaries: what changed in this version, and the
