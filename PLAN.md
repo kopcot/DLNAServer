@@ -3562,6 +3562,58 @@ Both versions now move together and a comment in `Directory.Packages.props` says
 mode is a green build. Note what the local suite does **not** prove: a Windows run never loads the Linux
 native package, so the half that was actually broken is verified by CI, not here.
 
+## 6q. A library breakdown and a dashboard that refreshes itself, 2026-09-23 (`1.1.0923`)
+
+Two operator asks, and the second one reverses a decision this project had made on purpose.
+
+### What the library is made of
+
+The Dashboard's *Library* panel had two figures, *Files* and *Folders*. It now splits the files by kind -
+video, music, photos, and an *Other* tile that appears only when something lands in it.
+
+The kind is **not stored**. `DlnaMedia` is derived from `DlnaMime` through `DlnaMimeCatalog.ToMedia()`,
+which is a dictionary lookup and cannot be translated to SQL, and neither `Mime` nor `UpnpClass` is
+indexed. `CountByKindAsync` therefore does what the media filter in `SearchAsync` already does: it groups
+on the stored MIME in SQL and folds the groups to kinds in memory. One query, no new index, no new
+abstraction.
+
+**The trap here was consistency, not the query.** `CountAsync` counts every row and does **not** hide
+`Library.ExcludeFolders`, while every listing does - so the old *Files* tile could already disagree with
+the Library page. Had the new per-kind counts filtered while the total did not, the tiles would visibly
+fail to add up and read as a bug. `CountByKindAsync` returns the total as the sum of its own parts, so the
+panel is consistent by construction, and the tile now agrees with the Library page for the first time.
+`CountAsync` itself was deliberately left alone: `LibraryIndexer` reconciles against it and needs every
+row, so the two answers are allowed to differ and now do so on purpose.
+
+### The Dashboard refreshes itself
+
+Both pages read everything once in their initialise handler and never again. They now tick.
+
+**The Dashboard was statically rendered, and `App.razor` argues for that**: static by default, interactive
+per page, because a circuit owns a DI scope holding a `DbContext` and a pooled SQLite connection - and the
+Dashboard is the landing page, the one most likely to sit open in a tab. It is now
+`@rendermode InteractiveServer`, which is that cost accepted rather than overlooked.
+
+What makes it affordable is that the two halves refresh at different rates. `IServedFileCache.Describe()`
+is synchronous, touches no database and no disc - counters and `_cache.Count` - so the memory and
+cache tiles tick every five seconds. The counts are a database round trip and refresh on every sixth tick,
+through `AdminPageBase.RunGatedAsync`, because on a timer the race the gate exists for is no longer
+hypothetical.
+
+*Recently added* is not a page: it is a `CollapsiblePanel` on `Library.razor`, which was already
+interactive, so it costs nothing new. It re-reads **only** that list. Reloading the page would rebuild
+`_folders` and `_files` and throw away every page the operator had pulled in with *Show more*.
+
+**No push seam was built, deliberately.** There is no backend-to-UI notification path today and adding one
+was not warranted: `ILibraryScanSignal` is a single-consumer `SemaphoreSlim`, so a UI waiter would steal
+the indexer's wake-up, and `IDatabaseReadySignal` latches rather than repeating. These are counters, not
+events. During a scan they change continuously, so a push per indexed row would be thousands of messages a
+second and the interval is what coalesces them.
+
+The timers hang off the existing `AdminPageBase` plumbing rather than new lifetime code: the loop waits on
+`PageToken`, which the base already cancels on dispose, and each page overrides `Dispose(bool)` to call
+base first - so the token is cancelled and the loop unwinding before the timer it waits on goes away.
+
 ## 7. Conventions and gotchas
 
 Full conventions live in `CLAUDE.md`. These are the ones that have actually cost time.

@@ -268,6 +268,11 @@ namespace DlnaServer.IntegrationTests
             throw new NotSupportedException();
         }
 
+        public Task<LibraryCountsDto> CountByKindAsync(CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task<bool> AnyUnderPathAsync(string folderPath, CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
