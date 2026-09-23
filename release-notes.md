@@ -66,6 +66,14 @@ Temporary*, because it underlines a large part of every page.
 **Help covers all of the above** - including what uploading does, how to turn it on, and where the upload
 log is kept.
 
+**The Dashboard says what your library is made of**, not just how many files it holds - video, music and
+photos each get their own figure beside the total. They are counted the way the Library page lists, so
+folders you have hidden are left out and the three add up to the total.
+
+**The Dashboard keeps itself up to date.** Memory and the recently-served-files figures refresh every few
+seconds, the library counts every half minute, and *Recently added* on the Library page refreshes on its
+own too - so a scan you started is visible without reloading the page.
+
 **Uploads no longer follow a shortcut out of your library.** If a folder inside your upload destination is
 a link to somewhere else on the machine, *Add files* now refuses it and says so instead of writing there.
 Nothing put behind such a link had ever shown up in the library anyway - the scanner skips them - so this

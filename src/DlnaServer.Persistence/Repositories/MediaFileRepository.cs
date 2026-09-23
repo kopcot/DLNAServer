@@ -1016,6 +1016,57 @@ namespace DlnaServer.Persistence.Repositories
             return _dbContext.Files.CountAsync(cancellationToken);
         }
 
+        public async Task<LibraryCountsDto> CountByKindAsync(CancellationToken cancellationToken = default)
+        {
+            IQueryable<MediaFileEntity> query = _dbContext.Files.AsNoTracking();
+            var hiddenFolders = _visibility.HiddenFromListings;
+
+            if (hiddenFolders is { Count: > 0 })
+            {
+                query = HiddenPathQuery.ExcludeHiddenFiles(query, hiddenFolders);
+            }
+
+            // Grouped on the stored MIME, which is what SQL can see; the kind each one maps to is a
+            // dictionary lookup in DlnaMimeCatalog and cannot be translated.
+            var byMime = await query
+                .GroupBy(static f => f.Mime)
+                .Select(static g => new { Mime = g.Key, Count = g.Count() })
+                .ToListAsync(cancellationToken);
+
+            var video = 0;
+            var audio = 0;
+            var image = 0;
+            var other = 0;
+
+            foreach (var row in byMime)
+            {
+                switch (row.Mime.ToMedia())
+                {
+                    case DlnaMedia.Video:
+                        video += row.Count;
+                        break;
+                    case DlnaMedia.Audio:
+                        audio += row.Count;
+                        break;
+                    case DlnaMedia.Image:
+                        image += row.Count;
+                        break;
+                    default:
+                        other += row.Count;
+                        break;
+                }
+            }
+
+            return new LibraryCountsDto
+            {
+                Total = video + audio + image + other,
+                Video = video,
+                Audio = audio,
+                Image = image,
+                Other = other,
+            };
+        }
+
         /// <remarks>
         /// A half-open range rather than a <c>LIKE 'path%'</c> prefix, so SQLite can seek the unique
         /// index on <c>FullPath</c> instead of scanning it: the successor character is the separator plus

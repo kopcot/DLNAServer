@@ -1,4 +1,9 @@
+@* Interactive, unlike most read-only pages here, because the figures refresh themselves. That costs a
+   SignalR circuit - and with it a DI scope holding a DbContext and a pooled SQLite connection - on the
+   page most likely to be left open in a tab. Taken deliberately: see PLAN.md section 6q. *@
+
 @page "/admin"
+@rendermode InteractiveServer
 @inherits AdminPageBase
 @inject IServedFileCache Cache
 @inject IMediaFileRepository Files
@@ -72,9 +77,22 @@
 
 <Panel Heading="Library">
     <StatGrid>
-        <StatTile Label="Files" Source="database Files row count">@_fileCount</StatTile>
+        <StatTile Label="Files" Source="database Files row count, folders the library hides left out">@_counts.Total</StatTile>
+        <StatTile Label="Video" Source="database Files grouped by MIME, the kinds that map to video">@_counts.Video</StatTile>
+        <StatTile Label="Music" Source="database Files grouped by MIME, the kinds that map to audio">@_counts.Audio</StatTile>
+        <StatTile Label="Photos" Source="database Files grouped by MIME, the kinds that map to image">@_counts.Image</StatTile>
+        @* Only when there is something in it, so the four kinds visibly add up to the total when there
+           is not. A file lands here when its type maps to no kind at all. *@
+        @if (_counts.Other > 0)
+        {
+            <StatTile Label="Other" Source="database Files grouped by MIME, types that map to no kind">@_counts.Other</StatTile>
+        }
         <StatTile Label="Folders" Source="database Directories row count">@_directoryCount</StatTile>
     </StatGrid>
+    <p class="muted">
+        Counted the way the Library page lists, so folders you have hidden are left out and the kinds add
+        up to <em>Files</em>. The kind comes from the file's type, not from where it sits.
+    </p>
 </Panel>
 
 @code {
@@ -82,9 +100,19 @@
 
     private const long WorkingSetTargetBytes = WorkingSetTargetMb * 1024L * 1024L;
 
+    // The cheap figures - the cache report and the process counters - touch no database, so they tick at
+    // this interval. The counts do, so they refresh on every RefreshTicksPerCount-th tick instead.
+    private static readonly TimeSpan _refreshInterval = TimeSpan.FromSeconds(5);
+
+    private const int RefreshTicksPerCount = 6;
+
+    private static readonly LibraryCountsDto _noCountsYet =
+        new() { Total = 0, Video = 0, Audio = 0, Image = 0, Other = 0 };
+
+    private PeriodicTimer? _timer;
     private ServedFileCacheReport _report = null!;
+    private LibraryCountsDto _counts = _noCountsYet;
     private DateTimeOffset? _blocked;
-    private int _fileCount;
     private int _directoryCount;
     private long _workingSetBytes;
     private long _managedBytes;
@@ -97,18 +125,62 @@
 
     protected override async Task OnInitializedAsync()
     {
+        ReadCheapFigures();
+
+        await RunGatedAsync(ReadCountsAsync);
+
+        _timer = new PeriodicTimer(_refreshInterval);
+
+        // Deliberately not awaited: OnInitializedAsync has to return for the page to render at all. The
+        // loop ends when PageToken is cancelled, which the base class does on dispose.
+        _ = RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        var ticks = 0;
+
+        try
+        {
+            while (await _timer!.WaitForNextTickAsync(PageToken))
+            {
+                ticks++;
+
+                ReadCheapFigures();
+
+                if (ticks % RefreshTicksPerCount == 0)
+                {
+                    await RunGatedAsync(ReadCountsAsync);
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The operator navigated away, or the circuit went down. Nothing left to refresh.
+        }
+    }
+
+    /// <remarks>
+    /// Gated because this page's counts share the circuit's <c>DbContext</c> with whatever a Maintenance or
+    /// Preview action is still running, and an ungated read racing a gated write is the whole failure mode
+    /// <c>IAdminOperationGate</c> exists for. On a timer that matters more than it did on one load.
+    /// </remarks>
+    private async Task ReadCountsAsync(CancellationToken cancellationToken)
+    {
+        _counts = await Files.CountByKindAsync(cancellationToken);
+        _directoryCount = await Directories.CountAsync(cancellationToken);
+    }
+
+    /// <remarks>
+    /// Everything here is a counter read: <c>Describe</c> is synchronous and touches no database or disc,
+    /// and the rest are process and GC properties. That is what makes a five-second tick affordable.
+    /// </remarks>
+    private void ReadCheapFigures()
+    {
         _report = Cache.Describe();
         _blocked = Blocker.IsBlocked ? Blocker.BlockedUntilUtc : null;
-
-        // Gated: this page's two counts shared the circuit's DbContext with whatever a Maintenance or
-        // Preview action was still running, and an ungated read racing a gated write is the whole
-        // failure mode IAdminOperationGate exists for.
-        await RunGatedAsync(
-            async token =>
-            {
-                _fileCount = await Files.CountAsync(token);
-                _directoryCount = await Directories.CountAsync(token);
-            });
 
         using var process = System.Diagnostics.Process.GetCurrentProcess();
         var gc = GC.GetGCMemoryInfo();
@@ -128,6 +200,20 @@
         _lohBytes = gc.GenerationInfo.Length > 3
             ? gc.GenerationInfo[3].SizeAfterBytes
             : 0;
+    }
+
+    /// <remarks>
+    /// Base first: it cancels <c>PageToken</c>, so the loop is already unwinding by the time the timer it
+    /// is waiting on goes away.
+    /// </remarks>
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+
+        if (disposing)
+        {
+            _timer?.Dispose();
+        }
     }
 
     /// <summary>
