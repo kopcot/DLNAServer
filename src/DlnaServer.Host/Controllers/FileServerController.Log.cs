@@ -2,24 +2,40 @@ namespace DlnaServer.Host.Controllers
 {
     public sealed partial class FileServerController
     {
-        // Debug, not Information: one line per file served, kept for a rolling week, is a viewing
-        // history in plaintext on a share anyone on the LAN can read. Nothing here identifies a person,
-        // but the sequence over time is the personal data - and the volume argument points the same way,
-        // so the privacy fix and keeping app.log readable are one change.
+        // Information on the maintainer's decision of 2026-09-23: which media file is being served, and
+        // whether it came from memory or the disc, is what an operator watching the log actually wants.
+        // Two costs were weighed and accepted rather than overlooked, and both are still real. One line
+        // per file served, kept for a rolling week, is a viewing history in plaintext on a share anyone
+        // on the LAN can read - nothing here identifies a person, but the sequence over time is the
+        // personal data. And a renderer issues one request per byte range, so a single film produces
+        // hundreds of the second message: at Information these filled 32 MB of app.log in a day with
+        // DebugMode off. Check the retention setting before assuming the log still reaches as far back.
         [LoggerMessage(
             EventId = 1,
-            Level = LogLevel.Debug,
+            Level = LogLevel.Information,
             Message = "Serving '{FilePath}' from {Source}")]
         private partial void LogServingTransfer(string filePath, string source);
 
-        // Debug, not Information: a renderer issues one request per byte range, so a single film produces
-        // hundreds of these. At Information they filled 32 MB of app.log in a day with DebugMode off,
-        // which is what the controller's own documentation already said should not happen.
         [LoggerMessage(
             EventId = 2,
-            Level = LogLevel.Debug,
+            Level = LogLevel.Information,
             Message = "Serving a byte range [{range}] of '{FilePath}' from {Source}")]
         private partial void LogServingRange(string filePath, string source, string range);
+
+        // Thumbnails stay at Debug, which is the whole reason these two exist separately: a browsing
+        // television asks for a preview per tile, so they outnumber the media lines by orders of
+        // magnitude and none of them says anything about what is being watched.
+        [LoggerMessage(
+            EventId = 8,
+            Level = LogLevel.Debug,
+            Message = "Serving thumbnail '{FilePath}' from {Source}")]
+        private partial void LogServingThumbnailTransfer(string filePath, string source);
+
+        [LoggerMessage(
+            EventId = 9,
+            Level = LogLevel.Debug,
+            Message = "Serving a byte range [{range}] of thumbnail '{FilePath}' from {Source}")]
+        private partial void LogServingThumbnailRange(string filePath, string source, string range);
 
         [LoggerMessage(
             EventId = 3,

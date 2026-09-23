@@ -225,7 +225,7 @@ namespace DlnaServer.Host.Controllers
 
             if (_cache.TryGet(thumbnail.FilePath, out var cached))
             {
-                LogServed(thumbnail.FilePath, SourceCache);
+                LogServedThumbnail(thumbnail.FilePath, SourceCache);
                 return File(cached.AsStream(), contentType, enableRangeProcessing: true);
             }
 
@@ -239,7 +239,7 @@ namespace DlnaServer.Host.Controllers
                     // AsMemory is a view over the array the repository already returned, not a copy.
                     _cache.Store(thumbnail.FilePath, CachedContentClass.Thumbnail, stored.AsMemory());
 
-                    LogServed(thumbnail.FilePath, SourceDatabase);
+                    LogServedThumbnail(thumbnail.FilePath, SourceDatabase);
 
                     // AsMemory().AsStream() rather than the byte[] overload: both avoid a copy, but this
                     // keeps every cached-payload response on one path, so the serving shape does not
@@ -252,7 +252,7 @@ namespace DlnaServer.Host.Controllers
 
             if (!loaded.IsEmpty)
             {
-                LogServed(thumbnail.FilePath, SourceCache);
+                LogServedThumbnail(thumbnail.FilePath, SourceCache);
                 return File(loaded.AsStream(), contentType, enableRangeProcessing: true);
             }
 
@@ -262,7 +262,7 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
-            LogServed(thumbnail.FilePath, SourceDisc);
+            LogServedThumbnail(thumbnail.FilePath, SourceDisc);
             return PhysicalFile(thumbnail.FilePath, contentType, enableRangeProcessing: true);
         }
 
@@ -309,9 +309,8 @@ namespace DlnaServer.Host.Controllers
         /// One line per response, at a level that keeps a whole film from filling the log.
         /// </summary>
         /// <remarks>
-        /// A renderer issues one request per byte range, so a single playback produces many of these.
-        /// The start of a transfer - the request carrying no <c>Range</c> - is the one worth seeing at
-        /// Information; the ranges that follow are Debug.
+        /// A renderer issues one request per byte range, so a single playback produces many of these. Both
+        /// are at Information - see the note on the declarations for what that costs and why it was chosen.
         /// </remarks>
         private void LogServed(string filePath, string source)
         {
@@ -322,6 +321,21 @@ namespace DlnaServer.Host.Controllers
             }
 
             LogServingTransfer(filePath, source);
+        }
+
+        /// <remarks>
+        /// The same fan-out for previews, kept separate only so they can stay at Debug while the media
+        /// lines are at Information.
+        /// </remarks>
+        private void LogServedThumbnail(string filePath, string source)
+        {
+            if (Request.Headers.Range.Count > 0)
+            {
+                LogServingThumbnailRange(filePath, source, Request.Headers.Range.ToString());
+                return;
+            }
+
+            LogServingThumbnailTransfer(filePath, source);
         }
     }
 }

@@ -49,7 +49,9 @@ namespace DlnaServer.Host.Configuration
             if (rejection is null)
             {
                 return new ConfigurationFileResult(
-                    ConfigurationFileStatus.Valid,
+                    HasSettingsButNoDlnaSection(filePath)
+                        ? ConfigurationFileStatus.Unrecognised
+                        : ConfigurationFileStatus.Valid,
                     filePath,
                     BackupPath: null,
                     Reason: null);
@@ -110,6 +112,41 @@ namespace DlnaServer.Host.Configuration
             catch (UnauthorizedAccessException exception)
             {
                 return $"the file could not be read ({exception.Message})";
+            }
+        }
+
+        /// <summary>
+        /// Whether the file says something but says none of it under <c>Dlna</c>.
+        /// </summary>
+        /// <remarks>
+        /// A file in a schema this server does not read binds to nothing and is silently replaced by
+        /// defaults, which looks identical to a file that was never edited. The likeliest cause is the
+        /// reference server's flat <c>config.json</c>, whose keys sit at the root.
+        /// <para>
+        /// An empty object is deliberately NOT reported: it carries no settings to lose, and the missing
+        /// source folder it produces is already reported separately. Only a file with content that is
+        /// entirely outside the section is worth interrupting startup for.
+        /// </para>
+        /// </remarks>
+        private static bool HasSettingsButNoDlnaSection(string filePath)
+        {
+            try
+            {
+                using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var document = JsonDocument.Parse(stream, DlnaConfigurationJson.ReadOptions);
+
+                var root = document.RootElement;
+
+                return root.ValueKind == JsonValueKind.Object
+                    && root.EnumerateObject().Any()
+                    && !root.TryGetProperty(DlnaOptions.SectionName, out _);
+            }
+            catch (Exception exception)
+                when (exception is JsonException or IOException or UnauthorizedAccessException)
+            {
+                // The caller already parsed this file successfully, so reaching here means something
+                // changed underneath. Saying nothing is right: the parse is the check that matters.
+                return false;
             }
         }
 
