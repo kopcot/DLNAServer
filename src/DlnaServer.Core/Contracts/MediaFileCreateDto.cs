@@ -39,7 +39,7 @@ namespace DlnaServer.Core.Contracts
         /// </summary>
         /// <remarks>
         /// Optional and nullable rather than required, so no existing construction site changes - a
-        /// <c>required</c> member on a DTO breaks every one of them (<c>PLAN.md</c> section 7b).
+        /// <c>required</c> member on a DTO breaks every one of them (<c>docs/decisions.md</c> section 7b).
         /// <para>
         /// Set only for the first fill of an empty index, and only by the indexer. Recently added orders
         /// by this column, and a bulk fill gives every row the same value, which is no ordering at all:

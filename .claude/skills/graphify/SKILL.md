@@ -91,7 +91,7 @@ does not hold the answer, say so rather than inventing an edge.
   `--help` included. Judge success by the output - the `Rebuilt:` line, or the answer text.
 - **`.razor` files are in the graph**, so the Blazor admin pages are queryable by name
   (`Maintenance.razor`, `Preview.razor`).
-- **`PLAN.md` is in the graph too**, and its headings appear as nodes joined by `INFERRED`
+- **`docs/decisions.md` is in the graph too**, and its headings appear as nodes joined by `INFERRED`
   `references` edges. Useful for "which milestone covers X", misleading if read as a code edge.
 - **Doc, image and paper changes are not picked up** by the AST-only build - that needs the full
   semantic pipeline, which costs tokens and is not configured here.

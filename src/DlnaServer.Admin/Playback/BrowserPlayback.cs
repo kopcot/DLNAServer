@@ -14,7 +14,7 @@ namespace DlnaServer.Admin.Playback
     /// Judged by the <b>container</b>, deliberately not by the MIME type. Chrome ignores the declared
     /// <c>Content-Type</c> for media and sniffs the bytes: this server sends an MP3 as <c>audio/mp4</c>
     /// on purpose for LG televisions, and it plays perfectly. So no MIME mapping can decide this, which is
-    /// recorded in <c>PLAN.md</c> standing decision 20 along with the measurements behind the lists below.
+    /// recorded in <c>docs/decisions.md</c> standing decision 20 along with the measurements behind the lists below.
     /// </para>
     /// </remarks>
     internal static class BrowserPlayback

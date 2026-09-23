@@ -11,6 +11,8 @@ namespace DlnaServer.Core.Hosting
     {
         private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        public bool IsReady => _ready.Task.IsCompletedSuccessfully;
+
         public Task WaitAsync(CancellationToken cancellationToken = default)
         {
             return _ready.Task.WaitAsync(cancellationToken);

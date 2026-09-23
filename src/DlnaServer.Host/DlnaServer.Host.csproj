@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <PropertyGroup>
+    <Version>1.1.0923</Version>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.HighPerformance" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
@@ -55,12 +59,25 @@
 
   <ItemGroup>
     <Content Update="appsettings.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
-    <Content Update="config.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+
+    <!-- config.json is NOT shipped from the repository. The one in this folder is the reference copy;
+         ConfigurationFileGuard writes a fresh one at startup when none is there, and when one IS there it
+         validates it, backs it up and replaces it only if it is unusable. Copying the repository's file
+         over a deployment would undo exactly that, and a PreserveNewest copy did it whenever the repo
+         file was the newer of the two.
+         BOTH attributes are needed and only the first is obvious: CopyToOutputDirectory governs bin,
+         CopyToPublishDirectory governs publish, and Content publishes by default - so setting only the
+         first leaves `dotnet publish` still emitting the file, which is the path NasBuild.sh deploys
+         with. Verified by publishing and listing the output, not by reading this. -->
+    <Content Update="config.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <!-- The two documents an operator is owed beside the binaries: what changed in this version, and the
        terms it is under. They stay at the solution root, where a reader of the repository finds them
-       next to README.md, and are LINKED here rather than moved - so PLAN.md's rule that release-notes.md
+       next to README.md, and are LINKED here rather than moved - so docs/decisions.md's rule that release-notes.md
        is updated as part of every change still points at one file in one place.
 
        Link is what puts them in the output ROOT rather than under a `../../` path, the same reason the

@@ -19,4 +19,4 @@
 
 - [ ] `<Version>` in `Directory.Build.props` bumped
 - [ ] `release-notes.md` updated, if an operator would notice this
-- [ ] `PLAN.md` updated, if a decision or a trap came out of it
+- [ ] `docs/decisions.md` updated, if a decision or a trap came out of it, and `docs/history.md` for the batch itself

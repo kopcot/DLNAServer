@@ -130,12 +130,16 @@ else
     /// <para>
     /// Paged with a Show more button rather than by handing <c>Virtualize</c> an <c>ItemsProvider</c>.
     /// The files are a wrapping CSS tile grid, and <c>Virtualize</c> positions rows on a fixed
-    /// <c>ItemSize</c> assuming one item per row - it would misplace every tile, and PLAN.md section 7
+    /// <c>ItemSize</c> assuming one item per row - it would misplace every tile, and docs/decisions.md section 7
     /// warns that its constraints fail quietly. Paging the DATA is what bounds the memory; virtualizing
     /// the RENDER only bounds the DOM, which was never the problem.
     /// </para>
     /// </remarks>
     private const int PageSize = 200;
+
+    // The same long interval the dashboard refreshes its counts on: this is a database read, and a newly
+    // indexed file is not worth a round trip per circuit per second.
+    private static readonly TimeSpan _recentRefreshInterval = TimeSpan.FromSeconds(30);
 
     private MediaDirectoryDto? _directory;
     private IReadOnlyList<MediaDirectoryDto> _trail = [];
@@ -147,12 +151,66 @@ else
     private int _folderTotal;
     private int _fileTotal;
     private bool _loading;
+    private PeriodicTimer? _timer;
 
     protected override async Task OnParametersSetAsync()
     {
         // Gated: this runs on every navigation, including a folder click made while ProcessingActions is
         // still awaiting a recreate on the same circuit's DbContext.
         await RunGatedAsync(LoadAsync);
+    }
+
+    /// <remarks>
+    /// Started here rather than in <c>OnParametersSetAsync</c>, which runs again on every folder click and
+    /// would leave a timer behind each time.
+    /// </remarks>
+    protected override void OnInitialized()
+    {
+        _timer = new PeriodicTimer(_recentRefreshInterval);
+
+        // Not awaited: the loop ends when PageToken is cancelled, which the base class does on dispose.
+        _ = RefreshRecentAsync();
+    }
+
+    /// <remarks>
+    /// Refreshes <em>Recently added</em> and nothing else. Reloading the page would also rebuild
+    /// <c>_folders</c> and <c>_files</c>, throwing away every page the operator had pulled in with
+    /// <em>Show more</em> - so the one list that goes stale on its own is the only one that is re-read.
+    /// </remarks>
+    private async Task RefreshRecentAsync()
+    {
+        try
+        {
+            while (await _timer!.WaitForNextTickAsync(PageToken))
+            {
+                // Only the root shows the list at all; inside a folder there is nothing to refresh.
+                if (DirectoryId is not null)
+                {
+                    continue;
+                }
+
+                await RunGatedAsync(
+                    async token => _recent = await Files.GetRecentlyAddedAsync(
+                        Options.CurrentValue.Library.RecentlyAddedCount,
+                        token));
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The operator navigated away, or the circuit went down. Nothing left to refresh.
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+
+        if (disposing)
+        {
+            _timer?.Dispose();
+        }
     }
 
     private async Task LoadAsync(CancellationToken cancellationToken)

@@ -32,6 +32,7 @@ namespace DlnaServer.Host.Configuration
         private readonly ILogger<LastGoodDlnaOptionsMonitor> _logger;
 
         private DlnaOptions? _lastGood;
+        private volatile bool _isCurrentValid = true;
 
         public LastGoodDlnaOptionsMonitor(
             IOptionsMonitor<DlnaOptions> inner,
@@ -46,6 +47,17 @@ namespace DlnaServer.Host.Configuration
 
         public DlnaOptions CurrentValue => Get(Options.DefaultName);
 
+        /// <summary>
+        /// Whether the most recent read validated, rather than falling back to the last good values.
+        /// </summary>
+        /// <remarks>
+        /// Says nothing on its own: it reports the outcome of the last <see cref="Get"/>, so a caller that
+        /// needs the state NOW - the readiness probe - reads <see cref="CurrentValue"/> first, which is
+        /// what re-runs validation. Starts true because <c>ValidateOnStart</c> has already passed by the
+        /// time anything can ask.
+        /// </remarks>
+        public bool IsCurrentValid => _isCurrentValid;
+
         public DlnaOptions Get(string? name)
         {
             try
@@ -57,6 +69,7 @@ namespace DlnaServer.Host.Configuration
                 // one, never a half-built graph. The options object is treated as immutable by every
                 // consumer, so sharing one instance across threads is what already happens.
                 _lastGood = current;
+                _isCurrentValid = true;
 
                 return current;
             }
@@ -67,6 +80,7 @@ namespace DlnaServer.Host.Configuration
                 // running on settings the operator has since edited, and the noise stops the moment the
                 // file is valid again.
                 LogServingLastGood(string.Join(" ", exception.Failures));
+                _isCurrentValid = false;
 
                 return _lastGood;
             }

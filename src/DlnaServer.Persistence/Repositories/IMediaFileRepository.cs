@@ -413,6 +413,21 @@ namespace DlnaServer.Persistence.Repositories
         Task<int> CountAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// How many files a listing would show, split by kind.
+        /// </summary>
+        /// <remarks>
+        /// Hides <c>Library.ExcludeFolders</c> like every other listing, which is why it does not simply
+        /// break <see cref="CountAsync"/> down: that one counts every row on purpose, because the indexer
+        /// reconciles against it, and the two answers are allowed to differ.
+        /// <para>
+        /// The kind is derived from the MIME rather than stored, and no column indexes either, so the
+        /// grouping is done in SQL on <c>Mime</c> and folded to the kind here - the same shape the media
+        /// filter in <c>SearchAsync</c> uses, and the reason both are one query rather than one per kind.
+        /// </para>
+        /// </remarks>
+        Task<LibraryCountsDto> CountByKindAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Whether any file is indexed at or under <paramref name="folderPath"/>.
         /// </summary>
         /// <remarks>

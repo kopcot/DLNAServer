@@ -93,6 +93,32 @@ namespace DlnaServer.IntegrationTests
         /// The live server produced 1390 unique-constraint failures a day by re-inserting directories
         /// it had already indexed.
         /// </summary>
+        /// <summary>
+        /// The dashboard's Library panel adds the kinds up and shows the sum as the total, so the two have
+        /// to come from one query rather than from two that can disagree.
+        /// </summary>
+        [Test]
+        public async Task CountByKindAsync_SplitsTheLibraryAndSumsToTheTotal()
+        {
+            // Arrange
+            CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            CreateFile(Path.Combine("movies", "second.mkv"), sizeInBytes: 100);
+            CreateFile(Path.Combine("music", "song.mp3"), sizeInBytes: 60);
+            CreateFile("photo.jpg", sizeInBytes: 50);
+            _ = await IndexAsync();
+
+            // Act
+            var counts = await Files().CountByKindAsync(CancellationToken.None);
+
+            // Assert
+            counts.Video.Should().Be(2, "because both .mkv files map to the video kind through their MIME");
+            counts.Audio.Should().Be(1, "because the .mp3 maps to the audio kind");
+            counts.Image.Should().Be(1, "because the .jpg maps to the image kind");
+            counts.Total.Should().Be(counts.Video + counts.Audio + counts.Image + counts.Other,
+                "because the panel shows the total as the sum of the parts, so a file counted in no kind "
+                + "would make the tiles contradict each other");
+        }
+
         [Test]
         public async Task IndexAsync_RunTwice_AddsNothingTheSecondTime()
         {
@@ -1217,7 +1243,7 @@ namespace DlnaServer.IntegrationTests
         /// empty, and "every file is gone" is exactly what that looks like to reconciliation. Reaching it
         /// needs no unreadable folder - <c>LibraryIndexer.FindUnusableSourceFolders</c> asks
         /// <see cref="ISourceFolderChecker"/>, so a checker reporting the folder unusable exercises the
-        /// guard on Windows and on the NAS alike. <c>PLAN.md</c> recorded this as not portable; the seam
+        /// guard on Windows and on the NAS alike. <c>docs/decisions.md</c> recorded this as not portable; the seam
         /// is what makes it portable.
         /// </remarks>
         [Test]

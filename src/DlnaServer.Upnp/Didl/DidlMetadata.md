@@ -209,7 +209,7 @@ Treat section 3 as a list of candidate names, and check each one before adding i
 - **One row is plainly wrong:** Aspect Ratio is listed as `upnp:longDescription`, which is a free-text
   description field.
 - **`upnp:videoCodec` / `upnp:audioCodec` are emitted here anyway.** They are in the reference's live
-  output, and wire compatibility with the working server outranks specification purity — see `PLAN.md`
+  output, and wire compatibility with the working server outranks specification purity — see `docs/decisions.md`
   section 2.
 
 Anything added from this table needs the same treatment as everything else in this folder: a golden test

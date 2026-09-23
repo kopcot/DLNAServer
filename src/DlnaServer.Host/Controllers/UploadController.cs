@@ -53,7 +53,7 @@ namespace DlnaServer.Host.Controllers
         /// <remarks>
         /// The buffer is rented rather than allocated: this server's hard constraint is memory, and an
         /// upload of fifty files would otherwise be fifty buffers for the collector to deal with. Section
-        /// 3 of PLAN.md is the history behind that.
+        /// 3 of docs/decisions.md is the history behind that.
         /// </remarks>
         private const int CopyBufferSize = 64 * 1024;
 
@@ -279,6 +279,11 @@ namespace DlnaServer.Host.Controllers
             {
                 _ = Directory.CreateDirectory(destination);
 
+                // Whatever is at the partial name goes first, so the CreateNew below starts from nothing:
+                // an upload that died mid-copy leaves one behind, and a link left there is the case that
+                // matters.
+                Delete(partialPath);
+
                 var size = await CopyAsync(section.Body, partialPath, maxFileSizeInBytes, cancellationToken);
 
                 if (size < 0)
@@ -329,9 +334,12 @@ namespace DlnaServer.Host.Controllers
             {
                 // bufferSize 1 disables the stream's own buffer: the loop below already reads in
                 // 64 KB blocks, and a second buffer would only copy each block once more.
+                // CreateNew rather than Create: Create follows a symlink sitting at this name and writes
+                // through it, so a planted link would be the file that got overwritten. The caller clears
+                // any leftover of its own first, which removes the link rather than its target.
                 await using var file = new FileStream(
                     path,
-                    FileMode.Create,
+                    FileMode.CreateNew,
                     FileAccess.Write,
                     FileShare.None,
                     bufferSize: 1,

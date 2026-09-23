@@ -34,7 +34,7 @@ namespace DlnaServer.Host.Indexing
     /// The bargain is that the extra memory is <b>borrowed, not kept</b>. A burst is acceptable while
     /// previews are being made; what is not acceptable is the server sitting at that level afterwards.
     /// <see cref="SettleAsync"/> is what makes that true, and it runs on the transition from working to
-    /// idle - see the note there on why it forces a collection when section 3 of <c>PLAN.md</c> forbids
+    /// idle - see the note there on why it forces a collection when section 3 of <c>docs/decisions.md</c> forbids
     /// exactly that.
     /// </para>
     /// </remarks>
@@ -280,7 +280,7 @@ namespace DlnaServer.Host.Indexing
         /// Gives back the memory a processing run borrowed, once the run is over.
         /// </summary>
         /// <remarks>
-        /// <b>This forces a collection, and section 3 of <c>PLAN.md</c> forbids that.</b> The exception is
+        /// <b>This forces a collection, and section 3 of <c>docs/decisions.md</c> forbids that.</b> The exception is
         /// deliberate and narrow. What that rule bans is the reference's shape - a collect on every
         /// eviction, through an unbounded chain, which is what 727 Gen2 collections in twelve days are.
         /// This runs <b>once per completed run</b>: the edge where the queue drains after real work, so a

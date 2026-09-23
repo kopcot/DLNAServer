@@ -6,7 +6,7 @@ namespace DlnaServer.Host.Gena
     /// <remarks>
     /// GENA is UPnP eventing: a renderer SUBSCRIBEs to a service, and the server would then push NOTIFY
     /// messages when a state variable changes. Everything here concerns the subscription handshake only -
-    /// no NOTIFY is ever sent, which is a recorded decision rather than an omission (<c>PLAN.md</c>
+    /// no NOTIFY is ever sent, which is a recorded decision rather than an omission (<c>docs/decisions.md</c>
     /// section 2).
     /// </remarks>
     internal static class GenaHeaders

@@ -7,7 +7,7 @@ namespace DlnaServer.IntegrationTests
     /// </summary>
     /// <remarks>
     /// The expectations here are measurements, not opinions: every case marked as playing or failing was
-    /// loaded in Chrome 152 from the live server on 2026-09-08, and <c>PLAN.md</c> standing decision 20
+    /// loaded in Chrome 152 from the live server on 2026-09-08, and <c>docs/decisions.md</c> standing decision 20
     /// records the run. A future browser could change any of them, which is why the video rule is a
     /// deny-list - see the test at the end.
     /// </remarks>

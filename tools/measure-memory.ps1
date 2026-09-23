@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Run after every milestone - or every substantial part of one - and paste the row into the trend
-    table in PLAN.md section 3b. A single reading says nothing; the trend across milestones is what
+    table in docs/decisions.md section 3b. A single reading says nothing; the trend across milestones is what
     shows whether the memory budget is holding as features land.
 
     Working set is the number that matters on the NAS. Managed heap alone is misleading: the reference
@@ -72,7 +72,7 @@ if ($HeapLimitPercent -gt 0) {
     $heapNote = "heap limit ${HeapLimitPercent}%"
     Write-Host "Emulating a constrained box: $heapNote"
 } else {
-    Write-Warning 'No -HeapLimitPercent given. This reading is inadmissible under PLAN.md section 3.'
+    Write-Warning 'No -HeapLimitPercent given. This reading is inadmissible under docs/decisions.md section 3.'
 }
 
 if ($PinFileCacheMegabytes -gt 0) {
@@ -100,7 +100,7 @@ try {
     $notes = '{0} build, {1}, {2} threads, {3}.' -f $Configuration, $gcMode, $memory.threadCount, $heapNote
 
     Write-Host ''
-    Write-Host 'Paste this row into PLAN.md section 3b:' -ForegroundColor Green
+    Write-Host 'Paste this row into docs/decisions.md section 3b:' -ForegroundColor Green
     Write-Host ''
     '| {0} | {1} s | **{2} MB** | {3} MB | {4} MB | {5} | {6} | {7} |' -f `
         $Label,

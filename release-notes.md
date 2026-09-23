@@ -66,6 +66,27 @@ Temporary*, because it underlines a large part of every page.
 **Help covers all of the above** - including what uploading does, how to turn it on, and where the upload
 log is kept.
 
+**The log says which file is being played.** Each media file the server sends now appears in `app.log` at
+the normal level, with whether it came from memory or from the disc. Previews stay out of the way at the
+debug level. Note that this fills the log faster - on a busy day it may not reach back the usual week.
+
+**The log also says what happened to your settings file.** A clean read is now reported rather than
+passed over in silence, and a file that parses but carries none of this server's settings - the older
+flat layout, for instance - is called out and left untouched instead of being quietly ignored.
+
+**The Dashboard says what your library is made of**, not just how many files it holds - video, music and
+photos each get their own figure beside the total. They are counted the way the Library page lists, so
+folders you have hidden are left out and the three add up to the total.
+
+**The Dashboard keeps itself up to date.** Memory and the recently-served-files figures refresh every few
+seconds, the library counts every half minute, and *Recently added* on the Library page refreshes on its
+own too - so a scan you started is visible without reloading the page.
+
+**Uploads no longer follow a shortcut out of your library.** If a folder inside your upload destination is
+a link to somewhere else on the machine, *Add files* now refuses it and says so instead of writing there.
+Nothing put behind such a link had ever shown up in the library anyway - the scanner skips them - so this
+only closes the gap between what was refused and what was reachable.
+
 Upgrading from 1.0 keeps your index. Nothing is rebuilt and no rescan is needed.
 
 ## 1.0

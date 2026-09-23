@@ -90,8 +90,16 @@ namespace DlnaServer.Host
         /// Segments kept once the size cap starts rolling within a single day.
         /// </summary>
         /// <remarks>
-        /// Retention is normally the seven-day time limit; this only bounds a pathological day. Serilog
-        /// applies both, and its count default of 31 would keep a gigabyte of one bad afternoon.
+        /// Serilog applies this and the seven-day time limit together, and its count default of 31 would
+        /// keep a gigabyte of one bad afternoon.
+        /// <para>
+        /// This used to say the count "only bounds a pathological day". That stopped being true on
+        /// 2026-09-23, when serving a media file moved to Information: the 32 MB day that produced this
+        /// cap was measured with exactly that logging on, so several segments a day is now the ordinary
+        /// case and the COUNT can reach back less than seven days on a busy one. Left at 14 rather than
+        /// raised, because 14 x 32 MB is already 448 MB in a publish folder on an SMB share - the
+        /// trade is a shorter window on heavy days, not more disc.
+        /// </para>
         /// </remarks>
         private const int AppLogRetainedFileCountLimit = 14;
 
@@ -390,10 +398,16 @@ namespace DlnaServer.Host
             // none of them has to know. It exists because a failed validation is cached and rethrown
             // forever; see LastGoodDlnaOptionsMonitor. ValidateOnStart still resolves through it and
             // still fails the boot, because at that point there is no last good value to fall back to.
-            _ = builder.Services.AddSingleton<IOptionsMonitor<DlnaOptions>>(static provider =>
+            // Registered by its own type as well, and the interface forwards to that one instance rather
+            // than building a second: the readiness endpoint needs to ask whether the CURRENT file
+            // validates, which is a question IOptionsMonitor<T> has no way to express.
+            _ = builder.Services.AddSingleton<LastGoodDlnaOptionsMonitor>(static provider =>
                 new LastGoodDlnaOptionsMonitor(
                     provider.GetRequiredService<OptionsMonitor<DlnaOptions>>(),
                     provider.GetRequiredService<ILogger<LastGoodDlnaOptionsMonitor>>()));
+
+            _ = builder.Services.AddSingleton<IOptionsMonitor<DlnaOptions>>(
+                static provider => provider.GetRequiredService<LastGoodDlnaOptionsMonitor>());
         }
 
         private static Serilog.Core.Logger ConfigureLogging(
@@ -529,6 +543,24 @@ namespace DlnaServer.Host
         {
             switch (result.Status)
             {
+                // Said out loud rather than inferred from the absence of a warning: an operator reading
+                // the log after an edit needs to see that the file was read and taken, and "no complaint"
+                // is indistinguishable from the guard never having run.
+                case ConfigurationFileStatus.Valid:
+                    logger.Information(
+                        "Configuration file {FilePath} was read and is well-formed.",
+                        result.FilePath);
+                    break;
+
+                case ConfigurationFileStatus.Unrecognised:
+                    logger.Warning(
+                        "Configuration file {FilePath} parses but has no Dlna section, so every setting in "
+                        + "it is being ignored and defaults are in use. This server's schema is grouped "
+                        + "under Dlna - the reference server's flat file is not compatible. The file has "
+                        + "been left exactly as it is.",
+                        result.FilePath);
+                    break;
+
                 case ConfigurationFileStatus.Created:
                     logger.Information(
                         "No configuration file found. Wrote defaults to {FilePath}. "
@@ -744,6 +776,33 @@ namespace DlnaServer.Host
 
             _ = app.MapGet("/admin/health", static () => Results.Ok("admin"))
                 .AddEndpointFilter(new RequirePortEndpointFilter(serverOptions.AdminPort));
+
+            // Readiness, as distinct from the liveness above: the process answering says nothing about
+            // whether it can serve anything. Reading CurrentValue is what re-runs validation, so the
+            // answer describes the file as it is now rather than whenever something last read a setting.
+            _ = app.MapGet(
+                "/health/ready",
+                static (IDatabaseReadySignal database, LastGoodDlnaOptionsMonitor options) =>
+                {
+                    _ = options.CurrentValue;
+
+                    var isDatabaseReady = database.IsReady;
+                    var isConfigurationValid = options.IsCurrentValid;
+
+                    return isDatabaseReady && isConfigurationValid
+                        ? Results.Ok("ready")
+                        : Results.Json(
+                            new
+                            {
+                                status = "not ready",
+                                database = isDatabaseReady ? "ready" : "no usable schema yet",
+                                configuration = isConfigurationValid
+                                    ? "valid"
+                                    : "invalid - running on the last settings that validated",
+                            },
+                            statusCode: StatusCodes.Status503ServiceUnavailable);
+                })
+                .AddEndpointFilter(new RequirePortEndpointFilter(serverOptions.Port));
 
             // The admin UI, on the admin port only. Its own controller serves media and thumbnails under
             // /admin/media, so no admin page ever references the media port - an operator's browser never
