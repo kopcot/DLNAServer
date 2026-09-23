@@ -398,10 +398,16 @@ namespace DlnaServer.Host
             // none of them has to know. It exists because a failed validation is cached and rethrown
             // forever; see LastGoodDlnaOptionsMonitor. ValidateOnStart still resolves through it and
             // still fails the boot, because at that point there is no last good value to fall back to.
-            _ = builder.Services.AddSingleton<IOptionsMonitor<DlnaOptions>>(static provider =>
+            // Registered by its own type as well, and the interface forwards to that one instance rather
+            // than building a second: the readiness endpoint needs to ask whether the CURRENT file
+            // validates, which is a question IOptionsMonitor<T> has no way to express.
+            _ = builder.Services.AddSingleton<LastGoodDlnaOptionsMonitor>(static provider =>
                 new LastGoodDlnaOptionsMonitor(
                     provider.GetRequiredService<OptionsMonitor<DlnaOptions>>(),
                     provider.GetRequiredService<ILogger<LastGoodDlnaOptionsMonitor>>()));
+
+            _ = builder.Services.AddSingleton<IOptionsMonitor<DlnaOptions>>(
+                static provider => provider.GetRequiredService<LastGoodDlnaOptionsMonitor>());
         }
 
         private static Serilog.Core.Logger ConfigureLogging(
@@ -770,6 +776,33 @@ namespace DlnaServer.Host
 
             _ = app.MapGet("/admin/health", static () => Results.Ok("admin"))
                 .AddEndpointFilter(new RequirePortEndpointFilter(serverOptions.AdminPort));
+
+            // Readiness, as distinct from the liveness above: the process answering says nothing about
+            // whether it can serve anything. Reading CurrentValue is what re-runs validation, so the
+            // answer describes the file as it is now rather than whenever something last read a setting.
+            _ = app.MapGet(
+                "/health/ready",
+                static (IDatabaseReadySignal database, LastGoodDlnaOptionsMonitor options) =>
+                {
+                    _ = options.CurrentValue;
+
+                    var isDatabaseReady = database.IsReady;
+                    var isConfigurationValid = options.IsCurrentValid;
+
+                    return isDatabaseReady && isConfigurationValid
+                        ? Results.Ok("ready")
+                        : Results.Json(
+                            new
+                            {
+                                status = "not ready",
+                                database = isDatabaseReady ? "ready" : "no usable schema yet",
+                                configuration = isConfigurationValid
+                                    ? "valid"
+                                    : "invalid - running on the last settings that validated",
+                            },
+                            statusCode: StatusCodes.Status503ServiceUnavailable);
+                })
+                .AddEndpointFilter(new RequirePortEndpointFilter(serverOptions.Port));
 
             // The admin UI, on the admin port only. Its own controller serves media and thumbnails under
             // /admin/media, so no admin page ever references the media port - an operator's browser never
