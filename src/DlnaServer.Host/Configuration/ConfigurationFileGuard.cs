@@ -177,6 +177,11 @@ namespace DlnaServer.Host.Configuration
             options.Server.Port = RecoveryMediaPort;
             options.Server.AdminPort = RecoveryAdminPort;
 
+            // Written into the file rather than seeded at bind time, for the reason MediaFileExtensionDefaults
+            // gives. Without it the recovered file carried an empty map, and an empty map indexes nothing -
+            // so a server recovered from a lost config.json had no media even once its folders were set.
+            options.Library.MediaFileExtensions = MediaFileExtensionDefaults.Create();
+
             var defaults = new Dictionary<string, DlnaOptions>(StringComparer.Ordinal)
             {
                 [DlnaOptions.SectionName] = options,

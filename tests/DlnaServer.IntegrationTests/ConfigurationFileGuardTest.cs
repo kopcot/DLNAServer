@@ -1,5 +1,8 @@
 using System.Text.Json;
+using DlnaServer.Core.Configuration;
+using DlnaServer.Core.Dlna;
 using DlnaServer.Host.Configuration;
+using Microsoft.Extensions.Configuration;
 
 namespace DlnaServer.IntegrationTests
 {
@@ -34,6 +37,41 @@ namespace DlnaServer.IntegrationTests
                 "because a first run has no configuration file and must be given a usable one");
             File.Exists(_configPath).Should().BeTrue("because defaults were written");
             ReadSection().Should().NotBeNull("because the written file carries the Dlna section");
+        }
+
+        /// <summary>
+        /// A recovered file used to carry an empty file-type map, and an empty map indexes nothing - so a
+        /// server that lost its config.json had no media even after its folders were set again.
+        /// </summary>
+        /// <remarks>
+        /// Read back through the configuration system rather than the raw JSON, because that is what the
+        /// server sees - and it binds the written null profile as "", which every reader treats as unset.
+        /// </remarks>
+        [Test]
+        public void EnsureUsable_WhenFileIsMissing_WritesTheShippedFileTypes()
+        {
+            // Arrange
+            _ = ConfigurationFileGuard.EnsureUsable(_configPath, TimeProvider.System);
+
+            // Act
+            var bound = new ConfigurationBuilder()
+                .AddJsonFile(_configPath, optional: false, reloadOnChange: false)
+                .Build()
+                .GetSection(DlnaOptions.SectionName)
+                .Get<DlnaOptions>();
+
+            // Assert
+            var extensions = bound!.Library.MediaFileExtensions;
+
+            extensions.Keys.Should().BeEquivalentTo(
+                MediaFileExtensionDefaults.Create().Keys,
+                "because a regenerated file must index the same file types the server ships with");
+
+            extensions[".mkv"].Mime.Should().Be(nameof(DlnaMime.VideoXMatroska),
+                "because the type is stored by its enum name, which is what the indexer parses");
+
+            extensions.Values.Should().OnlyContain(static e => string.IsNullOrEmpty(e.ProfileName),
+                "because the shipped map names no profile, so each type's own default applies");
         }
 
         [Test]

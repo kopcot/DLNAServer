@@ -139,6 +139,31 @@ namespace DlnaServer.IntegrationTests
                 "because a finished scan may have added or removed files, and the Dashboard must recount");
         }
 
+        /// <summary>
+        /// A profile left unset in config.json binds as "", and that must still mean the type's default.
+        /// </summary>
+        [Test]
+        public async Task IndexAsync_ForABlankConfiguredProfile_StoresTheTypesDefaultProfile()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            var options = CreateOptions();
+            options.Library.MediaFileExtensions[".mkv"] = new MediaExtensionOptions
+            {
+                Mime = nameof(DlnaMime.VideoXMatroska),
+                ProfileName = string.Empty,
+            };
+
+            // Act
+            _ = await IndexAsync(options);
+
+            // Assert
+            var indexed = await Files().GetByPathAsync(film, CancellationToken.None);
+
+            indexed!.DlnaProfileName.Should().Be(DlnaMime.VideoXMatroska.ToMainProfileName(),
+                "because the configuration system binds an unset profile as an empty string, not null");
+        }
+
         [Test]
         public async Task IndexAsync_RunTwice_AddsNothingTheSecondTime()
         {

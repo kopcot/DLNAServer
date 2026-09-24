@@ -1118,9 +1118,13 @@ namespace DlnaServer.Host.Indexing
                     continue;
                 }
 
+                // Blank, not just null: the configuration system binds a JSON null as "", so a profile
+                // left unset in config.json never reached the ?? this used to be.
                 mappings[extension] = new MediaExtensionMapping(
                     mime,
-                    configured.ProfileName ?? mime.ToMainProfileName());
+                    string.IsNullOrWhiteSpace(configured.ProfileName)
+                        ? mime.ToMainProfileName()
+                        : configured.ProfileName);
             }
 
             return new LibraryScanRequest

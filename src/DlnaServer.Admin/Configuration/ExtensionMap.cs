@@ -20,26 +20,6 @@ namespace DlnaServer.Admin.Configuration
         // Characters an extension may not contain past its leading dot.
         private static readonly SearchValues<char> _rejected = SearchValues.Create(" \t\r\n/\\:*?\"<>|");
 
-        // The map the shipped config.json carries, .mp3 as AudioMp4 included. No profile names: each one
-        // resolves to its type's own default, exactly as a blank entry in that file does.
-        private static readonly (string Extension, DlnaMime Mime)[] _defaults =
-        [
-            (".mp4", DlnaMime.VideoMp4),
-            (".mpg", DlnaMime.VideoMpeg),
-            (".mpeg", DlnaMime.VideoMpeg),
-            (".avi", DlnaMime.VideoXMsvideo),
-            (".mkv", DlnaMime.VideoXMatroska),
-            (".mov", DlnaMime.VideoQuicktime),
-            (".wmv", DlnaMime.VideoXMswmv),
-            (".flv", DlnaMime.VideoXFlv),
-            (".m4v", DlnaMime.VideoMpeg),
-            (".3gp", DlnaMime.Video3gpp),
-            (".mp3", DlnaMime.AudioMp4),
-            (".png", DlnaMime.ImagePng),
-            (".jpg", DlnaMime.ImageJpeg),
-            (".jpeg", DlnaMime.ImageJpeg),
-        ];
-
         /// <summary>
         /// Reads the configured map into editable rows, ordered by extension.
         /// </summary>
@@ -84,18 +64,12 @@ namespace DlnaServer.Admin.Configuration
         /// shows a configured map.
         /// </summary>
         /// <remarks>
-        /// A fresh set of rows on every call, because the editor mutates the rows it is handed.
+        /// A fresh set of rows on every call, because the editor mutates the rows it is handed. The map
+        /// itself is <see cref="MediaFileExtensionDefaults"/>, the same one a regenerated config.json gets.
         /// </remarks>
         internal static List<ExtensionMapRow> Defaults()
         {
-            var configured = new Dictionary<string, MediaExtensionOptions>(_defaults.Length, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var (extension, mime) in _defaults)
-            {
-                configured[extension] = new MediaExtensionOptions { Mime = mime.ToString() };
-            }
-
-            return FromOptions(configured);
+            return FromOptions(MediaFileExtensionDefaults.Create());
         }
 
         /// <summary>
