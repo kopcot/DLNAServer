@@ -1534,6 +1534,90 @@ namespace DlnaServer.IntegrationTests
         /// <summary>
         /// Builds a provider whose exclusion list a test can change between passes.
         /// </summary>
+        /// <summary>
+        /// A restart that finds no <c>config.json</c> falls back to serving the application folder, and
+        /// that must not be read as the operator narrowing the library to it.
+        /// </summary>
+        /// <remarks>
+        /// Happened on the NAS: the fallback's first scan removed both indexed source folders as "no longer
+        /// covered by configuration", the cascade took all 25,669 file rows, and the next start with the
+        /// file restored rebuilt the library with every identifier regenerated.
+        /// </remarks>
+        [Test]
+        public async Task IndexAsync_WhenTheSourceFoldersFallBackToTheApplicationFolder_KeepsTheIndexedLibrary()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+
+            var options = CreateOptions();
+            var monitor = new MutableOptionsMonitor<DlnaOptions>(options);
+
+            await using var provider = CreateProvider(monitor);
+
+            using (var first = provider.CreateScope())
+            {
+                _ = await first.ServiceProvider.GetRequiredService<ILibraryIndexer>()
+                    .IndexAsync(CancellationToken.None);
+            }
+
+            // Act - what DlnaOptionsDefaults makes of a configuration naming no source folder.
+            options.Library.SourceFolders = [AppContext.BaseDirectory];
+
+            using var scope = provider.CreateScope();
+            _ = await scope.ServiceProvider.GetRequiredService<ILibraryIndexer>()
+                .IndexAsync(CancellationToken.None);
+
+            // Assert
+            var files = scope.ServiceProvider.GetRequiredService<IMediaFileRepository>();
+            var directories = scope.ServiceProvider.GetRequiredService<IMediaDirectoryRepository>();
+
+            (await files.GetByPathAsync(film, CancellationToken.None)).Should().NotBeNull(
+                "because a fallback nobody chose is not a decision to stop sharing the library it replaced");
+
+            (await directories.GetByPathAsync(_mediaRoot, CancellationToken.None)).Should().NotBeNull(
+                "because removing the old source folder is what cascaded every file row away");
+        }
+
+        /// <summary>
+        /// The fallback exemption is only for folders outside it; a folder that is gone from disc still goes.
+        /// </summary>
+        [Test]
+        public async Task IndexAsync_OnTheFallback_StillRemovesAFolderThatIsGoneFromDisc()
+        {
+            // Arrange
+            _ = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            _ = CreateFile(Path.Combine("series", "episode.mkv"), sizeInBytes: 100);
+
+            var options = CreateOptions();
+            var monitor = new MutableOptionsMonitor<DlnaOptions>(options);
+
+            await using var provider = CreateProvider(monitor);
+
+            using (var first = provider.CreateScope())
+            {
+                _ = await first.ServiceProvider.GetRequiredService<ILibraryIndexer>()
+                    .IndexAsync(CancellationToken.None);
+            }
+
+            Directory.Delete(Path.Combine(_mediaRoot, "series"), recursive: true);
+
+            // Act
+            options.Library.SourceFolders = [AppContext.BaseDirectory];
+
+            using var scope = provider.CreateScope();
+            _ = await scope.ServiceProvider.GetRequiredService<ILibraryIndexer>()
+                .IndexAsync(CancellationToken.None);
+
+            // Assert
+            var directories = scope.ServiceProvider.GetRequiredService<IMediaDirectoryRepository>();
+
+            (await directories.GetByPathAsync(Path.Combine(_mediaRoot, "series"), CancellationToken.None))
+                .Should().BeNull("because only the coverage rule is suspended, not the check for a deleted folder");
+
+            (await directories.GetByPathAsync(Path.Combine(_mediaRoot, "movies"), CancellationToken.None))
+                .Should().NotBeNull("because that folder is still on disc");
+        }
+
         private ServiceProvider CreateProvider(IOptionsMonitor<DlnaOptions> monitor)
         {
             var services = new ServiceCollection();

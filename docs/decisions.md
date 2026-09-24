@@ -879,6 +879,7 @@ Global, and written for another project, so most of what it says does not apply 
 - **`MemoryCacheOptions.SizeLimit` is fixed for the life of the store.** `FileCache.MaxTotalSizeInMegabytes`
   is therefore the one file-cache setting that needs a restart; the rest are read per request through
   `IOptionsMonitor`.
+- **The application-folder fallback is not an operator's choice, and reconciliation must not treat it as one.** On 2026-09-23 a restart on the NAS found no `config.json`, `ConfigurationFileGuard` wrote defaults with no source folders, `DlnaOptionsDefaults` served the application folder, and `ReconcileDirectoriesAsync` removed both indexed source folders as "no longer covered by configuration" - the cascade took all 25,669 file rows, and the restored file rebuilt the library with every `PublicId` regenerated. `DlnaOptionsDefaults.IsSourceFolderFallback` now suspends the coverage rule while the fallback is in force; a folder that is gone from disc is still removed. Why the file was missing is not in the logs.
 - **`is null` is a compile error inside an EF expression tree** (also in section 7 above) - and the
   `cs-writeguard` `null-pattern` warning fires on every projection that works around it.
 

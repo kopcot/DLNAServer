@@ -121,6 +121,24 @@ namespace DlnaServer.Host.Configuration
         }
 
         /// <summary>
+        /// Whether the source folders are the application-folder fallback rather than folders an operator
+        /// named.
+        /// </summary>
+        /// <remarks>
+        /// The indexer needs the difference: a narrowed configuration is an operator deciding to stop
+        /// sharing a folder, while the fallback is what a missing or emptied <c>config.json</c> produces,
+        /// and treating it as a decision deleted a whole live library. An operator who names this exact
+        /// folder is indistinguishable from the fallback and loses nothing but that one deletion rule.
+        /// </remarks>
+        internal static bool IsSourceFolderFallback(LibraryOptions library)
+        {
+            ArgumentNullException.ThrowIfNull(library);
+
+            return library.SourceFolders is [var only]
+                && string.Equals(only, AppContext.BaseDirectory, StringComparison.Ordinal);
+        }
+
+        /// <summary>
         /// Adds a folder name to the exclusions once. Reloads re-run this, so appending blindly would
         /// grow the list on every configuration change.
         /// </summary>

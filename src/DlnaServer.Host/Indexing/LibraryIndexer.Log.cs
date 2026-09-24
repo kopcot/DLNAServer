@@ -91,5 +91,14 @@ namespace DlnaServer.Host.Indexing
             Message = "'{OldFullPath}' has moved to '{NewFullPath}' - the same library entry follows it, "
                 + "keeping its identifier, its metadata and the date it was added")]
         private partial void LogFileMoved(string oldFullPath, string newFullPath);
+
+        [LoggerMessage(
+            EventId = 13,
+            Level = LogLevel.Warning,
+            Message = "No source folders are configured, so {Folders} is being served as a fallback. "
+                + "{KeptCount} indexed folder(s) outside it were kept rather than removed - a missing or "
+                + "emptied config.json is not a decision to stop sharing them. Set "
+                + "Dlna.Library.SourceFolders to reconcile normally")]
+        private partial void LogFallbackKeptUncoveredFolders(string folders, int keptCount);
     }
 }

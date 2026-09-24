@@ -5,6 +5,7 @@ using DlnaServer.Core.Contracts.Scanning;
 using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Files;
 using DlnaServer.Core.Hosting;
+using DlnaServer.Host.Configuration;
 using DlnaServer.Media.Scanning;
 using DlnaServer.Persistence.Repositories;
 using Microsoft.Extensions.Options;
@@ -118,7 +119,10 @@ namespace DlnaServer.Host.Indexing
                 updatedFiles = updated + movedOrRenamed;
                 removedFiles = removed;
                 addedFiles -= movedOrRenamed;
-                removedDirectories = await ReconcileDirectoriesAsync(scanOptions, cancellationToken);
+                removedDirectories = await ReconcileDirectoriesAsync(
+                    scanOptions,
+                    DlnaOptionsDefaults.IsSourceFolderFallback(options.Library),
+                    cancellationToken);
                 removedDirectories += await PruneEmptyDirectoriesAsync(
                     scanOptions,
                     directoryKeys,
@@ -650,12 +654,21 @@ namespace DlnaServer.Host.Indexing
         /// <see cref="PruneEmptyDirectoriesAsync"/>, which runs next and has to work leaf-upwards for
         /// reasons this pass does not share.
         /// </para>
+        /// <para>
+        /// <b>The coverage half does not apply while the source folders are the fallback.</b> Nobody chose
+        /// that folder: it is what a missing <c>config.json</c> becomes, and on the NAS such a restart
+        /// removed the two indexed source folders as "no longer covered" and cascaded every file row with
+        /// them - every identifier regenerated and a full preview pass to follow. A folder that is
+        /// genuinely gone from disc is still removed.
+        /// </para>
         /// </remarks>
         private async Task<int> ReconcileDirectoriesAsync(
             LibraryScanRequest scanOptions,
+            bool isSourceFolderFallback,
             CancellationToken cancellationToken)
         {
             var removed = 0;
+            var keptUncovered = 0;
             string? cursor = null;
 
             while (true)
@@ -671,14 +684,36 @@ namespace DlnaServer.Host.Indexing
 
                 cursor = page[^1].FullPath;
 
-                var missing = page
-                    .Where(indexed =>
-                        IsDirectoryDefinitelyAbsent(indexed.FullPath)
-                        || !IsInsideAnySourceFolder(indexed.FullPath, scanOptions.SourceFolders))
-                    .Select(static indexed => indexed.PublicId)
-                    .ToArray();
+                var missing = new List<Guid>(page.Count);
+
+                foreach (var indexed in page)
+                {
+                    if (IsDirectoryDefinitelyAbsent(indexed.FullPath))
+                    {
+                        missing.Add(indexed.PublicId);
+                        continue;
+                    }
+
+                    if (IsInsideAnySourceFolder(indexed.FullPath, scanOptions.SourceFolders))
+                    {
+                        continue;
+                    }
+
+                    if (isSourceFolderFallback)
+                    {
+                        keptUncovered++;
+                        continue;
+                    }
+
+                    missing.Add(indexed.PublicId);
+                }
 
                 removed += await _directories.RemoveByPublicIdsAsync(missing, cancellationToken);
+            }
+
+            if (keptUncovered > 0)
+            {
+                LogFallbackKeptUncoveredFolders(string.Join(", ", scanOptions.SourceFolders), keptUncovered);
             }
 
             return removed;
