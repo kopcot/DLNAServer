@@ -880,6 +880,7 @@ Global, and written for another project, so most of what it says does not apply 
   is therefore the one file-cache setting that needs a restart; the rest are read per request through
   `IOptionsMonitor`.
 - **The application-folder fallback is not an operator's choice, and reconciliation must not treat it as one.** On 2026-09-23 a restart on the NAS found no `config.json`, `ConfigurationFileGuard` wrote defaults with no source folders, `DlnaOptionsDefaults` served the application folder, and `ReconcileDirectoriesAsync` removed both indexed source folders as "no longer covered by configuration" - the cascade took all 25,669 file rows, and the restored file rebuilt the library with every `PublicId` regenerated. `DlnaOptionsDefaults.IsSourceFolderFallback` now suspends the coverage rule while the fallback is in force; a folder that is gone from disc is still removed. Why the file was missing is not in the logs.
+- **A Xabe `ConversionException` message is ffmpeg's entire standard error.** On a damaged stream that is one line per bad packet - 139,365 lines and 9.9 MB in one warning on the NAS, three of which rolled a 32 MB log file. Every ffmpeg-facing reason in `MediaProcessor` now goes through `FFmpegFailureReason.Summarise`, which keeps the distinct error lines up to a cap; never log `exception.Message` from that path raw.
 - **`is null` is a compile error inside an EF expression tree** (also in section 7 above) - and the
   `cs-writeguard` `null-pattern` warning fires on every projection that works around it.
 

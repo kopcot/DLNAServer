@@ -109,7 +109,7 @@ namespace DlnaServer.Media.Processing
                 // of which the previous ArgumentException/InvalidOperationException/IOException filter
                 // matched - so a single bad container reached the hosted service and stopped the host.
                 // "No metadata we could read" is the honest outcome for every one of them.
-                LogMetadataFailed(filePath, exception.Message);
+                LogMetadataFailed(filePath, FFmpegFailureReason.Summarise(exception.Message));
                 return null;
             }
         }
@@ -266,7 +266,7 @@ namespace DlnaServer.Media.Processing
             }
             catch (ConversionException exception)
             {
-                LogThumbnailConversionFailed(filePath, exception.Message);
+                LogThumbnailConversionFailed(filePath, FFmpegFailureReason.Summarise(exception.Message));
                 return null;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -281,7 +281,7 @@ namespace DlnaServer.Media.Processing
             }
             catch (Exception exception)
             {
-                LogThumbnailFailed(filePath, exception.Message);
+                LogThumbnailFailed(filePath, FFmpegFailureReason.Summarise(exception.Message));
                 return null;
             }
             finally
@@ -355,7 +355,7 @@ namespace DlnaServer.Media.Processing
             }
             catch (Exception exception)
             {
-                LogContainerTagsFailed(filePath, exception.Message);
+                LogContainerTagsFailed(filePath, FFmpegFailureReason.Summarise(exception.Message));
                 return [];
             }
         }
@@ -425,7 +425,7 @@ namespace DlnaServer.Media.Processing
             }
             catch (ConversionException exception)
             {
-                LogThumbnailConversionFailed(filePath, exception.Message);
+                LogThumbnailConversionFailed(filePath, FFmpegFailureReason.Summarise(exception.Message));
                 return null;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -440,7 +440,7 @@ namespace DlnaServer.Media.Processing
             }
             catch (Exception exception)
             {
-                LogThumbnailFailed(filePath, exception.Message);
+                LogThumbnailFailed(filePath, FFmpegFailureReason.Summarise(exception.Message));
                 return null;
             }
             finally

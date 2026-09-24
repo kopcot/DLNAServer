@@ -12,6 +12,8 @@ worth telling you about is added to the version it belongs to.
 
 **A missing settings file no longer empties your library.** If the server starts and cannot find its settings file, it writes a fresh one and shares its own folder until you set your media folders again. That used to be taken as you deciding to stop sharing your media, so the next scan forgot the whole library - and restoring the file meant indexing everything again from scratch, with every preview remade. Your library is now kept while the server runs on that fallback, and picks up where it left off once your folders are set again.
 
+**One damaged video can no longer fill the log.** When a preview could not be made from a broken video, the server wrote everything the video tool printed into the log - on one real library that was over 139,000 lines for a single file, and three of those filled a whole day's log file. It now writes the few lines that say what went wrong, and how much it left out.
+
 **Behind the optional admin proxy, the server now sees who is really calling.** If you put the admin
 pages behind the TLS proxy, every request used to arrive looking as though it came from the proxy itself
 - so the upload security log and the remembered-devices list recorded the same local address for
