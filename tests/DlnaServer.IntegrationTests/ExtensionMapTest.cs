@@ -295,6 +295,77 @@ namespace DlnaServer.IntegrationTests
                 "because only null makes the indexer fall back to the type's own default profile");
         }
 
+        /// <summary>
+        /// The defaults are the map the shipped config.json carries, one line per extension.
+        /// </summary>
+        [Test]
+        public void Defaults_AreTheShippedFileTypes()
+        {
+            // Arrange
+            var expected = new Dictionary<string, DlnaMime>(StringComparer.Ordinal)
+            {
+                [".3gp"] = DlnaMime.Video3gpp,
+                [".avi"] = DlnaMime.VideoXMsvideo,
+                [".flv"] = DlnaMime.VideoXFlv,
+                [".jpeg"] = DlnaMime.ImageJpeg,
+                [".jpg"] = DlnaMime.ImageJpeg,
+                [".m4v"] = DlnaMime.VideoMpeg,
+                [".mkv"] = DlnaMime.VideoXMatroska,
+                [".mov"] = DlnaMime.VideoQuicktime,
+                [".mp3"] = DlnaMime.AudioMp4,
+                [".mp4"] = DlnaMime.VideoMp4,
+                [".mpeg"] = DlnaMime.VideoMpeg,
+                [".mpg"] = DlnaMime.VideoMpeg,
+                [".png"] = DlnaMime.ImagePng,
+                [".wmv"] = DlnaMime.VideoXMswmv,
+            };
+
+            // Act
+            var rows = ExtensionMap.Defaults();
+
+            // Assert
+            rows.ToDictionary(static r => r.Extension, static r => r.Mime, StringComparer.Ordinal).Should().Equal(expected,
+                "because restoring the defaults must give back exactly the list the server ships with");
+        }
+
+        /// <summary>
+        /// Restoring the defaults and pressing Save must go through, or the button would lead nowhere.
+        /// </summary>
+        [Test]
+        public void Defaults_PassValidation()
+        {
+            // Arrange
+            var rows = ExtensionMap.Defaults();
+
+            // Act
+            var problems = ExtensionMap.Validate(rows);
+
+            // Assert
+            problems.Should().BeEmpty("because the default list has to be saveable as it stands");
+        }
+
+        /// <summary>
+        /// The editor mutates the rows it is handed, so one restore must not leak into the next.
+        /// </summary>
+        [Test]
+        public void Defaults_ReturnsFreshRowsOnEveryCall()
+        {
+            // Arrange
+            var first = ExtensionMap.Defaults();
+            first[0].Extension = ".changed";
+            first.RemoveAt(first.Count - 1);
+
+            // Act
+            var second = ExtensionMap.Defaults();
+
+            // Assert
+            second.Should().NotContain(static r => r.Extension == ".changed",
+                "because an edit to rows handed out earlier must not change the defaults");
+
+            second.Should().HaveCount(14,
+                "because removing a line from rows handed out earlier must not shorten the defaults");
+        }
+
         [Test]
         public void ToOptions_KeysTheMapWithoutRegardToCase()
         {

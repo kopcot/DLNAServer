@@ -364,6 +364,14 @@
     </p>
 
     <ExtensionMapEditor Rows="_extensions" />
+
+    <div class="checkrow">
+        <button type="button" @onclick="RestoreDefaultFileTypes" disabled="@_saving">Restore the default file types</button>
+    </div>
+    <p class="muted">
+        Replaces every line above with the list the server ships with. Nothing is saved until you press
+        <em>Save</em>, and <em>Discard changes</em> brings back what you had.
+    </p>
 </CollapsiblePanel>
 
 <CollapsiblePanel @key='AdvancedKey("Recently served files")' StartCollapsed="@(!_failed)" Heading="Recently served files">
@@ -668,6 +676,15 @@
         {
             _saving = false;
         }
+    }
+
+    private void RestoreDefaultFileTypes()
+    {
+        _extensions = ExtensionMap.Defaults();
+
+        // The message only: _failed keys the advanced panels, and clearing it would fold this one away
+        // under the operator's cursor.
+        _message = null;
     }
 
     private void CheckSourceFolders()

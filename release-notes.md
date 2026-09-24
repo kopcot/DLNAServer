@@ -22,6 +22,10 @@ beside the program files, so whoever is running a deployment can read what chang
 without going back to the source. The server is under the **MIT licence** - free to use, change and pass
 on, with no warranty - and About says so.
 
+**Put the file types back the way they shipped.** Settings, under *Advanced → File types*, has a
+*Restore the default file types* button that refills the list with the one the server comes with. Nothing
+changes until you press *Save*, so *Discard changes* still takes you back to what you had.
+
 **Correct what one file says it is.** A file's own page can now change its *file type* and its
 *compatibility profile*, in the *File* group beside the facts it corrects. It is the fix for a file a
 television refuses while it plays perfectly on these pages, and it affects that one file - the list that
