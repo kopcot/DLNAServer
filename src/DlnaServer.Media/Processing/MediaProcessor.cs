@@ -260,7 +260,7 @@ namespace DlnaServer.Media.Processing
                 // an encoding-effort setting that buys nothing for a single still and costs real CPU.
                 _ = conversion.SetPreset(ConversionPreset.VeryFast);
 
-                _ = await conversion.Start(timeout.Token);
+                await StartConversionAsync(conversion, filePath, framePath, timeout.Token);
 
                 return _imageThumbnails.Generate(framePath, targetPath, request);
             }
@@ -419,7 +419,7 @@ namespace DlnaServer.Media.Processing
                     .AddStream(artwork)
                     .SetOutput(framePath);
 
-                _ = await conversion.Start(timeout.Token);
+                await StartConversionAsync(conversion, filePath, framePath, timeout.Token);
 
                 return _imageThumbnails.Generate(framePath, targetPath, request);
             }
@@ -447,6 +447,48 @@ namespace DlnaServer.Media.Processing
             {
                 TryDeleteFrame(framePath);
             }
+        }
+
+        /// <summary>
+        /// Runs a one-frame conversion, riding out the race in Xabe's output log.
+        /// </summary>
+        /// <remarks>
+        /// Xabe.FFmpeg 6.0.2's <c>FFmpegWrapper.RunProcess</c> waits on the process handle and calls
+        /// <c>WaitForExit()</c> - the overload that also drains standard error - only when the process has
+        /// not exited yet. When it has, the stderr callback can still be appending to <c>_outputLog</c>
+        /// while <c>ToArray</c> copies it, which throws "Destination array was not long enough". ffmpeg has
+        /// already finished by then, so the frame is on disc and only the wrapper's bookkeeping failed.
+        /// The frame is deleted before every conversion, so one that exists now was written by this one.
+        /// </remarks>
+        private async Task StartConversionAsync(
+            IConversion conversion,
+            string filePath,
+            string framePath,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                _ = await conversion.Start(cancellationToken);
+            }
+            catch (ArgumentException exception) when (IsOutputLogRace(exception.ParamName, exception.StackTrace)
+                && File.Exists(framePath))
+            {
+                LogOutputLogRaceRidden(filePath);
+            }
+        }
+
+        /// <summary>
+        /// Whether an exception is Xabe's output-log race rather than anything else that shares its type.
+        /// </summary>
+        /// <remarks>
+        /// Taken apart into the two strings so both answers can be tested: the race cannot be provoked on
+        /// demand, and any other <see cref="ArgumentException"/> must still count as a failure.
+        /// </remarks>
+        internal static bool IsOutputLogRace(string? paramName, string? stackTrace)
+        {
+            return string.Equals(paramName, "destinationArray", StringComparison.Ordinal)
+                && stackTrace is not null
+                && stackTrace.Contains("Xabe.FFmpeg.FFmpegWrapper", StringComparison.Ordinal);
         }
 
         /// <summary>

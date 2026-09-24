@@ -54,5 +54,12 @@ namespace DlnaServer.Media.Processing
             Message = "The tags in '{FilePath}' could not be read ({Reason}); "
                 + "its other metadata is unaffected")]
         private partial void LogContainerTagsFailed(string filePath, string reason);
+
+        [LoggerMessage(
+            EventId = 9,
+            Level = LogLevel.Debug,
+            Message = "ffmpeg finished the frame for '{FilePath}' but the wrapper's output log raced as it "
+                + "exited; the frame on disc is used")]
+        private partial void LogOutputLogRaceRidden(string filePath);
     }
 }
