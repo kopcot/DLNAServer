@@ -14,6 +14,8 @@ worth telling you about is added to the version it belongs to.
 
 **One damaged video can no longer fill the log.** When a preview could not be made from a broken video, the server wrote everything the video tool printed into the log - on one real library that was over 139,000 lines for a single file, and three of those filled a whole day's log file. It now writes the few lines that say what went wrong, and how much it left out.
 
+**A file that cannot be read is no longer tried three times in a row.** The server gives each file three chances before leaving it alone, but all three used to happen within a few seconds - too quickly for anything to have changed, and three times the work and the log lines for a file that will never work. It now waits five minutes before the second try and half an hour before the third. Asking for a file to be redone from its page, or letting it back in, still happens straight away.
+
 **Behind the optional admin proxy, the server now sees who is really calling.** If you put the admin
 pages behind the TLS proxy, every request used to arrive looking as though it came from the proxy itself
 - so the upload security log and the remembered-devices list recorded the same local address for

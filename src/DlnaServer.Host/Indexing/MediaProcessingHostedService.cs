@@ -59,6 +59,9 @@ namespace DlnaServer.Host.Indexing
         /// </summary>
         private const int MaxFailureCount = 3;
 
+        private static readonly TimeSpan _firstRetryDelay = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan _laterRetryDelay = TimeSpan.FromMinutes(30);
+
         /// <summary>
         /// Empty passes tolerated at <see cref="_idleDelay"/> before the wait starts doubling.
         /// </summary>
@@ -106,6 +109,18 @@ namespace DlnaServer.Host.Indexing
         /// on a process with nothing to give back.
         /// </remarks>
         private bool _hasProcessedSinceSettle;
+
+        /// <summary>
+        /// Files that failed recently, and when each may be tried again.
+        /// </summary>
+        /// <remarks>
+        /// While work is queued the passes run a second apart, so all <see cref="MaxFailureCount"/>
+        /// attempts used to land within about three seconds - too soon for anything transient to have
+        /// cleared, and three full decodes and three warnings for a file that can never be read. In memory
+        /// on purpose: a restart is a fair moment for a fresh attempt, and it needs no schema change.
+        /// Written by both workers, hence concurrent.
+        /// </remarks>
+        private readonly ConcurrentDictionary<Guid, DateTimeOffset> _retryNotBefore = new();
 
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IOptionsMonitor<DlnaOptions> _options;
@@ -208,9 +223,19 @@ namespace DlnaServer.Host.Indexing
             return delay > _maxIdleDelay ? _maxIdleDelay : delay;
         }
 
+        /// <remarks>
+        /// <c>internal</c> for the same reason as <see cref="ResolveIdleDelay"/>: the schedule is asserted
+        /// directly rather than by driving the loop through half an hour of fake time.
+        /// </remarks>
+        internal static TimeSpan ResolveRetryDelay(int failuresSoFar)
+        {
+            return failuresSoFar <= 1 ? _firstRetryDelay : _laterRetryDelay;
+        }
+
         private async Task<int> ProcessBatchAsync(CancellationToken cancellationToken)
         {
             IReadOnlyList<MediaFileDto> pending;
+            var notYetRetryable = CollectNotYetRetryable();
 
             // Its own scope, disposed before the workers start. Claiming the batch is one short query and
             // holding a DbContext open across the whole pass would keep a pooled connection - and its
@@ -218,7 +243,11 @@ namespace DlnaServer.Host.Indexing
             using (var claimScope = _scopeFactory.CreateScope())
             {
                 var claimFiles = claimScope.ServiceProvider.GetRequiredService<IMediaFileRepository>();
-                pending = await claimFiles.GetPendingProcessingAsync(BatchSize, MaxFailureCount, cancellationToken);
+                pending = await claimFiles.GetPendingProcessingAsync(
+                    BatchSize,
+                    MaxFailureCount,
+                    notYetRetryable,
+                    cancellationToken);
             }
 
             if (pending.Count == 0)
@@ -483,7 +512,37 @@ namespace DlnaServer.Host.Indexing
                     metadataFailed,
                     thumbnailFailed,
                     cancellationToken);
+
+                // The counts on the claimed row are from before this attempt, hence the + 1.
+                var failuresSoFar = 1 + Math.Max(
+                    metadataFailed ? file.MetadataFailureCount : 0,
+                    thumbnailFailed ? file.ThumbnailFailureCount : 0);
+
+                _retryNotBefore[file.PublicId] = _timeProvider.GetUtcNow() + ResolveRetryDelay(failuresSoFar);
             }
+        }
+
+        /// <summary>
+        /// The files still waiting out their retry delay, dropping those whose delay has passed.
+        /// </summary>
+        private List<Guid> CollectNotYetRetryable()
+        {
+            var now = _timeProvider.GetUtcNow();
+            var waiting = new List<Guid>(_retryNotBefore.Count);
+
+            foreach (var (publicId, notBefore) in _retryNotBefore)
+            {
+                if (notBefore > now)
+                {
+                    waiting.Add(publicId);
+                }
+                else
+                {
+                    _ = _retryNotBefore.TryRemove(publicId, out _);
+                }
+            }
+
+            return waiting;
         }
 
         private static bool IsThumbnailWanted(MediaFileDto file, DlnaOptions options)

@@ -40,11 +40,18 @@ namespace DlnaServer.IntegrationTests
 
         public List<(Guid PublicId, bool MetadataFailed, bool ThumbnailFailed)> RecordedFailures { get; } = [];
 
+        /// <summary>
+        /// What each claim asked to leave out, in order.
+        /// </summary>
+        public List<Guid[]> ExcludedPerRequest { get; } = [];
+
         public Task<IReadOnlyList<MediaFileDto>> GetPendingProcessingAsync(
             int maxCount,
             int maxFailureCount,
+            IReadOnlyCollection<Guid>? excludedPublicIds = null,
             CancellationToken cancellationToken = default)
         {
+            ExcludedPerRequest.Add(excludedPublicIds is null ? [] : [.. excludedPublicIds]);
             _pendingRequests++;
 
             if (_pendingRequests == 1)

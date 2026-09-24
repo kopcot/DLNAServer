@@ -323,6 +323,7 @@ namespace DlnaServer.Persistence.Repositories
         public async Task<IReadOnlyList<MediaFileDto>> GetPendingProcessingAsync(
             int maxCount,
             int maxFailureCount,
+            IReadOnlyCollection<Guid>? excludedPublicIds = null,
             CancellationToken cancellationToken = default)
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCount);
@@ -336,11 +337,22 @@ namespace DlnaServer.Persistence.Repositories
             // ExcludeFolders alone, deliberately, and the one place the two kinds of hiding differ in this
             // direction: a temporarily hidden folder stays current, so it must still get its metadata and
             // its thumbnails - otherwise revealing it would show a wall of blank tiles until a later pass.
-            return await ProjectFiles(
-                    f =>
-                        (!f.IsMetadataSuppressed && f.MetadataStamp != f.ContentStamp && f.MetadataFailureCount < maxFailureCount)
-                        || (!f.IsThumbnailSuppressed && f.ThumbnailStamp != f.ContentStamp && f.ThumbnailFailureCount < maxFailureCount),
-                    hiddenFolders: _options.CurrentValue.Library.ExcludeFolders)
+            var pending = ProjectFiles(
+                f =>
+                    (!f.IsMetadataSuppressed && f.MetadataStamp != f.ContentStamp && f.MetadataFailureCount < maxFailureCount)
+                    || (!f.IsThumbnailSuppressed && f.ThumbnailStamp != f.ContentStamp && f.ThumbnailFailureCount < maxFailureCount),
+                hiddenFolders: _options.CurrentValue.Library.ExcludeFolders);
+
+            // Only while the row still carries a failure. Recreating, letting a file back in and a change
+            // of content all reset the counts, and none of those should wait out a retry delay.
+            if (excludedPublicIds is { Count: > 0 })
+            {
+                pending = pending.Where(f =>
+                    !excludedPublicIds.Contains(f.PublicId)
+                    || (f.MetadataFailureCount == 0 && f.ThumbnailFailureCount == 0));
+            }
+
+            return await pending
                 .OrderBy(static f => f.CreatedUtc)
                 .Take(maxCount)
                 .ToListAsync(cancellationToken);

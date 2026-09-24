@@ -2467,6 +2467,64 @@ namespace DlnaServer.UnitTests.Persistence
                 "because the admin search and a renderer's browse must answer with the same library");
         }
 
+        /// <summary>
+        /// A file waiting out its retry delay is left out of the claim, so it cannot fill the batch.
+        /// </summary>
+        [Test]
+        public async Task GetPendingProcessingAsync_LeavesOutAnExcludedFileThatHasFailed()
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var repository = CreateRepository(context);
+            var stored = await repository.AddRangeAsync(
+                files: [CreateFile("/media/broken.mkv"), CreateFile("/media/next.mkv")],
+                cancellationToken: CancellationToken.None);
+            var broken = stored.Single(static f => f.FileName == "broken.mkv");
+
+            await repository.RecordProcessingFailureAsync(
+                publicId: broken.PublicId,
+                metadataFailed: true,
+                thumbnailFailed: true,
+                cancellationToken: CancellationToken.None);
+
+            // Act
+            var pending = await repository.GetPendingProcessingAsync(
+                maxCount: 10,
+                maxFailureCount: 3,
+                excludedPublicIds: [broken.PublicId],
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            pending.Should().ContainSingle("because only the file that is not waiting may be claimed")
+                .Which.FileName.Should().Be("next.mkv",
+                    "because the excluded file failed and its retry delay has not passed");
+        }
+
+        /// <summary>
+        /// Recreating or letting a file back in resets its counts, and that must not wait out a delay.
+        /// </summary>
+        [Test]
+        public async Task GetPendingProcessingAsync_StillOffersAnExcludedFileWhoseFailuresWereReset()
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var repository = CreateRepository(context);
+            var stored = await repository.AddRangeAsync(
+                files: [CreateFile("/media/film.mkv")],
+                cancellationToken: CancellationToken.None);
+
+            // Act
+            var pending = await repository.GetPendingProcessingAsync(
+                maxCount: 10,
+                maxFailureCount: 3,
+                excludedPublicIds: [stored[0].PublicId],
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            pending.Should().ContainSingle(
+                "because a row carrying no failure is an operator's retry or new content, not a failure to wait out");
+        }
+
         [Test]
         public async Task GetPendingProcessingAsync_OmitsFilesUnderAnExcludedFolder()
         {

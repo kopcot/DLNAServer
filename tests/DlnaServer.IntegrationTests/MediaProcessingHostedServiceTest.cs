@@ -87,6 +87,50 @@ namespace DlnaServer.IntegrationTests
                 "because only the corrupt file failed");
         }
 
+        /// <summary>
+        /// A file that just failed is not offered again on the next pass, a second later.
+        /// </summary>
+        /// <remarks>
+        /// All three attempts used to land within about three seconds on the NAS, because passes run a
+        /// second apart while work is queued: three decodes and three identical warnings per broken file,
+        /// and nothing transient given time to clear.
+        /// </remarks>
+        [Test]
+        public async Task ExecuteAsync_AfterAFailure_LeavesTheFileOutOfTheNextClaim()
+        {
+            // Arrange
+            var file = CreateFile(_failingPath);
+            var repository = new RecordingMediaFileRepository(file);
+            var processor = new ThrowingMediaProcessor(_failingPath);
+
+            using var service = CreateService(repository, processor);
+
+            // Act
+            await service.StartAsync(CancellationToken.None);
+            await repository.PendingRequestedTwice.WaitAsync(_signalTimeout);
+            await service.StopAsync(CancellationToken.None);
+
+            // Assert
+            repository.ExcludedPerRequest[0].Should().BeEmpty(
+                "because nothing had failed before the first claim");
+
+            repository.ExcludedPerRequest[1].Should().Equal([file.PublicId],
+                "because the file that just failed must wait out its retry delay rather than be tried again");
+        }
+
+        [TestCase(1, 5)]
+        [TestCase(2, 30)]
+        [TestCase(3, 30)]
+        public void ResolveRetryDelay_WaitsLongerAfterEachFailure(int failuresSoFar, int expectedMinutes)
+        {
+            // Act
+            var delay = MediaProcessingHostedService.ResolveRetryDelay(failuresSoFar);
+
+            // Assert
+            delay.Should().Be(TimeSpan.FromMinutes(expectedMinutes),
+                $"because a file that has failed {failuresSoFar} time(s) waits {expectedMinutes} minutes before the next attempt");
+        }
+
         private static MediaProcessingHostedService CreateService(
             IMediaFileRepository repository,
             IMediaProcessor processor)

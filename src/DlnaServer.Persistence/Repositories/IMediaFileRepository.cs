@@ -98,9 +98,18 @@ namespace DlnaServer.Persistence.Repositories
         /// Files whose content changed since metadata or a thumbnail was produced, plus those never
         /// processed, excluding any that have failed too often to be worth retrying.
         /// </summary>
+        /// <param name="maxCount">The most files returned.</param>
+        /// <param name="maxFailureCount">Failures after which a file is no longer offered.</param>
+        /// <param name="excludedPublicIds">
+        /// Files the caller is not ready to retry yet. Left out in the query rather than after it, so they
+        /// cannot fill a batch and hold back the files queued behind them - and only while their row still
+        /// records a failure, so a reset of the counts makes one eligible at once.
+        /// </param>
+        /// <param name="cancellationToken">Cancels the query.</param>
         Task<IReadOnlyList<MediaFileDto>> GetPendingProcessingAsync(
             int maxCount,
             int maxFailureCount,
+            IReadOnlyCollection<Guid>? excludedPublicIds = null,
             CancellationToken cancellationToken = default);
 
         /// <summary>
