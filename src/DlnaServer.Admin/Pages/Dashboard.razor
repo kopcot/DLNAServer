@@ -78,6 +78,10 @@
 <Panel Heading="Library">
     <StatGrid>
         <StatTile Label="Files" Source="database Files row count, folders the library hides left out">@_counts.Total</StatTile>
+        <StatTile Label="Folders" Source="database Directories row count">@_directoryCount</StatTile>
+    </StatGrid>
+    @* The totals on the first row, what Files is made of on the second. *@
+    <StatGrid>
         <StatTile Label="Video" Source="database Files grouped by MIME, the kinds that map to video">@_counts.Video</StatTile>
         <StatTile Label="Music" Source="database Files grouped by MIME, the kinds that map to audio">@_counts.Audio</StatTile>
         <StatTile Label="Photos" Source="database Files grouped by MIME, the kinds that map to image">@_counts.Image</StatTile>
@@ -87,7 +91,6 @@
         {
             <StatTile Label="Other" Source="database Files grouped by MIME, types that map to no kind">@_counts.Other</StatTile>
         }
-        <StatTile Label="Folders" Source="database Directories row count">@_directoryCount</StatTile>
     </StatGrid>
     <p class="muted">
         Counted the way the Library page lists, so folders you have hidden are left out and the kinds add

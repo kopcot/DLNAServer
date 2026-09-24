@@ -75,7 +75,7 @@ passed over in silence, and a file that parses but carries none of this server's
 flat layout, for instance - is called out and left untouched instead of being quietly ignored.
 
 **The Dashboard says what your library is made of**, not just how many files it holds - video, music and
-photos each get their own figure beside the total. They are counted the way the Library page lists, so
+photos each get their own figure, on a row below the file and folder totals. They are counted the way the Library page lists, so
 folders you have hidden are left out and the three add up to the total.
 
 **The Dashboard keeps itself up to date.** Memory and the recently-served-files figures refresh every few

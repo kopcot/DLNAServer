@@ -144,6 +144,9 @@ h2 { font-size: 17px; margin: 28px 0 10px; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
 
+/* Two grids stacked in one panel read as two rows, so they keep the grid's own gap between them. */
+.grid + .grid { margin-top: 14px; }
+
 /*
     Pins a page's controls at the top of the viewport so the list below scrolls under them instead of
     taking them off the screen. The page's own scroll does the work - a scroller inside the panel would
@@ -738,6 +741,7 @@ dl.meta dd { margin: 0; word-break: break-all; }
     .panel { padding: 14px; border-radius: 6px; }
 
     .grid { grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); gap: 10px; }
+    .grid + .grid { margin-top: 10px; }
     .stat .value { font-size: 20px; }
 
     /* Two tiles across a phone rather than one giant one. */
