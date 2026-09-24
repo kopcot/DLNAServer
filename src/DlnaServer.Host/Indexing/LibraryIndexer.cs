@@ -43,6 +43,7 @@ namespace DlnaServer.Host.Indexing
         private readonly ISourceFolderChecker _sourceFolders;
         private readonly IServedFileCache _fileCache;
         private readonly ILibraryIndexLock _indexLock;
+        private readonly ILibraryChangeSignal _changes;
         private readonly IOptionsMonitor<DlnaOptions> _options;
         private readonly ILogger<LibraryIndexer> _logger;
 
@@ -53,6 +54,7 @@ namespace DlnaServer.Host.Indexing
             ISourceFolderChecker sourceFolders,
             IServedFileCache fileCache,
             ILibraryIndexLock indexLock,
+            ILibraryChangeSignal changes,
             IOptionsMonitor<DlnaOptions> options,
             ILogger<LibraryIndexer> logger)
         {
@@ -62,6 +64,7 @@ namespace DlnaServer.Host.Indexing
             _sourceFolders = sourceFolders;
             _fileCache = fileCache;
             _indexLock = indexLock;
+            _changes = changes;
             _options = options;
             _logger = logger;
         }
@@ -71,10 +74,22 @@ namespace DlnaServer.Host.Indexing
         /// <see cref="ILibraryIndexLock"/> now because a third caller needs it and cannot reach a private
         /// static: the admin UI's <i>Rebuild index</i> deletes every row and runs <c>VACUUM</c>, which was
         /// able to run straight into a scan already in flight.
+        /// <para>
+        /// Every pass marks <see cref="ILibraryChangeSignal"/>, whatever it found and however it ended: a
+        /// pass that changed nothing costs a reader one recount, and one that failed half-way may still
+        /// have inserted or removed rows before it did.
+        /// </para>
         /// </remarks>
-        public Task<LibraryIndexResult> IndexAsync(CancellationToken cancellationToken = default)
+        public async Task<LibraryIndexResult> IndexAsync(CancellationToken cancellationToken = default)
         {
-            return _indexLock.RunAsync(IndexUnderGateAsync, cancellationToken);
+            try
+            {
+                return await _indexLock.RunAsync(IndexUnderGateAsync, cancellationToken);
+            }
+            finally
+            {
+                _changes.MarkChanged();
+            }
         }
 
         private async Task<LibraryIndexResult> IndexUnderGateAsync(CancellationToken cancellationToken)

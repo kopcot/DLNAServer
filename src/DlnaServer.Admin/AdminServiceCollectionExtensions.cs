@@ -1,3 +1,4 @@
+using DlnaServer.Admin.Components;
 using DlnaServer.Admin.Formatting;
 using DlnaServer.Admin.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,9 @@ namespace DlnaServer.Admin
             // Both are stateless and hold no configuration, so one instance serves every circuit.
             _ = services.AddSingleton<IMediaFormatter, MediaFormatter>();
             _ = services.AddSingleton<IAdminUrls, AdminUrls>();
+
+            // One per process on purpose: every open Dashboard, pre-rendered or live, shares the last count.
+            _ = services.AddSingleton<LibraryCountsCache>();
 
             return services;
         }

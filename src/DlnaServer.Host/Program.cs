@@ -197,6 +197,7 @@ namespace DlnaServer.Host
             _ = builder.Services.AddSingleton(restartSignal);
             _ = builder.Services.AddSingleton(databaseResetSignal);
             _ = builder.Services.AddSingleton<ILibraryScanSignal, LibraryScanSignal>();
+            _ = builder.Services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = builder.Services.AddSingleton<IDatabaseReadySignal, DatabaseReadySignal>();
 
             // Singleton because it serialises the INDEX, not a scope: the startup scan, the file

@@ -11,6 +11,10 @@
 @inject IApiBlocker Blocker
 @inject IMediaCapabilities Capabilities
 @inject IMediaFormatter Fmt
+@inject LibraryCountsCache CountsCache
+@inject ILibraryChangeSignal Changes
+@inject ITemporaryFolderVisibility Visibility
+@inject TimeProvider Time
 
 <PageHeader Title="Dashboard">
     What the server is holding, and how much of this machine it is using.
@@ -104,10 +108,9 @@
     private const long WorkingSetTargetBytes = WorkingSetTargetMb * 1024L * 1024L;
 
     // The cheap figures - the cache report and the process counters - touch no database, so they tick at
-    // this interval. The counts do, so they refresh on every RefreshTicksPerCount-th tick instead.
+    // this interval. The counts are looked at on the same tick but only re-read when the library changed;
+    // see LibraryCountsCache.
     private static readonly TimeSpan _refreshInterval = TimeSpan.FromSeconds(5);
-
-    private const int RefreshTicksPerCount = 6;
 
     private static readonly LibraryCountsDto _noCountsYet =
         new() { Total = 0, Video = 0, Audio = 0, Image = 0, Other = 0 };
@@ -130,7 +133,7 @@
     {
         ReadCheapFigures();
 
-        await RunGatedAsync(ReadCountsAsync);
+        await RefreshCountsAsync();
 
         _timer = new PeriodicTimer(_refreshInterval);
 
@@ -141,20 +144,13 @@
 
     private async Task RefreshAsync()
     {
-        var ticks = 0;
-
         try
         {
             while (await _timer!.WaitForNextTickAsync(PageToken))
             {
-                ticks++;
-
                 ReadCheapFigures();
 
-                if (ticks % RefreshTicksPerCount == 0)
-                {
-                    await RunGatedAsync(ReadCountsAsync);
-                }
+                await RefreshCountsAsync();
 
                 await InvokeAsync(StateHasChanged);
             }
@@ -166,14 +162,36 @@
     }
 
     /// <remarks>
-    /// Gated because this page's counts share the circuit's <c>DbContext</c> with whatever a Maintenance or
-    /// Preview action is still running, and an ungated read racing a gated write is the whole failure mode
-    /// <c>IAdminOperationGate</c> exists for. On a timer that matters more than it did on one load.
+    /// The shared snapshot first: while the library has not changed and the hidden folders are the same,
+    /// nothing here touches the database. The generation is read before counting so a change landing
+    /// mid-count is caught on the next tick - see <see cref="LibraryCountsCache.Store"/>.
+    /// <para>
+    /// The count itself is gated because this page's counts share the circuit's <c>DbContext</c> with
+    /// whatever a Maintenance or Preview action is still running, and an ungated read racing a gated write
+    /// is the whole failure mode <c>IAdminOperationGate</c> exists for.
+    /// </para>
     /// </remarks>
-    private async Task ReadCountsAsync(CancellationToken cancellationToken)
+    private async Task RefreshCountsAsync()
     {
-        _counts = await Files.CountByKindAsync(cancellationToken);
-        _directoryCount = await Directories.CountAsync(cancellationToken);
+        var generation = Changes.Generation;
+        var hiddenFolders = string.Join('\n', Visibility.HiddenFromListings);
+        var now = Time.GetUtcNow();
+
+        if (CountsCache.Find(generation, hiddenFolders, now) is { } cached)
+        {
+            _counts = cached.Counts;
+            _directoryCount = cached.DirectoryCount;
+
+            return;
+        }
+
+        await RunGatedAsync(async cancellationToken =>
+        {
+            _counts = await Files.CountByKindAsync(cancellationToken);
+            _directoryCount = await Directories.CountAsync(cancellationToken);
+
+            CountsCache.Store(new LibraryCountsCache.Snapshot(generation, hiddenFolders, now, _counts, _directoryCount));
+        });
     }
 
     /// <remarks>

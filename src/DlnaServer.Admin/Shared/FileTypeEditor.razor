@@ -11,6 +11,7 @@
 
 @inject IMediaFileRepository Files
 @inject IAdminOperationGate Gate
+@inject ILibraryChangeSignal Changes
 
 @* Shut to begin with. The facts above it are what the panel is for; this is the rarely-wanted correction
    underneath them, and open by default it would put a form between them and everything below. *@
@@ -102,6 +103,12 @@
             var stored = await Gate.RunAsync(
                 token => Files.UpdateDlnaMappingAsync(File.PublicId, _mime, _profileName, token),
                 CancellationToken.None);
+
+            // A new type can move the file to another kind, and the Dashboard counts by kind.
+            if (stored)
+            {
+                Changes.MarkChanged();
+            }
 
             _message = stored
                 ? $"This file is now {_mime.ToMimeString()}. Televisions see the change the next time they browse."

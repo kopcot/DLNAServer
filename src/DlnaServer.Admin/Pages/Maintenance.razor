@@ -8,6 +8,7 @@
 @inject IHostApplicationLifetime Lifetime
 @inject IIndexMaintenance IndexMaintenance
 @inject ILibraryScanSignal ScanSignal
+@inject ILibraryChangeSignal Changes
 @inject IDatabaseResetSignal DatabaseResetSignal
 @inject IMediaDirectoryRepository Directories
 @inject ILibraryIndexLock IndexLock
@@ -264,6 +265,7 @@
                 async lockedToken =>
                 {
                     var cleared = await IndexMaintenance.ClearIndexAsync(lockedToken);
+                    Changes.MarkChanged();
 
                     ScanSignal.RequestScan();
 

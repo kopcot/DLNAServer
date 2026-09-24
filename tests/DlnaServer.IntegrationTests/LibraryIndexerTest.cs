@@ -40,6 +40,7 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddDlnaPersistence($"Data Source={_databasePath}");
             _ = services.AddDlnaMedia();
             _ = services.AddScoped<ILibraryIndexer, LibraryIndexer>();
+            _ = services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();
             _ = services.AddSingleton<IServedFileCache, NoOpServedFileCache>();
             _ = services.AddSingleton<ILibraryIndexLock, LibraryIndexLock>();
@@ -117,6 +118,25 @@ namespace DlnaServer.IntegrationTests
             counts.Total.Should().Be(counts.Video + counts.Audio + counts.Image + counts.Other,
                 "because the panel shows the total as the sum of the parts, so a file counted in no kind "
                 + "would make the tiles contradict each other");
+        }
+
+        /// <summary>
+        /// The Dashboard only recounts when the library is marked as changed, and a scan is what changes it.
+        /// </summary>
+        [Test]
+        public async Task IndexAsync_MarksTheLibraryAsChanged()
+        {
+            // Arrange
+            _ = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            var changes = _provider.GetRequiredService<ILibraryChangeSignal>();
+            var before = changes.Generation;
+
+            // Act
+            _ = await IndexAsync();
+
+            // Assert
+            changes.Generation.Should().BeGreaterThan(before,
+                "because a finished scan may have added or removed files, and the Dashboard must recount");
         }
 
         [Test]
@@ -441,6 +461,7 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddDlnaPersistence($"Data Source={_databasePath}");
             _ = services.AddDlnaMedia();
             _ = services.AddScoped<ILibraryIndexer, LibraryIndexer>();
+            _ = services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();
             _ = services.AddSingleton<IServedFileCache, NoOpServedFileCache>();
             _ = services.AddSingleton<ILibraryIndexLock, LibraryIndexLock>();
@@ -485,6 +506,7 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddDlnaPersistence($"Data Source={_databasePath}");
             _ = services.AddDlnaMedia();
             _ = services.AddScoped<ILibraryIndexer, LibraryIndexer>();
+            _ = services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();
             _ = services.AddSingleton<IServedFileCache, NoOpServedFileCache>();
             _ = services.AddSingleton<ILibraryIndexLock, LibraryIndexLock>();
@@ -547,6 +569,7 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddDlnaPersistence($"Data Source={_databasePath}");
             _ = services.AddDlnaMedia();
             _ = services.AddScoped<ILibraryIndexer, LibraryIndexer>();
+            _ = services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();
             _ = services.AddSingleton<IServedFileCache, NoOpServedFileCache>();
             _ = services.AddSingleton<ILibraryIndexLock, LibraryIndexLock>();
@@ -624,6 +647,7 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddDlnaPersistence($"Data Source={_databasePath}");
             _ = services.AddDlnaMedia();
             _ = services.AddScoped<ILibraryIndexer, LibraryIndexer>();
+            _ = services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();
             _ = services.AddSingleton<IServedFileCache, NoOpServedFileCache>();
             _ = services.AddSingleton<ILibraryIndexLock, LibraryIndexLock>();
@@ -683,6 +707,7 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddDlnaPersistence($"Data Source={_databasePath}");
             _ = services.AddDlnaMedia();
             _ = services.AddScoped<ILibraryIndexer, LibraryIndexer>();
+            _ = services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();
             _ = services.AddSingleton<IServedFileCache, NoOpServedFileCache>();
             _ = services.AddSingleton<ILibraryIndexLock, LibraryIndexLock>();
@@ -822,6 +847,7 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddDlnaPersistence($"Data Source={_databasePath}");
             _ = services.AddDlnaMedia();
             _ = services.AddScoped<ILibraryIndexer, LibraryIndexer>();
+            _ = services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = services.AddSingleton(checker);
             _ = services.AddSingleton<IServedFileCache, NoOpServedFileCache>();
             _ = services.AddSingleton<ILibraryIndexLock, LibraryIndexLock>();
@@ -871,6 +897,7 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddDlnaPersistence($"Data Source={_databasePath}");
             _ = services.AddDlnaMedia();
             _ = services.AddScoped<ILibraryIndexer, LibraryIndexer>();
+            _ = services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();
             _ = services.AddSingleton<IServedFileCache, NoOpServedFileCache>();
             _ = services.AddSingleton<ILibraryIndexLock, LibraryIndexLock>();
@@ -1628,6 +1655,7 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddDlnaPersistence($"Data Source={_databasePath}");
             _ = services.AddDlnaMedia();
             _ = services.AddScoped<ILibraryIndexer, LibraryIndexer>();
+            _ = services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();
             _ = services.AddSingleton<IServedFileCache, NoOpServedFileCache>();
             _ = services.AddSingleton<ILibraryIndexLock, LibraryIndexLock>();
@@ -1721,6 +1749,7 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddDlnaPersistence($"Data Source={_databasePath}");
             _ = services.AddDlnaMedia();
             _ = services.AddScoped<ILibraryIndexer, LibraryIndexer>();
+            _ = services.AddSingleton<ILibraryChangeSignal, LibraryChangeSignal>();
             _ = services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();
             _ = services.AddSingleton<IServedFileCache, NoOpServedFileCache>();
             _ = services.AddSingleton<ILibraryIndexLock, LibraryIndexLock>();

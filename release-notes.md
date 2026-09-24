@@ -89,8 +89,8 @@ photos each get their own figure, on a row below the file and folder totals. The
 folders you have hidden are left out and the three add up to the total.
 
 **The Dashboard keeps itself up to date.** Memory and the recently-served-files figures refresh every few
-seconds, the library counts every half minute, and *Recently added* on the Library page refreshes on its
-own too - so a scan you started is visible without reloading the page.
+seconds, the library counts within seconds of a scan changing them, and *Recently added* on the Library page refreshes on its
+own too - so a scan you started is visible without reloading the page. A Dashboard left open no longer reads the whole library every half minute while nothing is changing, so it no longer keeps the disks awake.
 
 **Uploads no longer follow a shortcut out of your library.** If a folder inside your upload destination is
 a link to somewhere else on the machine, *Add files* now refuses it and says so instead of writing there.

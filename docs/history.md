@@ -3028,6 +3028,8 @@ cache tiles tick every five seconds. The counts are a database round trip and re
 through `AdminPageBase.RunGatedAsync`, because on a timer the race the gate exists for is no longer
 hypothetical.
 
+*Superseded 2026-09-24: the counts now re-read only when `ILibraryChangeSignal` has moved or the hidden folders changed - see the trap on it in `docs/decisions.md` section 7.*
+
 *Recently added* is not a page: it is a `CollapsiblePanel` on `Library.razor`, which was already
 interactive, so it costs nothing new. It re-reads **only** that list. Reloading the page would rebuild
 `_folders` and `_files` and throw away every page the operator had pulled in with *Show more*.
