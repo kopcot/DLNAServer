@@ -26,6 +26,17 @@
         <div class="noimg">@File.Mime.ToMedia().ToString().ToLowerInvariant()</div>
     }
     <span class="kindbadge" title="@Kind" aria-label="@Kind">@KindIcon</span>
+    @if (File.HasSubtitles)
+    {
+        @* Under the kind badge, and only when there is something to say: a tile with no subtitles gets no
+           second badge rather than a crossed-out one. *@
+        <span class="subbadge" title="subtitles" aria-label="subtitles">
+            <svg viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M1.5 3h9v6.5h-9z" fill="none" stroke="currentColor" stroke-width="1" />
+                <path d="M3 5.5h3v1H3z M7 5.5h2v1H7z M3 7.3h6v1H3z" />
+            </svg>
+        </span>
+    }
     <div class="caption">
         @File.Title
         <MediaFileFacts File="File" Compact="true" />

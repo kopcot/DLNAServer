@@ -98,5 +98,13 @@ namespace DlnaServer.Upnp.Didl
         /// </summary>
         [XmlElement(ElementName = "icon", Namespace = XmlNamespaces.Upnp, Order = 102)]
         public string? Icon { get; set; }
+
+        /// <summary>
+        /// <b>sec:CaptionInfoEx</b><br />
+        /// Samsung's pointer to the item's subtitle. Linked subtitle files also go out as extra
+        /// <c>res</c> elements in <see cref="Resources"/>, which is what other renderers read.
+        /// </summary>
+        [XmlElement(ElementName = "CaptionInfoEx", Namespace = XmlNamespaces.Samsung, Order = 103)]
+        public DidlCaptionInfo? CaptionInfo { get; set; }
     }
 }

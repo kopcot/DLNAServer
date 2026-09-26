@@ -10,6 +10,12 @@ worth telling you about is added to the version it belongs to.
 
 ## 1.1
 
+**Subtitles reach the television.** A subtitle file named like a video - `film.srt`, `film.en.srt`, `film.1.en.srt` next to `film.mkv`, or in a folder just below it such as `Subs` - is now offered with that video, and lyrics (`.lrc`) with a song, with nothing to set up. Copy one in a week after the video and it is picked up the next time the server looks over your folders. Whether your television shows it depends on the television, so if one starts misbehaving, *Offer subtitles to televisions* on Settings turns it all off.
+
+**Choose them yourself on a file's page.** The file's page lists what is linked to it, with the language each one appears to be. You can add one by hand - it must be in the file's folder or one folder below, and not reached through a shortcut (a link) - which then replaces the automatic ones, remove one (it stays removed, whether it was found by name or added by you), or correct its language. A subtitle in a folder you later add to *Excluded folders* is let go of the next time the server looks over your folders, and so is one you added whose file has gone. Until then the page says why it cannot be used. Subtitles you add by hand are forgotten if you use *Rebuild index*; the ones found by name come back by themselves.
+
+**Find them.** *Search files* has a *Subtitles* filter, its subtitle-language filter now includes the languages of linked files, and the Library tiles carry a small badge under the video or music one when a file has subtitles - a track inside it or a linked file.
+
 **Memory is handed back when nobody is watching.** Films and previews kept in memory are meant to be let go after a while, but the server only noticed they had expired the next time something asked it for a file - so a server left alone overnight kept everything it had served the evening before, over a gigabyte on one real library. It now checks every minute. A film let go of is also really freed now, rather than lingering until you pressed *Empty the memory*.
 
 **The log says which version started.** Every start writes the server's version to the log, so after an upgrade you can tell which lines came from which build.

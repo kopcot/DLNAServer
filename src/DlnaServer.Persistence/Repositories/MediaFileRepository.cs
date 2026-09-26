@@ -3,6 +3,7 @@ using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Diagnostics;
 using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Dlna;
+using DlnaServer.Core.Subtitles;
 using DlnaServer.Core.Files;
 using DlnaServer.Core.Contracts.Processing;
 using DlnaServer.Persistence.Entities;
@@ -129,6 +130,8 @@ namespace DlnaServer.Persistence.Repositories
                         FileModifiedUtc = f.FileModifiedUtc,
                         CreatedUtc = f.CreatedUtc,
                         IsExcludedFromCache = f.IsExcludedFromCache,
+                        HasSubtitleTracks = f.Subtitles.Count != 0,
+                        HasSubtitleFiles = f.SubtitleFiles.Any(static s => s.Source != SubtitleSource.Removed),
                         ContentStamp = f.ContentStamp,
                         MetadataStamp = f.MetadataStamp,
                         ThumbnailStamp = f.ThumbnailStamp,
@@ -1008,11 +1011,15 @@ namespace DlnaServer.Persistence.Repositories
                 .OrderBy(static language => language)
                 .ToListAsync(cancellationToken);
 
+            // Linked subtitle files too, so every language the search can match is one it offers.
             var subtitle = await visible
                 .SelectMany(static f => f.Subtitles)
                 .Where(static s => s.Language != null)
                 .Select(static s => s.Language!)
-                .Distinct()
+                .Union(visible
+                    .SelectMany(static f => f.SubtitleFiles)
+                    .Where(static s => s.Language != null && s.Source != SubtitleSource.Removed)
+                    .Select(static s => s.Language!))
                 .OrderBy(static language => language)
                 .ToListAsync(cancellationToken);
 
@@ -1379,6 +1386,8 @@ namespace DlnaServer.Persistence.Repositories
                 FileModifiedUtc = f.FileModifiedUtc,
                 CreatedUtc = f.CreatedUtc,
                 IsExcludedFromCache = f.IsExcludedFromCache,
+                HasSubtitleTracks = f.Subtitles.Count != 0,
+                HasSubtitleFiles = f.SubtitleFiles.Any(static s => s.Source != SubtitleSource.Removed),
                 ContentStamp = f.ContentStamp,
                 MetadataStamp = f.MetadataStamp,
                 ThumbnailStamp = f.ThumbnailStamp,
@@ -1668,7 +1677,11 @@ namespace DlnaServer.Persistence.Repositories
             {
                 var languages = request.SubtitleLanguages;
 
-                query = query.Where(f => f.Subtitles.Any(s => s.Language != null && languages.Contains(s.Language)));
+                // A linked file's language counts as much as a track's: the operator may have set it by hand.
+                query = query.Where(f => f.Subtitles.Any(s => s.Language != null && languages.Contains(s.Language))
+                    || f.SubtitleFiles.Any(s => s.Language != null
+                        && s.Source != SubtitleSource.Removed
+                        && languages.Contains(s.Language)));
             }
 
             if (request.HasMetadata is { } hasMetadata)
@@ -1696,6 +1709,13 @@ namespace DlnaServer.Persistence.Repositories
                 query = isKeptInMemory
                     ? query.Where(static f => !f.IsExcludedFromCache)
                     : query.Where(static f => f.IsExcludedFromCache);
+            }
+
+            if (request.HasSubtitles is { } hasSubtitles)
+            {
+                query = hasSubtitles
+                    ? query.Where(static f => f.Subtitles.Count != 0 || f.SubtitleFiles.Any(static s => s.Source != SubtitleSource.Removed))
+                    : query.Where(static f => f.Subtitles.Count == 0 && !f.SubtitleFiles.Any(static s => s.Source != SubtitleSource.Removed));
             }
 
             return await query
@@ -1746,6 +1766,8 @@ namespace DlnaServer.Persistence.Repositories
                     FileModifiedUtc = f.FileModifiedUtc,
                     CreatedUtc = f.CreatedUtc,
                     IsExcludedFromCache = f.IsExcludedFromCache,
+                    HasSubtitleTracks = f.Subtitles.Count != 0,
+                    HasSubtitleFiles = f.SubtitleFiles.Any(static s => s.Source != SubtitleSource.Removed),
                     ContentStamp = f.ContentStamp,
                     MetadataStamp = f.MetadataStamp,
                     ThumbnailStamp = f.ThumbnailStamp,

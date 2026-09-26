@@ -4,7 +4,9 @@ namespace DlnaServer.Core.Configuration
 {
     /// <summary>
     /// Escape hatches for renderer-specific behaviour. Each flag exists because the reference implementation
-    /// behaved one way and the corrected behaviour is a risk to devices validated against the old one.
+    /// behaved one way and the corrected or added behaviour is a risk to devices validated against the old
+    /// one - most correct something the reference got wrong, and <see cref="SendSubtitles"/> turns off
+    /// something it never did.
     /// </summary>
     public sealed class CompatibilityOptions
     {
@@ -13,6 +15,14 @@ namespace DlnaServer.Core.Configuration
         /// The reference never sent them; strict renderers expect them.
         /// </summary>
         public bool SendDlnaResponseHeaders { get; set; } = true;
+
+        /// <summary>
+        /// Offer subtitle files linked to a video, and lyrics linked to a song: as extra resources in
+        /// DIDL-Lite, as Samsung's <c>sec:CaptionInfoEx</c>, and as a <c>CaptionInfo.sec</c> header on the
+        /// media response. The reference never sent any, so a television that misbehaves on them can be
+        /// given the old answer back.
+        /// </summary>
+        public bool SendSubtitles { get; set; } = true;
 
         /// <summary>
         /// Reproduce the reference's inverted SSDP M-SEARCH match, which answers for every service type

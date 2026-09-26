@@ -37,6 +37,25 @@ namespace DlnaServer.IntegrationTests
                 "because the compact form is what goes on the wire");
         }
 
+        /// <summary>
+        /// XmlSerializer writes an attribute without its prefix when the attribute's namespace is the
+        /// element's own - which turned <c>sec:type</c> into a bare <c>type</c> the first time this ran.
+        /// </summary>
+        [Test]
+        public void Serialize_ForASubtitle_WritesSamsungsCaptionElementWithItsPrefixedType()
+        {
+            // Arrange
+            var document = CreateDocument();
+            document.Items[0].CaptionInfo = new DidlCaptionInfo { Type = "srt", Url = "http://host/fileserver/subtitle/a.srt" };
+
+            // Act
+            var xml = DidlSerializer.Serialize(document);
+
+            // Assert
+            xml.Should().Contain("<sec:CaptionInfoEx sec:type=\"srt\">http://host/fileserver/subtitle/a.srt</sec:CaptionInfoEx>",
+                "because Samsung televisions read the subtitle's format from sec:type");
+        }
+
         [Test]
         public void Serialize_DeclaresEveryNamespaceARendererExpects()
         {

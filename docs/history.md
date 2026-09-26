@@ -3305,3 +3305,139 @@ not track the product version at all - every assembly carries its own version an
 project is touched. Each test `.csproj` now sets its own `<Version>`: `DlnaServer.IntegrationTests` at
 `1.1.0926`, since this batch changed it, and the other two unchanged at `1.1.0923`. `docs/decisions.md`
 section 7, `docs/development.md` and `CLAUDE.md` say so.
+
+### Subtitles: linked by name, served, edited, found (items 7-7j)
+
+The batch's largest item, and the first time anything about subtitles goes on the wire: the reference
+declared `SubtitleFileExtensions` and marked it "not implemented", and this server indexed the tracks
+inside a file without ever advertising them. **None of it is confirmed on a television yet**; that is the
+open item it leaves.
+
+**Where a link lives.** A table of its own, `SubtitleFiles` (migration `AddSubtitleFiles`), rather than
+rows in `SubtitleStreams`, which every metadata re-read clears - an operator's link or language edit has
+to survive re-reading the file. The path is stored relative to the media file's folder with forward
+slashes, so a film moved together with its subtitles keeps them. `Source` is `Automatic`, `Manual`, or
+`Removed`: the last is an automatic link the operator took away, kept as a marker so the next scan does not
+add it back.
+
+**Matching** (`SubtitleMatcher`, pure, in Core). A subtitle belongs to a media file when its name without
+the extension is the media's, or the media's followed by a dot and anything. Candidates are filtered by
+kind first - `.lrc` only for music, the rest only for video - and the longest media name then wins, which
+is rule 7b: `film.1.en.srt` goes to `film.1.mkv` when there is one, and a `film.1.mp3` cannot take it. Two
+videos with one name both get the link. The language is read only from what follows the media's name,
+right to left past `forced`/`sdh`/`cc`/`hi`/`default`, so `The.Office.US.srt` does not become `us`. A
+`.sub` with an `.idx` beside it is VobSub - pictures - and is left alone.
+
+**Found by the scan that was already running.** The scanner reported only media and dropped everything
+else before it left the walk; it now reports subtitle-like files too, flagged `IsSubtitle`, from the same
+walk, so no second pass wakes the discs. Folder discovery is untouched, so a folder holding only subtitles
+does not become a container. The indexer keeps those out of the insert batch - a `Subs` folder has no
+directory row and would otherwise log a missing parent for each file - and links them **after
+reconciliation**, because a move keeps the old row and deletes the new one, and **under the same gate**,
+so an unmounted volume cannot look like every subtitle deleted. The match is tried in the subtitle's own
+folder first and then in the folder directly above, never further - the maintainer asked for both one
+folder down and for a subtitle that arrives a week after its video to be linked by itself, which the
+watcher's rescan does. An automatic link is dropped only when its media no longer matches it or its file is
+definitely gone. The indexer test for an unreachable folder passes even without the gate, because the
+definitely-gone check alone keeps a link whose file is still there; the gate is what covers a volume whose
+files really have vanished from the mount point.
+
+**On the wire**, behind `Compatibility.SendSubtitles`, on by default: an extra `res` per linked file after
+the media `res` (so a renderer reading the first `res` still gets the film), Samsung's
+`sec:CaptionInfoEx` for one of them - an SRT when there is one - and a `CaptionInfo.sec` header on the
+media response when the request carries `getCaptionInfo.sec`. Browse makes one batched lookup per page,
+and none on a page where no file has a linked subtitle file. The file is served from `fileserver/subtitle/{id}.{ext}`
+on the media port; the extension is there for televisions that judge a URL by its ending. The stored path
+is re-checked before serving, because it may have come from what an operator typed. Golden wire files are
+unchanged: an item with no subtitles is exactly what it was.
+
+**One defect only running it found**: `XmlSerializer` writes an attribute without its prefix when the
+attribute's namespace is the element's own, so the first Browse came out as `<sec:CaptionInfoEx
+type="srt">`. `Form = XmlSchemaForm.Qualified` makes it `sec:type`, and `DidlSerializerTest` pins the
+exact string.
+
+**The file's page** has a *Subtitle files* group for video and music: each link with its language
+(editable), whether it was found by name or added by hand, and *Remove*; and an add row with *Check* and
+*Add*. A path is accepted in the file's folder or one folder below, never climbing out, never into a folder
+the library hides - a temporarily hidden one only while it is shown. Adding one replaces the automatic
+links in one transaction, and its language is guessed from the name the same way. Hand-made links are
+operator data that *Rebuild index* discards with the files; the Maintenance page says so.
+
+**Has subtitles** (7i, 7j) means a track inside the file or a live linked file. It is a `required` member of
+`MediaFileDto`, so none of the three hand-kept projections could leave it silently false - the compiler
+named exactly those three the first time it built. *Search files* has a *Subtitles* filter, and the Library
+tiles carry a second badge under the kind badge when it is true.
+
+Verified on a throwaway server over a library built for the rules: four links from the first scan
+(same folder, one below, the 7b pair, lyrics) and none for the VobSub pair; the DIDL above read back from a
+real Browse; the subtitle served as `text/srt`; the header answered; an unknown id and the admin port both
+404; in the browser the badges, both sides of the filter, every *Check* refusal, a manual add replacing the
+automatic links, a language edit, and an automatic link removed and still removed after a rescan.
+
+**What the review changed before it was committed.** The `/review-all --full` pass on this diff raised
+these, all applied:
+- **A subtitle swapped for a symlink was served.** `SubtitlePath` is lexical, and both the page's check
+  and the file server then followed links on disc: an automatic `film.en.srt` replaced by a link to the
+  database stayed linked - the scanner skips links, so the next scan saw the name vanish while
+  `IsDefinitelyAbsent` still found the link entry - and was served on the media port without a password.
+  `SubtitlePath.ExistsWithoutLinks` now refuses a link as the file and as the one sub-folder, and both
+  callers use it. Covered by `SubtitleFileCheckerTest`, which creates real links.
+- **`CaptionInfo.sec` was built from the `Host` header**, which the caller chooses, while the DIDL used the
+  advertised address. `DidlMapper.ResolveEndpoint` is now the one resolution both use.
+- **Windows spellings.** A segment ending in a dot or a space, or containing `~`, is refused: Windows drops
+  the first two and resolves an 8.3 name, so each could reach a hidden folder under a name the hidden-folder
+  test does not read.
+- **At most 8 subtitle resources per item**, so a folder of language variants does not lengthen every
+  Browse of it. `CaptionInfoEx` and the header still choose from all of them.
+- **`HasSubtitleFiles`** is a second `required` flag beside `HasSubtitles`, linked files only. Browse and
+  the header query the links on it: `HasSubtitles` includes embedded tracks, so on an MKV library almost
+  every page had queried for nothing. The badge and the search filter keep `HasSubtitles`.
+- Smaller: the matcher reads each media file's name stem once per folder rather than once per subtitle
+  and media pair; the scanner no longer stats a subtitle file, since linking needs only its name - so an
+  empty subtitle file is now linked like any other; the sync looks names up in a set; the "SRT first"
+  choice is one `DidlMapper.PreferredCaption` for both callers; and the page's language guess is
+  `SubtitleMatcher.GuessLanguage(subtitle, media)`, on the same `BelongsTo` rule the scan uses.
+- The Browse-time lookup, `GetForFilesAsync`, now resolves the files' ids first and filters on
+  `MediaFileId`, so its plan cannot depend on join order.
+
+**The second full review, before the commit.** A second `/review-all --full` over the fixed diff, with all
+17 agents and all 5 skills, found no blocker. Its findings were in the rules for which links a scan keeps,
+drops and brings back. Every item below except the last is covered by `SubtitleRepositoryTest`, which
+exercises the real repository:
+- **A hand-picked link and an automatic one could end up side by side for good.** The sync kept every
+  automatic link that still matched before it asked whether its media had a manual one. A scan that read the
+  table just before the operator pressed *Add* therefore re-inserted the automatic link, and no later scan
+  took it away. The manual test now comes first.
+- **Removing a hand-added link could undo itself.** *Remove* deleted a manual row outright. If that file also
+  matched by name, the next scan linked it straight back as automatic. *Remove* now leaves the same
+  `Removed` marker for both kinds, and the marker goes once its file does. Removing the last hand-picked link
+  still lets the automatic ones come back, which is the point of having removed it.
+- **A folder excluded after its subtitles were linked kept them for good**, and still offered and served
+  them. The scan never walks an excluded folder, so its files are never seen. Their links were therefore
+  kept, and probed on disc on every pass, waking that disc to change nothing. The sync now takes the scan's
+  `ExcludeFolders` and drops an automatic link into one without probing. A `Removed` marker there stays,
+  for when the folder is shown again.
+- **A first fill wrote every link in one save**, where the indexer writes in 500s. It now inserts in 500s.
+- **A language set on a linked file could not be searched for.** The *Search files* subtitle-language filter
+  and its dropdown read only the tracks inside files. Both now include live linked files.
+- **`.smi` went out as SMIL** (`application/smil`), an unrelated format. It is SAMI, now `application/x-sami`;
+  whether a television accepts that is part of the open television check.
+- **The file's page:** a path the filesystem refuses, such as one containing a NUL, used to throw in *Check*
+  and end the operator's session. It is now a refusal. A failed write no longer clears what was typed or
+  announces a change, and an *Add* for a file that has left the library says so.
+- Smaller:
+  - `MediaFileDto.HasSubtitles` is computed from a `required` `HasSubtitleTracks` and `HasSubtitleFiles`,
+    so the two can no longer disagree, and each projection makes one EXISTS where it made two. The tracks
+    half keeps `Count != 0` because CA1860 flags `Any()` there.
+  - `SubtitlePath.TryLocate` is the one lexical-then-disc check for both callers.
+  - `.Cut`, `.DC`, `.HD` and `.UHD` no longer read as languages.
+  - `.ttml` stays unlinkable, now with the reason in the code: it would be served as XML, which a browser
+    renders.
+  - Stale `using`s in the touched files are gone, and `CaptionInfo.sec` has its own wire-doc.
+  - `DlnaServer.UnitTests` moved to `1.1.0926` with this work, after the paragraph above recorded it
+    unchanged.
+- **The maintainer's rulings on what the review left open:**
+  - **A hand-added link no longer outlives its file.** A manual link used to be kept whatever became of its file, so a film moved without its subtitle, or a subtitle deleted by hand, left a link that 404s. A scan now drops a manual link whose file is definitely gone, or which points into an excluded folder, which such a link may never do. Until that scan runs, the file's page marks the link with the reason it cannot be served, for hand-added links only. The film's automatic links then come back one scan later, not in the same pass.
+  - **The check-then-serve gap is accepted**, and recorded in `docs/decisions.md` 7b.
+  - **No shared expression** for the "not removed" predicate: the hand-kept projections stay as they are.
+  - The whole-table read in the sync is recorded as W10 in `docs/decisions.md` 7b.

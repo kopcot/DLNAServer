@@ -1,7 +1,7 @@
-using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Contracts.Scanning;
 using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Files;
+using DlnaServer.Core.Subtitles;
 
 namespace DlnaServer.Media.Scanning
 {
@@ -201,9 +201,13 @@ namespace DlnaServer.Media.Scanning
                 return null;
             }
 
+            // A subtitle beside the media is reported too, flagged, from this same walk: the indexer links
+            // it to its media, and a second walk just to find sidecars would wake the discs again.
             if (!TryResolveMime(extension, options, out var mapping))
             {
-                return null;
+                return SubtitleMatcher.IsScanned(extension)
+                    ? DescribeSubtitle(path, extension)
+                    : null;
             }
 
             try
@@ -258,6 +262,28 @@ namespace DlnaServer.Media.Scanning
                 LogFileUnreadable(path, exception.Message);
                 return null;
             }
+        }
+
+        // Linking needs only the name and the folder, so a subtitle is never stat()ed - Path.GetFullPath
+        // is string work, and gives the same spelling FileInfo would.
+        private static ScannedFile DescribeSubtitle(string path, string extension)
+        {
+            var fullPath = Path.GetFullPath(path);
+
+            return new ScannedFile
+            {
+                FullPath = fullPath,
+                FileName = Path.GetFileName(fullPath),
+                DirectoryPath = Path.TrimEndingDirectorySeparator(Path.GetDirectoryName(fullPath) ?? string.Empty),
+                Extension = extension.ToLowerInvariant(),
+                Mime = default,
+                SizeInBytes = 0,
+                CreatedUtc = default,
+                FileSystemCreatedUtc = default,
+                ModifiedUtc = default,
+                ContentStamp = string.Empty,
+                IsSubtitle = true,
+            };
         }
 
         /// <summary>

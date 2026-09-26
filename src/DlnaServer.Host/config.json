@@ -97,6 +97,7 @@
     },
     "Compatibility": {
       "SendDlnaResponseHeaders": true,
+      "SendSubtitles": true,
       "UseLegacyInvertedSearchTargetMatch": false,
       "SsdpAliveIntervalInSeconds": 30,
       "AlsoNotifyBroadcastAddress": true,

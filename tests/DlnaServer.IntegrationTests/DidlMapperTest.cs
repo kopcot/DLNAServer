@@ -1,5 +1,6 @@
 using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Dlna;
+using DlnaServer.Core.Subtitles;
 using DlnaServer.Host.Upnp.Control;
 
 namespace DlnaServer.IntegrationTests
@@ -29,12 +30,65 @@ namespace DlnaServer.IntegrationTests
             var file = CreateFile(directoryPublicId: _directoryId);
 
             // Act
-            var item = DidlMapper.MapItem(file, Endpoint, DidlMapper.RootObjectId);
+            var item = DidlMapper.MapItem(file, Endpoint, DidlMapper.RootObjectId, subtitles: []);
 
             // Assert
             item.ParentId.Should().Be("0",
                 "because BrowseDirectChildren on container 0 must return objects whose parentID is 0, "
                 + "whatever their position in the tree");
+        }
+
+        [Test]
+        public void MapItem_WithLinkedSubtitles_OffersEachAsAResourceAndOneToSamsung()
+        {
+            // Arrange
+            var file = CreateFile(directoryPublicId: _directoryId);
+            var vtt = CreateSubtitle(file, "film.en.vtt");
+            var srt = CreateSubtitle(file, "Subs/film.cz.srt");
+
+            // Act
+            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString(), subtitles: [vtt, srt]);
+
+            // Assert
+            item.Resources.Should().HaveCount(3, "because each linked subtitle is a resource of its own after the media");
+            item.Resources[0].Url.Should().EndWith($"/fileserver/file/{file.PublicId}",
+                "because a renderer that reads the first res must still get the film");
+            item.Resources[1].ProtocolInfo.Should().Be("http-get:*:text/vtt:*", "because a subtitle is matched on its MIME");
+            item.Resources[2].Url.Should().Be($"http://{Endpoint}/fileserver/subtitle/{srt.PublicId}.srt",
+                "because the URL ends in the subtitle's own extension");
+            item.CaptionInfo.Should().NotBeNull("because Samsung televisions read a subtitle from sec:CaptionInfoEx");
+            item.CaptionInfo!.Type.Should().Be("srt", "because an SRT is preferred over the other formats");
+        }
+
+        [Test]
+        public void MapItem_WithManyLinkedSubtitles_OffersOnlyTheFirstFew()
+        {
+            // Arrange
+            var file = CreateFile(directoryPublicId: _directoryId);
+            var subtitles = Enumerable.Range(0, 20)
+                .Select(i => CreateSubtitle(file, $"film.{i}.srt"))
+                .ToArray();
+
+            // Act
+            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString(), subtitles: subtitles);
+
+            // Assert
+            item.Resources.Should().HaveCount(9,
+                "because a folder of many language variants must not make every Browse of it that much longer");
+        }
+
+        [Test]
+        public void MapItem_WithoutSubtitles_AddsNothing()
+        {
+            // Arrange
+            var file = CreateFile(directoryPublicId: _directoryId);
+
+            // Act
+            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString(), subtitles: []);
+
+            // Assert
+            item.Resources.Should().ContainSingle("because an item with no subtitles is exactly what it was before");
+            item.CaptionInfo.Should().BeNull("because there is nothing to point a Samsung television at");
         }
 
         [Test]
@@ -44,7 +98,7 @@ namespace DlnaServer.IntegrationTests
             var file = CreateFile(directoryPublicId: _directoryId);
 
             // Act
-            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString());
+            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString(), subtitles: []);
 
             // Assert
             item.ParentId.Should().Be(_directoryId.ToString(),
@@ -127,7 +181,7 @@ namespace DlnaServer.IntegrationTests
             };
 
             // Act
-            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString());
+            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString(), subtitles: []);
             var resource = item.Resources[0];
 
             // Assert
@@ -157,7 +211,7 @@ namespace DlnaServer.IntegrationTests
             };
 
             // Act
-            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString());
+            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString(), subtitles: []);
             var resource = item.Resources[0];
 
             // Assert
@@ -187,7 +241,7 @@ namespace DlnaServer.IntegrationTests
             };
 
             // Act
-            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString());
+            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString(), subtitles: []);
             var resource = item.Resources[0];
 
             // Assert
@@ -206,7 +260,7 @@ namespace DlnaServer.IntegrationTests
             var file = CreateFile(directoryPublicId: _directoryId);
 
             // Act
-            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString());
+            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString(), subtitles: []);
             var resource = item.Resources[0];
 
             // Assert
@@ -227,7 +281,7 @@ namespace DlnaServer.IntegrationTests
             var file = CreateFile(directoryPublicId: _directoryId) with { Width = 1920 };
 
             // Act
-            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString());
+            var item = DidlMapper.MapItem(file, Endpoint, _directoryId.ToString(), subtitles: []);
 
             // Assert
             item.Resources[0].Resolution.Should().BeNull(
@@ -247,7 +301,7 @@ namespace DlnaServer.IntegrationTests
             var file = CreateFile(directoryPublicId: _directoryId) with { Title = "Ep01" };
 
             // Act
-            var item = DidlMapper.MapItem(file, Endpoint, DidlMapper.RootObjectId);
+            var item = DidlMapper.MapItem(file, Endpoint, DidlMapper.RootObjectId, subtitles: []);
 
             // Assert
             item.Title.Should().Be("Ep01",
@@ -277,7 +331,7 @@ namespace DlnaServer.IntegrationTests
             var file = CreateFile(directoryPublicId: _directoryId) with { Title = "Party \U0001F389" };
 
             // Act
-            var item = DidlMapper.MapItem(file, Endpoint, DidlMapper.RootObjectId);
+            var item = DidlMapper.MapItem(file, Endpoint, DidlMapper.RootObjectId, subtitles: []);
 
             // Assert
             item.Title.Should().Be("Party \U0001F389",
@@ -291,11 +345,23 @@ namespace DlnaServer.IntegrationTests
             var file = CreateFile(directoryPublicId: _directoryId);
 
             // Act
-            var item = DidlMapper.MapItem(file, Endpoint, DidlMapper.RootObjectId);
+            var item = DidlMapper.MapItem(file, Endpoint, DidlMapper.RootObjectId, subtitles: []);
 
             // Assert
             item.Title.Should().BeSameAs(file.Title,
                 "because the common case must cost one scan and no allocation");
+        }
+
+        private static SubtitleFileDto CreateSubtitle(MediaFileDto file, string relativePath)
+        {
+            return new SubtitleFileDto
+            {
+                PublicId = Guid.NewGuid(),
+                MediaFilePublicId = file.PublicId,
+                MediaFileFullPath = file.FullPath,
+                RelativePath = relativePath,
+                Source = SubtitleSource.Automatic,
+            };
         }
 
         private static MediaFileDto CreateFile(Guid? directoryPublicId)
@@ -315,6 +381,8 @@ namespace DlnaServer.IntegrationTests
                 FileModifiedUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                 CreatedUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                 IsExcludedFromCache = false,
+                HasSubtitleTracks = false,
+                HasSubtitleFiles = false,
                 ContentStamp = "1024:638000000000000000",
             };
         }

@@ -318,6 +318,48 @@ namespace DlnaServer.Persistence.Migrations
                     b.ToTable("ServerInstances", (string)null);
                 });
 
+            modelBuilder.Entity("DlnaServer.Persistence.Entities.SubtitleFileEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Language")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("MediaFileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("ModifiedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PublicId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("MediaFileId", "RelativePath")
+                        .IsUnique();
+
+                    b.ToTable("SubtitleFiles", (string)null);
+                });
+
             modelBuilder.Entity("DlnaServer.Persistence.Entities.SubtitleStreamEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -606,6 +648,17 @@ namespace DlnaServer.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("DlnaServer.Persistence.Entities.SubtitleFileEntity", b =>
+                {
+                    b.HasOne("DlnaServer.Persistence.Entities.MediaFileEntity", "MediaFile")
+                        .WithMany("SubtitleFiles")
+                        .HasForeignKey("MediaFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MediaFile");
+                });
+
             modelBuilder.Entity("DlnaServer.Persistence.Entities.SubtitleStreamEntity", b =>
                 {
                     b.HasOne("DlnaServer.Persistence.Entities.MediaFileEntity", "MediaFile")
@@ -660,6 +713,8 @@ namespace DlnaServer.Persistence.Migrations
             modelBuilder.Entity("DlnaServer.Persistence.Entities.MediaFileEntity", b =>
                 {
                     b.Navigation("AudioStreams");
+
+                    b.Navigation("SubtitleFiles");
 
                     b.Navigation("Subtitles");
 

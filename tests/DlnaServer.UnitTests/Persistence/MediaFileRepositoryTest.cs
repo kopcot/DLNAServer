@@ -2,6 +2,7 @@ using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Contracts.Processing;
 using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Files;
+using DlnaServer.Core.Subtitles;
 using DlnaServer.Persistence.Entities;
 using DlnaServer.Core.Configuration;
 using DlnaServer.Persistence;
@@ -1266,6 +1267,53 @@ namespace DlnaServer.UnitTests.Persistence
             // Assert
             found.Select(static f => f.FileName).Should().Equal([expectedFileName],
                 "because a file is kept in memory unless reading it has already failed");
+        }
+
+        /// <summary>
+        /// NOTES items 7i and 7j: "has subtitles" is a linked subtitle file or a track inside the file, and
+        /// an automatic link the operator removed does not count.
+        /// </summary>
+        [TestCase(true, "linked.mkv", TestName = "SearchAsync_WithSubtitles_ReturnsOnlyTheLinkedFile")]
+        [TestCase(false, "plain.mkv,removed.mkv", TestName = "SearchAsync_WithoutSubtitles_ReturnsTheRest")]
+        public async Task SearchAsync_BySubtitles_ReturnsOnlyThatSide(bool hasSubtitles, string expectedFileNames)
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var repository = CreateRepository(context);
+            var subtitles = new SubtitleRepository(context);
+
+            var stored = await repository.AddRangeAsync(
+                files: [CreateFile("/media/linked.mkv"), CreateFile("/media/removed.mkv"), CreateFile("/media/plain.mkv")],
+                cancellationToken: CancellationToken.None);
+
+            _ = await subtitles.AddManualAsync(
+                mediaFilePublicId: stored.Single(static f => f.FileName == "linked.mkv").PublicId,
+                relativePath: "linked.srt",
+                language: null,
+                cancellationToken: CancellationToken.None);
+
+            var removedId = await context.Files
+                .Where(static f => f.FileName == "removed.mkv")
+                .Select(static f => f.Id)
+                .SingleAsync(CancellationToken.None);
+            _ = context.SubtitleFiles.Add(new SubtitleFileEntity
+            {
+                MediaFileId = removedId,
+                RelativePath = "removed.srt",
+                Source = SubtitleSource.Removed,
+            });
+            _ = await context.SaveChangesAsync(CancellationToken.None);
+
+            // Act
+            var found = await repository.SearchAsync(
+                new MediaFileSearchRequest { HasSubtitles = hasSubtitles },
+                CancellationToken.None);
+
+            // Assert
+            found.Select(static f => f.FileName).Should().BeEquivalentTo(expectedFileNames.Split(','),
+                "because only a live link counts, and a link the operator removed does not");
+            found.Should().OnlyContain(f => f.HasSubtitles == hasSubtitles,
+                "because the listing's own flag has to agree with the filter that selected it");
         }
 
         [Test]

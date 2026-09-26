@@ -56,5 +56,11 @@ namespace DlnaServer.Core.Contracts.Scanning
         /// Size and modification time combined, compared against the stored stamp to detect a changed file.
         /// </summary>
         public required string ContentStamp { get; init; }
+
+        /// <summary>
+        /// A subtitle or lyrics file found beside the media rather than media itself. It is never indexed as
+        /// a file of its own; the indexer links it to the media it belongs to.
+        /// </summary>
+        public bool IsSubtitle { get; init; }
     }
 }

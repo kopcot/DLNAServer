@@ -1,9 +1,13 @@
+using System.Net;
 using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Delivery;
 using DlnaServer.Core.Dlna;
+using DlnaServer.Core.Subtitles;
 using DlnaServer.Host.Controllers;
 using DlnaServer.Host.Delivery;
+using DlnaServer.Host.Diagnostics;
+using DlnaServer.Upnp.Ssdp;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,6 +28,7 @@ namespace DlnaServer.IntegrationTests
     {
         private static readonly Guid _fileId = new("11111111-1111-1111-1111-111111111111");
         private static readonly Guid _thumbnailId = new("22222222-2222-2222-2222-222222222222");
+        private static readonly IPAddress _advertisedAddress = IPAddress.Parse("192.168.1.10");
 
         private string _root = null!;
 
@@ -186,16 +191,113 @@ namespace DlnaServer.IntegrationTests
                 + "would never start the stream");
         }
 
+        [Test]
+        public async Task GetSubtitle_ForALinkedFile_ServesIt()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine(_root, "film.mkv"));
+            File.WriteAllText(Path.Combine(_root, "film.en.srt"), "1\n00:00:01,000 --> 00:00:02,000\nHello\n");
+            var subtitles = new FakeSubtitleRepository();
+            var subtitle = CreateSubtitle(film, "film.en.srt");
+            subtitles.Links.Add(subtitle);
+
+            var controller = CreateController(
+                new RecordingMediaFileRepository { File = film },
+                new FakeContentResolver(),
+                new FakeCache(),
+                subtitles);
+
+            // Act
+            var result = await controller.GetSubtitle(subtitle.PublicId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            result.Should().BeOfType<PhysicalFileResult>("because a linked subtitle beside the film is served from disc")
+                .Which.ContentType.Should().Be("text/srt", "because the MIME comes from the subtitle's own extension");
+        }
+
+        [Test]
+        public async Task GetSubtitle_ForAStoredPathOutsideTheFilmsFolder_RefusesIt()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine(_root, "films", "film.mkv"));
+            File.WriteAllText(Path.Combine(_root, "secret.srt"), "x");
+            var subtitles = new FakeSubtitleRepository();
+            var subtitle = CreateSubtitle(film, "../secret.srt");
+            subtitles.Links.Add(subtitle);
+
+            var controller = CreateController(
+                new RecordingMediaFileRepository { File = film },
+                new FakeContentResolver(),
+                new FakeCache(),
+                subtitles);
+
+            // Act
+            var result = await controller.GetSubtitle(subtitle.PublicId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            result.Should().BeOfType<NotFoundResult>(
+                "because the stored path is checked again before serving, and one that climbs out of the film's folder is refused");
+        }
+
+        [Test]
+        public async Task GetFile_WhenASamsungAsksForCaptionInfo_AnswersWithTheSubtitleUrl()
+        {
+            // Arrange
+            var path = Path.Combine(_root, "film.mkv");
+            File.WriteAllBytes(path, [1, 2, 3]);
+            var film = CreateFile(path) with { HasSubtitleFiles = true };
+            var subtitles = new FakeSubtitleRepository();
+            var subtitle = CreateSubtitle(film, "film.srt");
+            subtitles.Links.Add(subtitle);
+
+            var controller = CreateController(
+                new RecordingMediaFileRepository { File = film },
+                new FakeContentResolver(),
+                new FakeCache(),
+                subtitles);
+            controller.HttpContext.Connection.LocalIpAddress = _advertisedAddress;
+            controller.HttpContext.Connection.LocalPort = 26852;
+            controller.HttpContext.Request.Host = new HostString("attacker.example:80");
+            controller.HttpContext.Request.Headers["getCaptionInfo.sec"] = "1";
+
+            // Act
+            _ = await controller.GetFile(_fileId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            controller.HttpContext.Response.Headers["CaptionInfo.sec"].ToString().Should().Be(
+                $"http://192.168.1.10:26852/fileserver/subtitle/{subtitle.PublicId}.srt",
+                "because a Samsung television reads the subtitle's URL from this header, built from the "
+                + "advertised address the request arrived on and never from the Host header it sent");
+        }
+
+        private static SubtitleFileDto CreateSubtitle(MediaFileDto film, string relativePath)
+        {
+            return new SubtitleFileDto
+            {
+                PublicId = Guid.NewGuid(),
+                MediaFilePublicId = film.PublicId,
+                MediaFileFullPath = film.FullPath,
+                RelativePath = relativePath,
+                Source = SubtitleSource.Automatic,
+            };
+        }
+
         private static FileServerController CreateController(
             RecordingMediaFileRepository repository,
             FakeContentResolver content,
-            FakeCache cache)
+            FakeCache cache,
+            FakeSubtitleRepository? subtitles = null)
         {
+            var options = new StaticOptionsMonitor<DlnaOptions>(new DlnaOptions());
+
             return new FileServerController(
                 repository,
+                subtitles ?? new FakeSubtitleRepository(),
+                new TemporaryFolderVisibility(options, TimeProvider.System),
+                new UpnpDeviceRegistry(new StubAddressProvider(), "test", 26852),
                 cache,
                 content,
-                new StaticOptionsMonitor<DlnaOptions>(new DlnaOptions()),
+                options,
                 NullLogger<FileServerController>.Instance)
             {
                 ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
@@ -218,6 +320,8 @@ namespace DlnaServer.IntegrationTests
                 FileModifiedUtc = DateTime.UtcNow,
                 CreatedUtc = DateTime.UtcNow,
                 IsExcludedFromCache = false,
+                HasSubtitleTracks = false,
+                HasSubtitleFiles = false,
                 ContentStamp = "4:1",
             };
         }
@@ -297,6 +401,14 @@ namespace DlnaServer.IntegrationTests
             public bool Evict(string filePath)
             {
                 return Stored.Remove(filePath);
+            }
+        }
+
+        private sealed class StubAddressProvider : ILocalAddressProvider
+        {
+            public IReadOnlyList<IPAddress> GetBroadcastableAddresses()
+            {
+                return [_advertisedAddress];
             }
         }
     }

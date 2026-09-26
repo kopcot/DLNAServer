@@ -102,6 +102,17 @@
                 </ChildContent>
                 <Hint>Choose <em>no</em> to list the files the server gave up on reading into memory.</Hint>
             </FormField>
+
+            <FormField Label="Subtitles" For="hasSubtitles">
+                <ChildContent>
+                    <select id="hasSubtitles" @bind="_criteria.HasSubtitles">
+                        <option value="">any</option>
+                        <option value="@Presence.Yes">yes</option>
+                        <option value="@Presence.No">no</option>
+                    </select>
+                </ChildContent>
+                <Hint>A track inside the file, or a subtitle or lyrics file linked to it.</Hint>
+            </FormField>
         </div>
 
         @* Offered from what the index actually holds, so a selection can always match something. Picking
@@ -261,6 +272,11 @@
             set.Add(keptInMemory == Presence.Yes ? "kept in memory" : "not kept in memory");
         }
 
+        if (_criteria.HasSubtitles is { } hasSubtitles)
+        {
+            set.Add(hasSubtitles == Presence.Yes ? "with subtitles" : "without subtitles");
+        }
+
         return set.Count switch
         {
             0 => "no filters set",
@@ -378,6 +394,8 @@
 
         public Presence? KeptInMemory { get; set; }
 
+        public Presence? HasSubtitles { get; set; }
+
         public int Take { get; } = 200;
 
         private static bool? ToFlag(Presence? presence)
@@ -412,6 +430,7 @@
                 HasMetadata = ToFlag(DetailsRead),
                 HasThumbnail = ToFlag(PreviewMade),
                 IsKeptInMemory = ToFlag(KeptInMemory),
+                HasSubtitles = ToFlag(HasSubtitles),
                 Take = Take,
             };
         }

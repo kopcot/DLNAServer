@@ -886,6 +886,130 @@ namespace DlnaServer.IntegrationTests
                 .IndexAsync(CancellationToken.None);
         }
 
+        [Test]
+        public async Task IndexAsync_LinksSubtitlesBesideTheVideoAndOneFolderDown()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            CreateFile(Path.Combine("movies", "film.en.srt"), sizeInBytes: 10);
+            CreateFile(Path.Combine("movies", "Subs", "film.cz.srt"), sizeInBytes: 10);
+            CreateFile(Path.Combine("movies", "other.srt"), sizeInBytes: 10);
+
+            // Act
+            var result = await IndexAsync();
+            var links = await SubtitlesOfAsync(film);
+
+            // Assert
+            result.TotalFiles.Should().Be(1, "because a subtitle file is never a library item of its own");
+            links.Select(static l => (l.RelativePath, l.Language)).Should().BeEquivalentTo(
+                [("Subs/film.cz.srt", "cz"), ("film.en.srt", "en")],
+                "because a subtitle named like the film links to it from its folder or the one below, and "
+                + "other.srt names no media at all");
+        }
+
+        [Test]
+        public async Task IndexAsync_ForASubtitleAddedLater_LinksIt()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            _ = await IndexAsync();
+            CreateFile(Path.Combine("movies", "film.srt"), sizeInBytes: 10);
+
+            // Act
+            _ = await IndexAsync();
+            var links = await SubtitlesOfAsync(film);
+
+            // Assert
+            links.Should().ContainSingle("because a subtitle uploaded after its video is linked by the next scan")
+                .Which.RelativePath.Should().Be("film.srt", "because it sits beside the film");
+        }
+
+        [Test]
+        public async Task IndexAsync_AfterTheOperatorRemovedAnAutomaticLink_DoesNotAddItBack()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            CreateFile(Path.Combine("movies", "film.srt"), sizeInBytes: 10);
+            _ = await IndexAsync();
+            await Subtitles().RemoveAsync((await SubtitlesOfAsync(film))[0].PublicId, CancellationToken.None);
+
+            // Act
+            _ = await IndexAsync();
+
+            // Assert
+            (await SubtitlesOfAsync(film)).Should().BeEmpty("because a link the operator removed must stay removed");
+        }
+
+        [Test]
+        public async Task IndexAsync_ForAFileWithAManualLink_AddsNoAutomaticOnes()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            CreateFile(Path.Combine("movies", "film.srt"), sizeInBytes: 10);
+            CreateFile(Path.Combine("movies", "chosen.srt"), sizeInBytes: 10);
+            _ = await IndexAsync();
+            var filmId = (await Files().GetByPathAsync(film, CancellationToken.None))!.PublicId;
+
+            // Act
+            _ = await Subtitles().AddManualAsync(filmId, "chosen.srt", language: "de", CancellationToken.None);
+            _ = await IndexAsync();
+
+            // Assert
+            (await SubtitlesOfAsync(film)).Select(static l => l.RelativePath).Should().Equal(["chosen.srt"],
+                "because a subtitle linked by hand replaces every automatic match for that file");
+        }
+
+        [Test]
+        public async Task IndexAsync_WhenTheSubtitleIsDeleted_DropsTheLink()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            var subtitle = CreateFile(Path.Combine("movies", "film.srt"), sizeInBytes: 10);
+            _ = await IndexAsync();
+            File.Delete(subtitle);
+
+            // Act
+            var result = await IndexAsync();
+
+            // Assert
+            result.TotalFiles.Should().Be(1, "because the film itself is still there");
+            (await SubtitlesOfAsync(film)).Should().BeEmpty("because the subtitle file is gone");
+        }
+
+        [Test]
+        public async Task IndexAsync_WhenTheSourceFolderIsUnreachable_KeepsEveryLink()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            CreateFile(Path.Combine("movies", "film.srt"), sizeInBytes: 10);
+            _ = await IndexAsync();
+
+            var options = CreateOptions();
+            options.Library.SourceFolders = [Path.Combine(_mediaRoot, "does-not-exist")];
+
+            // Act
+            _ = await IndexAsync(options, new SourceFolderChecker());
+
+            // Assert
+            (await SubtitlesOfAsync(film)).Should().ContainSingle(
+                "because an unreadable volume must not look like every subtitle deleted");
+        }
+
+        private ISubtitleRepository Subtitles()
+        {
+            return _provider.CreateScope().ServiceProvider.GetRequiredService<ISubtitleRepository>();
+        }
+
+        private async Task<IReadOnlyList<SubtitleFileDto>> SubtitlesOfAsync(string mediaPath)
+        {
+            var file = await Files().GetByPathAsync(mediaPath, CancellationToken.None);
+            var links = await Subtitles().GetForFilesAsync([file!.PublicId], CancellationToken.None);
+
+            return links.TryGetValue(file.PublicId, out var found)
+                ? found
+                : [];
+        }
+
         private IMediaDirectoryRepository Directories()
         {
             return _provider.CreateScope().ServiceProvider.GetRequiredService<IMediaDirectoryRepository>();

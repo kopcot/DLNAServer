@@ -1,0 +1,226 @@
+@* The subtitle and lyrics files linked to one media file, and the way to change them - NOTES items 7c-7g.
+
+   A file named like the media is linked by each scan without anyone asking, from the media's own folder
+   or the one below it. This is where the operator overrides that: add a file by hand (which replaces the
+   automatic ones), remove one, or correct its language. Its own component for the reason FileTypeEditor
+   is one - it writes to the library. *@
+
+@inherits AdminPageBase
+@inject ISubtitleRepository Subtitles
+@inject ISubtitleFileChecker Checker
+@inject ILibraryChangeSignal Changes
+
+<Panel Heading="Subtitle files">
+    <p class="muted">
+        Subtitle and lyrics files offered to televisions with this file. One named like it - such as
+        <code>@ExampleName</code> - is linked by itself, from this folder or one folder below. Adding one
+        here chooses it yourself and replaces the automatic ones.
+    </p>
+
+    @if (_links.Count > 0)
+    {
+        <DataTable>
+            <Columns>
+                <th>File</th><th>Language</th><th>Linked</th><th></th>
+            </Columns>
+            <ChildContent>
+                @foreach (var link in _links)
+                {
+                    <tr @key="link.PublicId">
+                        <td class="paths">@link.RelativePath</td>
+                        <td>
+                            <input type="text" maxlength="32" placeholder="for example en" value="@link.Language"
+                                   aria-label="Language of @link.RelativePath"
+                                   @onchange="e => SetLanguageAsync(link, e.Value as string)" disabled="@_busy" />
+                        </td>
+                        <td>
+                            @(link.Source == SubtitleSource.Manual ? "by you" : "found by name")
+                            @if (_missing.TryGetValue(link.PublicId, out var problem))
+                            {
+                                <span class="missing">- @problem</span>
+                            }
+                        </td>
+                        <td><button type="button" @onclick="() => RemoveAsync(link)" disabled="@_busy">Remove</button></td>
+                    </tr>
+                }
+            </ChildContent>
+        </DataTable>
+    }
+    else
+    {
+        <p class="muted">None linked.</p>
+    }
+
+    <FormField Label="Add a subtitle file" For="subtitlePath">
+        <ChildContent>
+            <div class="checkrow">
+                <input id="subtitlePath" type="text" placeholder="film.en.srt or Subs/film.srt" @bind="_path" />
+                <button type="button" @onclick="() => Check()" disabled="@_busy">Check</button>
+                <button type="button" class="primary" @onclick="AddAsync" disabled="@_busy">Add</button>
+            </div>
+            @if (_verdict is not null)
+            {
+                <ul class="checks">
+                    <li class="@(_isUsable ? "ok" : "bad")">
+                        <span class="paths">@_path</span>
+                        <span class="verdict">@_verdict</span>
+                    </li>
+                </ul>
+            }
+        </ChildContent>
+        <Hint>
+            From this file's folder. Only this folder and one folder below it are looked at, and not a folder
+            the library hides - a temporarily hidden one only while it is being shown.
+        </Hint>
+    </FormField>
+
+    <Notice Message="@Message" />
+</Panel>
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public MediaFileDto File { get; set; } = null!;
+
+    /// <summary>
+    /// Raised once a change has been stored, so the page can re-read what it is showing.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnCompleted { get; set; }
+
+    private IReadOnlyList<SubtitleFileDto> _links = [];
+
+    // Hand-added links whose file cannot be served any more, by link, with the reason.
+    private Dictionary<Guid, string> _missing = [];
+    private Guid _loadedFor;
+    private string? _path;
+    private string? _verdict;
+    private bool _isUsable;
+    private bool _busy;
+
+    private string MediaDirectory => Path.GetDirectoryName(File.FullPath) ?? string.Empty;
+
+    private string ExampleName => Path.GetFileNameWithoutExtension(File.FileName)
+        + (File.Mime.ToMedia() == DlnaMedia.Audio ? ".lrc" : ".en.srt");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Once per file: stepping to the next file re-enters here, and so does every re-render of the page.
+        if (_loadedFor != File.PublicId)
+        {
+            _loadedFor = File.PublicId;
+            _path = null;
+            _verdict = null;
+
+            await LoadAsync();
+        }
+    }
+
+    // Returns the path to store, or null when it cannot be used.
+    private string? Check()
+    {
+        _isUsable = Checker.TryCheck(MediaDirectory, _path, out var relativePath, out var problem);
+        _verdict = _isUsable
+            ? "Found, and allowed."
+            : problem;
+
+        return _isUsable
+            ? relativePath
+            : null;
+    }
+
+    private async Task AddAsync()
+    {
+        if (Check() is not { } relativePath)
+        {
+            return;
+        }
+
+        // The same reading a scan makes, and only for a name that starts with this file's own.
+        var language = SubtitleMatcher.GuessLanguage(relativePath, File.FileName);
+
+        var isAdded = false;
+
+        await WriteAsync(
+            async token => isAdded = await Subtitles.AddManualAsync(File.PublicId, relativePath, language, token),
+            "The subtitle could not be added.");
+
+        // What was typed stays when the write failed, so the operator can try again without retyping it.
+        if (Message is not null)
+        {
+            return;
+        }
+
+        if (!isAdded)
+        {
+            Message = "This file is no longer in the library, so nothing was linked to it.";
+
+            return;
+        }
+
+        _path = null;
+        _verdict = null;
+    }
+
+    private Task RemoveAsync(SubtitleFileDto link)
+    {
+        return WriteAsync(token => Subtitles.RemoveAsync(link.PublicId, token), "The subtitle could not be removed.");
+    }
+
+    private Task SetLanguageAsync(SubtitleFileDto link, string? language)
+    {
+        return WriteAsync(
+            token => Subtitles.SetLanguageAsync(link.PublicId, language, token),
+            "The language could not be saved.");
+    }
+
+    private async Task WriteAsync(Func<CancellationToken, Task> write, string failureMessage)
+    {
+        _busy = true;
+        Message = null;
+
+        try
+        {
+            await RunGuardedAsync(write, failureMessage);
+
+            // RunGuardedAsync reports a failed write through Message; only a stored change is announced.
+            if (Message is null)
+            {
+                Changes.MarkChanged();
+            }
+
+            await LoadAsync();
+            await OnCompleted.InvokeAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task LoadAsync()
+    {
+        return RunGatedAsync(async token =>
+        {
+            var links = await Subtitles.GetForFilesAsync([File.PublicId], token);
+
+            _links = links.TryGetValue(File.PublicId, out var found)
+                ? found
+                : [];
+
+            // Manual links only: an automatic one is found by the scan itself, so it cannot outlive its file.
+            var missing = new Dictionary<Guid, string>();
+
+            foreach (var link in _links)
+            {
+                if (link.Source == SubtitleSource.Manual
+                    && !Checker.TryCheck(MediaDirectory, link.RelativePath, out _, out var problem))
+                {
+                    missing[link.PublicId] = problem;
+                }
+            }
+
+            _missing = missing;
+        });
+    }
+}

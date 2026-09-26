@@ -250,3 +250,5 @@ TROUBLESHOOTING
     A TV finds the server but refuses to play
         Try Dlna.Compatibility.SendDlnaResponseHeaders = false to match the old
         server, which never sent contentFeatures.dlna.org.
+        If it started after subtitles were linked, try
+        Dlna.Compatibility.SendSubtitles = false - the old server never offered any.

@@ -25,15 +25,20 @@ namespace DlnaServer.Host.Upnp.Control
     {
         private readonly IMediaDirectoryRepository _directories;
         private readonly IMediaFileRepository _files;
+        private readonly ISubtitleRepository _subtitles;
         private readonly IHttpContextAccessor _httpContext;
         private readonly IUpnpDeviceRegistry _devices;
         private readonly IMediaCacheBacklog _backlog;
         private readonly IOptionsMonitor<DlnaOptions> _options;
         private readonly ILogger<ContentDirectoryService> _logger;
 
+        private static readonly IReadOnlyDictionary<Guid, IReadOnlyList<SubtitleFileDto>> _noSubtitles =
+            new Dictionary<Guid, IReadOnlyList<SubtitleFileDto>>();
+
         public ContentDirectoryService(
             IMediaDirectoryRepository directories,
             IMediaFileRepository files,
+            ISubtitleRepository subtitles,
             IHttpContextAccessor httpContext,
             IUpnpDeviceRegistry devices,
             IMediaCacheBacklog backlog,
@@ -42,6 +47,7 @@ namespace DlnaServer.Host.Upnp.Control
         {
             _directories = directories;
             _files = files;
+            _subtitles = subtitles;
             _httpContext = httpContext;
             _devices = devices;
             _backlog = backlog;
@@ -218,13 +224,15 @@ namespace DlnaServer.Host.Upnp.Control
             // escaping it.
             var listingParentId = isRoot ? DidlMapper.RootObjectId : publicId.ToString();
 
+            var subtitles = await LoadSubtitlesAsync(pagedFiles, cancellationToken);
+
             var document = new DidlDocument
             {
                 Containers = pagedContainers
                     .Select(c => DidlMapper.MapContainer(c, endpoint, listingParentId))
                     .ToArray(),
                 Items = pagedFiles
-                    .Select(f => DidlMapper.MapItem(f, endpoint, listingParentId))
+                    .Select(f => DidlMapper.MapItem(f, endpoint, listingParentId, SubtitlesOf(subtitles, f)))
                     .ToArray(),
             };
 
@@ -278,7 +286,9 @@ namespace DlnaServer.Host.Upnp.Control
             }
             else if (await _files.GetByPublicIdAsync(publicId, cancellationToken) is { } file)
             {
-                document.Items = [DidlMapper.MapItem(file, endpoint, DidlMapper.ParentIdOf(file))];
+                var subtitles = await LoadSubtitlesAsync([file], cancellationToken);
+
+                document.Items = [DidlMapper.MapItem(file, endpoint, DidlMapper.ParentIdOf(file), SubtitlesOf(subtitles, file))];
             }
 
             var count = (uint)(document.Containers.Length + document.Items.Length);
@@ -433,6 +443,38 @@ namespace DlnaServer.Host.Upnp.Control
         }
 
         /// <summary>
+        /// The linked subtitles of every file on a page, in one query - and no query at all when no file on
+        /// the page has any, or subtitles are switched off.
+        /// </summary>
+        private async Task<IReadOnlyDictionary<Guid, IReadOnlyList<SubtitleFileDto>>> LoadSubtitlesAsync(
+            IReadOnlyList<MediaFileDto> files,
+            CancellationToken cancellationToken)
+        {
+            if (!_options.CurrentValue.Compatibility.SendSubtitles)
+            {
+                return _noSubtitles;
+            }
+
+            var withSubtitles = files
+                .Where(static f => f.HasSubtitleFiles)
+                .Select(static f => f.PublicId)
+                .ToArray();
+
+            return withSubtitles.Length == 0
+                ? _noSubtitles
+                : await _subtitles.GetForFilesAsync(withSubtitles, cancellationToken);
+        }
+
+        private static IReadOnlyList<SubtitleFileDto> SubtitlesOf(
+            IReadOnlyDictionary<Guid, IReadOnlyList<SubtitleFileDto>> subtitles,
+            MediaFileDto file)
+        {
+            return subtitles.TryGetValue(file.PublicId, out var found)
+                ? found
+                : [];
+        }
+
+        /// <summary>
         /// Drops optional properties the caller did not ask for.
         /// </summary>
         /// <remarks>
@@ -441,8 +483,8 @@ namespace DlnaServer.Host.Upnp.Control
         /// </remarks>
         private static void ApplyFilter(DidlDocument document, BrowseRequest options)
         {
-            // Hoisted: these three are loop-invariant - BrowseRequest is not mutated here and Includes is
-            // a pure query - so evaluating them per DIDL object meant 3N filter searches on the Browse
+            // Hoisted: these four are loop-invariant - BrowseRequest is not mutated here and Includes is
+            // a pure query - so evaluating them per DIDL object meant 4N filter searches on the Browse
             // hot path where 3 do.
             if (options.IncludesAllProperties)
             {
@@ -452,9 +494,15 @@ namespace DlnaServer.Host.Upnp.Control
             var wantsAlbumArt = options.Includes("upnp:albumArtURI");
             var wantsIcon = options.Includes("upnp:icon");
             var wantsDate = options.Includes("dc:date");
+            var wantsCaptionInfo = options.Includes("sec:CaptionInfoEx");
 
             foreach (var item in document.Items)
             {
+                if (!wantsCaptionInfo)
+                {
+                    item.CaptionInfo = null;
+                }
+
                 if (!wantsAlbumArt)
                 {
                     item.AlbumArtUri = null;
@@ -486,31 +534,14 @@ namespace DlnaServer.Host.Upnp.Control
         }
 
         /// <summary>
-        /// The endpoint that resource URLs are built against.
+        /// The endpoint that resource URLs are built against - see <see cref="DidlMapper.ResolveEndpoint"/>.
         /// </summary>
-        /// <remarks>
-        /// Resolved through the device registry rather than taken straight from the connection, for two
-        /// reasons. It guarantees the URL uses an address the server actually advertised over SSDP, so a
-        /// renderer is never handed one it cannot reach. And it avoids emitting a raw IPv6 address, which
-        /// would need bracketing to be a valid URL - a request arriving on the IPv6 loopback otherwise
-        /// produces <c>http://::1:26852/...</c>, which no client can parse.
-        /// </remarks>
         private string ResolveEndpoint()
         {
-            var connection = _httpContext.HttpContext?.Connection;
-            var port = connection?.LocalPort ?? _options.CurrentValue.Server.Port;
-
-            try
-            {
-                var identity = _devices.Resolve(connection?.LocalIpAddress);
-
-                return $"{identity.Address}:{port}";
-            }
-            catch (InvalidOperationException)
-            {
-                // No advertised interface - only reachable over loopback, so say so plainly.
-                return $"127.0.0.1:{port}";
-            }
+            return DidlMapper.ResolveEndpoint(
+                _devices,
+                _httpContext.HttpContext?.Connection,
+                _options.CurrentValue.Server.Port);
         }
     }
 }

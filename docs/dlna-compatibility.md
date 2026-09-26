@@ -33,6 +33,7 @@ details below**, which were found by capturing the reference's own responses (se
 | Browse `SortCriteria` | Ignored | Honoured |
 | Browse `RequestedCount` | Clamped to `[1,100]`; `0` becomes `1` | `0` means all, bounded by `Compatibility.MaxBrowseRequestedCount` |
 | DLNA HTTP headers | `contentFeatures.dlna.org` / `transferMode.dlna.org` never sent | Sent; `Compatibility.SendDlnaResponseHeaders` turns them off |
+| Subtitles | Never offered (`SubtitleFileExtensions` was marked not implemented) | Linked subtitle and lyrics files go out three ways: an extra `res` per file (`http-get:*:text/srt:*` etc.) after the media `res`, Samsung's `sec:CaptionInfoEx sec:type="srt"` for one of them, and a `CaptionInfo.sec` response header when a request carries `getCaptionInfo.sec`. Served from `fileserver/subtitle/{id}.{ext}` on the media port. `Compatibility.SendSubtitles` turns all three off. **Not yet confirmed on a television** |
 | GENA `TIMEOUT` | `00:30:00` | `Second-1800` |
 | GENA `UNSUBSCRIBE` | Acknowledged, never enacted | Actually removes the subscription |
 | MediaReceiverRegistrar | SCPD advertises two actions, contract implements neither | Both implemented |

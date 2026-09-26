@@ -66,6 +66,8 @@ namespace DlnaServer.Persistence
 
         public DbSet<MediaFileTagEntity> MediaFileTags => Set<MediaFileTagEntity>();
 
+        public DbSet<SubtitleFileEntity> SubtitleFiles => Set<SubtitleFileEntity>();
+
         public DbSet<ThumbnailEntity> Thumbnails => Set<ThumbnailEntity>();
 
         public DbSet<ThumbnailContentEntity> ThumbnailContents => Set<ThumbnailContentEntity>();

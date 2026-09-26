@@ -77,7 +77,7 @@ The element's **text** is the absolute URL to fetch; everything else is an attri
 | --- | --- | --- | --- |
 | `upnp:comments` | Property declared, `Order = 6` | Not declared | Never assigned by `BrowseItemMapper`, so it never reached the wire. Nothing indexes comments. |
 | `upnp:genre` | Property declared, `Order = 7` | Not declared | Same — declared and never populated. Also not a name any renderer in use reads. |
-| `res@subtitlesType` | Attribute declared | Not declared | Never assigned. Subtitle streams are indexed but not yet advertised — see M7. |
+| `res@subtitlesType` | Attribute declared | Not declared | Never assigned. Linked subtitle files are advertised another way since 2026-09-26 - an extra `res` each, plus `sec:CaptionInfoEx` (see `docs/dlna-compatibility.md`). Tracks inside the file are still indexed and not advertised. |
 | `res@language` | Attribute declared | Not declared | Never assigned. |
 | `res@class` | Attribute declared **and populated** with `video` / `audio` / `image` / `subtitle` | Not declared | The one in this table the reference actually emits. Not a DIDL-Lite attribute: the item's kind is carried by `upnp:class`, which every renderer reads. Left out as duplication; if a device is ever found to want it, this row is the note to reverse. |
 

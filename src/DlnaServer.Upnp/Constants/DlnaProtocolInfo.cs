@@ -184,6 +184,18 @@ namespace DlnaServer.Upnp.Constants
         }
 
         /// <summary>
+        /// Builds the <c>protocolInfo</c> value for a subtitle or lyrics resource.
+        /// </summary>
+        /// <remarks>
+        /// The fourth field is a bare <c>*</c>: a subtitle has no DLNA profile, and renderers that read
+        /// subtitles from DIDL-Lite match on the MIME alone.
+        /// </remarks>
+        public static string ForSubtitle(DlnaMime mime)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"http-get:*:{mime.ToMimeString()}:*");
+        }
+
+        /// <summary>
         /// <b>contentFeatures.dlna.org</b><br />
         /// The header form of <see cref="ForThumbnail"/>, carrying the thumbnail content-index marker.
         /// </summary>

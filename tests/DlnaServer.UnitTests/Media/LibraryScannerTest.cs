@@ -288,11 +288,16 @@ namespace DlnaServer.UnitTests.Media
         /// put every sidecar subtitle beside the films as a <c>Generic</c> item on the television, which
         /// is a regression rather than a feature - and the reference's own subtitle support is marked as
         /// not implemented.
+        /// <para>
+        /// Since 2026-09-26 the walk does report them - flagged as subtitles, so the indexer can link each
+        /// to its media - and this still pins the half that matters: never as media.
+        /// </para>
         /// </remarks>
         [TestCase("film.srt")]
         [TestCase("film.vtt")]
         [TestCase("film.sub")]
-        public void EnumerateFiles_ForASubtitleTheCatalogKnows_StillFindsNoMedia(string fileName)
+        [TestCase("film.lrc")]
+        public void EnumerateFiles_ForASubtitle_ReportsItAsASubtitleAndNeverAsMedia(string fileName)
         {
             // Arrange
             CreateFile(fileName, sizeInBytes: 128);
@@ -301,8 +306,9 @@ namespace DlnaServer.UnitTests.Media
             var found = _scanner.EnumerateFiles(CreateOptions(), CancellationToken.None).ToArray();
 
             // Assert
-            found.Should().BeEmpty(
-                $"because '{fileName}' is a subtitle, and the fallback infers only video, audio and images");
+            found.Should().ContainSingle($"because '{fileName}' is reported so it can be linked to its media")
+                .Which.IsSubtitle.Should().BeTrue(
+                    $"because '{fileName}' is a subtitle, and the fallback infers only video, audio and images");
         }
 
         /// <summary>

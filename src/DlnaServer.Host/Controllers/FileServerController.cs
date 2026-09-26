@@ -1,11 +1,14 @@
 using CommunityToolkit.HighPerformance;
 using DlnaServer.Core.Configuration;
+using DlnaServer.Core.Contracts;
+using DlnaServer.Core.Diagnostics;
 using DlnaServer.Core.Dlna;
+using DlnaServer.Core.Subtitles;
 using DlnaServer.Host.Delivery;
-using DlnaServer.Host.Delivery.Caching;
-using DlnaServer.Host.Delivery.Prefetch;
+using DlnaServer.Host.Upnp.Control;
 using DlnaServer.Persistence.Repositories;
 using DlnaServer.Upnp.Constants;
+using DlnaServer.Upnp.Ssdp;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using DlnaServer.Core.Delivery;
@@ -38,7 +41,23 @@ namespace DlnaServer.Host.Controllers
         private const string SourceDisc = "disc";
         private const string SourceDatabase = "database";
 
+        /// <summary>
+        /// <b>getCaptionInfo.sec</b><br />
+        /// Sent by a Samsung television on a media request to ask for the video's subtitle.
+        /// </summary>
+        private const string CaptionInfoRequestHeader = "getCaptionInfo.sec";
+
+        /// <summary>
+        /// <b>CaptionInfo.sec</b><br />
+        /// The subtitle's URL, on the media response, for a television that asked with
+        /// <see cref="CaptionInfoRequestHeader"/>.
+        /// </summary>
+        private const string CaptionInfoResponseHeader = "CaptionInfo.sec";
+
         private readonly IMediaFileRepository _files;
+        private readonly ISubtitleRepository _subtitles;
+        private readonly ITemporaryFolderVisibility _visibility;
+        private readonly IUpnpDeviceRegistry _devices;
         private readonly IServedFileCache _cache;
         private readonly IMediaContentResolver _content;
         private readonly IOptionsMonitor<DlnaOptions> _options;
@@ -46,12 +65,18 @@ namespace DlnaServer.Host.Controllers
 
         public FileServerController(
             IMediaFileRepository files,
+            ISubtitleRepository subtitles,
+            ITemporaryFolderVisibility visibility,
+            IUpnpDeviceRegistry devices,
             IServedFileCache cache,
             IMediaContentResolver content,
             IOptionsMonitor<DlnaOptions> options,
             ILogger<FileServerController> logger)
         {
             _files = files;
+            _subtitles = subtitles;
+            _visibility = visibility;
+            _devices = devices;
             _cache = cache;
             _content = content;
             _options = options;
@@ -91,6 +116,8 @@ namespace DlnaServer.Host.Controllers
                     file.Mime.ToMedia(),
                     DlnaProtocolInfo.ContentFeaturesFor(file.Mime, file.DlnaProfileName, file.Extension));
             }
+
+            await AddCaptionInfoAsync(file, cancellationToken);
 
             var contentType = file.Mime.ToMimeString();
 
@@ -173,6 +200,8 @@ namespace DlnaServer.Host.Controllers
                     DlnaProtocolInfo.ContentFeaturesFor(file.Mime, file.DlnaProfileName, file.Extension));
             }
 
+            await AddCaptionInfoAsync(file, cancellationToken);
+
             LogProbed(file.FullPath);
 
             var contentType = file.Mime.ToMimeString();
@@ -182,6 +211,45 @@ namespace DlnaServer.Host.Controllers
             return isOnDisc
                 ? PhysicalFile(file.FullPath, contentType, enableRangeProcessing: true)
                 : File(cached.AsStream(), contentType, enableRangeProcessing: true);
+        }
+
+        /// <summary>
+        /// Serves one subtitle or lyrics file linked to a media file.
+        /// </summary>
+        /// <remarks>
+        /// The extension in the route is there for televisions that judge a subtitle URL by its ending and
+        /// is not read. The stored path is checked against <see cref="SubtitlePath"/> again before anything
+        /// is served, because it came from what an operator typed; and the media file is looked up the way
+        /// its own request would be, so a subtitle is never reachable while its film is not.
+        /// </remarks>
+        [HttpGet("subtitle/{id:guid}.{extension:alpha}")]
+        [HttpHead("subtitle/{id:guid}.{extension:alpha}")]
+        public async Task<IActionResult> GetSubtitle([FromRoute] Guid id, CancellationToken cancellationToken)
+        {
+            var subtitle = _options.CurrentValue.Compatibility.SendSubtitles
+                ? await _subtitles.GetByPublicIdAsync(id, cancellationToken)
+                : null;
+
+            if (subtitle is null
+                || await _files.GetByPublicIdAsync(subtitle.MediaFilePublicId, cancellationToken) is null
+                || !SubtitlePath.TryLocate(
+                    Path.GetDirectoryName(subtitle.MediaFileFullPath) ?? string.Empty,
+                    subtitle.RelativePath,
+                    [.. _visibility.HiddenFromDelivery],
+                    out _,
+                    out var fullPath,
+                    out _))
+            {
+                return NotFound();
+            }
+
+            var contentType = DlnaMimeCatalog.TryGetByFileExtension(Path.GetExtension(fullPath), out var mime)
+                ? mime.ToMimeString()
+                : "text/plain";
+
+            LogServed(fullPath, SourceDisc);
+
+            return PhysicalFile(fullPath, contentType, enableRangeProcessing: true);
         }
 
         /// <summary>
@@ -336,6 +404,26 @@ namespace DlnaServer.Host.Controllers
             }
 
             LogServingThumbnailTransfer(filePath, source);
+        }
+
+        // Only when asked: a Samsung television sends the request header, and nothing else needs the query.
+        private async Task AddCaptionInfoAsync(MediaFileDto file, CancellationToken cancellationToken)
+        {
+            if (!file.HasSubtitleFiles
+                || !Request.Headers.ContainsKey(CaptionInfoRequestHeader)
+                || !_options.CurrentValue.Compatibility.SendSubtitles)
+            {
+                return;
+            }
+
+            var subtitles = await _subtitles.GetForFilesAsync([file.PublicId], cancellationToken);
+
+            if (subtitles.TryGetValue(file.PublicId, out var linked) && DidlMapper.PreferredCaption(linked) is { } chosen)
+            {
+                var endpoint = DidlMapper.ResolveEndpoint(_devices, HttpContext.Connection, _options.CurrentValue.Server.Port);
+
+                Response.Headers[CaptionInfoResponseHeader] = DidlMapper.SubtitleUrl(endpoint, chosen);
+            }
         }
     }
 }

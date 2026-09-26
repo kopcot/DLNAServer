@@ -126,6 +126,11 @@ namespace DlnaServer.Persistence.Entities
         /// </summary>
         public ICollection<SubtitleStreamEntity> Subtitles { get; set; } = [];
 
+        /// <summary>
+        /// Subtitle and lyrics files linked to this one, including automatic links the operator removed.
+        /// </summary>
+        public ICollection<SubtitleFileEntity> SubtitleFiles { get; set; } = [];
+
         public ThumbnailEntity? Thumbnail { get; set; }
     }
 }

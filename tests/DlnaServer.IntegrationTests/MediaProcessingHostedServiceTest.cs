@@ -205,6 +205,8 @@ namespace DlnaServer.IntegrationTests
                 FileModifiedUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                 CreatedUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                 IsExcludedFromCache = false,
+                HasSubtitleTracks = false,
+                HasSubtitleFiles = false,
                 ContentStamp = "1024:638000000000000000",
             };
         }

@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 
 namespace DlnaServer.Persistence
 {
@@ -66,6 +65,7 @@ namespace DlnaServer.Persistence
             _ = services.AddScoped<IDatabaseInitializer, DatabaseInitializer>();
             _ = services.AddScoped<IIndexMaintenance, IndexMaintenance>();
             _ = services.AddScoped<IUploadDeviceRepository, UploadDeviceRepository>();
+            _ = services.AddScoped<ISubtitleRepository, SubtitleRepository>();
 
             // TryAdd, so the host's own instance wins. The host builds one in Main and registers it
             // before this, because a reset request has to survive the container it was raised in; this is

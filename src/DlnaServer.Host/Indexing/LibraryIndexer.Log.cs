@@ -100,5 +100,11 @@ namespace DlnaServer.Host.Indexing
                 + "emptied config.json is not a decision to stop sharing them. Set "
                 + "Dlna.Library.SourceFolders to reconcile normally")]
         private partial void LogFallbackKeptUncoveredFolders(string folders, int keptCount);
+
+        [LoggerMessage(
+            EventId = 14,
+            Level = LogLevel.Information,
+            Message = "Subtitles: {LinkedCount} file(s) newly linked to their media, {UnlinkedCount} link(s) dropped")]
+        private partial void LogSubtitlesLinked(int linkedCount, int unlinkedCount);
     }
 }

@@ -131,6 +131,29 @@ namespace DlnaServer.Core.Contracts
         public required bool IsExcludedFromCache { get; init; }
 
         /// <summary>
+        /// Whether the file carries a subtitle track inside it.
+        /// </summary>
+        /// <remarks>
+        /// Required, so none of the hand-kept projections that build this type can leave it silently false.
+        /// </remarks>
+        public required bool HasSubtitleTracks { get; init; }
+
+        /// <summary>
+        /// Whether a subtitle or lyrics file is linked to the file - the part of <see cref="HasSubtitles"/>
+        /// a renderer is handed a URL for.
+        /// </summary>
+        /// <remarks>
+        /// Kept apart because it decides whether a Browse page queries the links at all, and most films
+        /// carry an embedded track and no linked file.
+        /// </remarks>
+        public required bool HasSubtitleFiles { get; init; }
+
+        /// <summary>
+        /// Whether the file has subtitles: a track inside it, or a linked subtitle or lyrics file.
+        /// </summary>
+        public bool HasSubtitles => HasSubtitleTracks || HasSubtitleFiles;
+
+        /// <summary>
         /// Identifies the file's content as of the last scan. Metadata and thumbnails are regenerated
         /// when their recorded stamp no longer matches this one.
         /// </summary>

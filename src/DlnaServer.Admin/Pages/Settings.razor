@@ -437,6 +437,13 @@
         </Hint>
     </CheckField>
 
+    <CheckField Label="Offer subtitles to televisions" @bind-Value="_edited.Compatibility.SendSubtitles">
+        <Hint>
+            Tells televisions about subtitle files found beside a video, and lyrics beside a song. Turn it
+            off only if a television stops listing or playing files after an upgrade.
+        </Hint>
+    </CheckField>
+
     <CheckField Label="Older device discovery mode" @bind-Value="_edited.Compatibility.UseLegacyInvertedSearchTargetMatch">
         <Hint>
             Uses the older way of answering devices that go looking for a media server. Turn it on only if

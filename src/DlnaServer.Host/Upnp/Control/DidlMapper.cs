@@ -5,6 +5,7 @@ using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Dlna;
 using DlnaServer.Upnp.Constants;
 using DlnaServer.Upnp.Didl;
+using DlnaServer.Upnp.Ssdp;
 
 namespace DlnaServer.Host.Upnp.Control
 {
@@ -21,6 +22,9 @@ namespace DlnaServer.Host.Upnp.Control
         /// Identifier the UPnP root container is addressed by.
         /// </summary>
         public const string RootObjectId = "0";
+
+        // A folder of forty language variants must not make every Browse of it forty resources longer.
+        private const int MaxSubtitleResources = 8;
 
         /// <summary>
         /// Maps a directory, declaring <paramref name="parentId"/> as its parent.
@@ -58,9 +62,14 @@ namespace DlnaServer.Host.Upnp.Control
         /// content at all. The reference gets it right by construction: it stamps the root's own
         /// identifier on every object it returns from a root listing.
         /// </remarks>
-        public static DidlItem MapItem(MediaFileDto file, string endpoint, string parentId)
+        public static DidlItem MapItem(
+            MediaFileDto file,
+            string endpoint,
+            string parentId,
+            IReadOnlyList<SubtitleFileDto> subtitles)
         {
             ArgumentNullException.ThrowIfNull(file);
+            ArgumentNullException.ThrowIfNull(subtitles);
 
             var thumbnail = ResolveThumbnail(file, endpoint);
 
@@ -96,6 +105,7 @@ namespace DlnaServer.Host.Upnp.Control
                         SampleFrequency = FormatCount(file.AudioSampleRate),
                         Url = $"http://{endpoint}/fileserver/file/{file.PublicId}",
                     },
+                    .. MapSubtitleResources(subtitles, endpoint),
                 ],
                 VideoCodec = ToXmlTextOrNull(file.VideoCodec),
                 AudioCodec = ToXmlTextOrNull(file.AudioCodec),
@@ -110,7 +120,82 @@ namespace DlnaServer.Host.Upnp.Control
                     },
                 AlbumArtUri = thumbnail?.Url,
                 Icon = thumbnail?.Url,
+                CaptionInfo = MapCaptionInfo(subtitles, endpoint),
             };
+        }
+
+        /// <summary>
+        /// The endpoint that resource URLs are built against, for a request that arrived on
+        /// <paramref name="connection"/>.
+        /// </summary>
+        /// <remarks>
+        /// Resolved through the device registry rather than taken straight from the connection, for two
+        /// reasons. It guarantees the URL uses an address the server actually advertised over SSDP, so a
+        /// renderer is never handed one it cannot reach. And it avoids emitting a raw IPv6 address, which
+        /// would need bracketing to be a valid URL - a request arriving on the IPv6 loopback otherwise
+        /// produces <c>http://::1:26852/...</c>, which no client can parse. Never the <c>Host</c> header:
+        /// that is whatever the caller chose to send.
+        /// </remarks>
+        public static string ResolveEndpoint(
+            IUpnpDeviceRegistry devices,
+            ConnectionInfo? connection,
+            int fallbackPort)
+        {
+            ArgumentNullException.ThrowIfNull(devices);
+
+            var port = connection?.LocalPort ?? fallbackPort;
+
+            try
+            {
+                var identity = devices.Resolve(connection?.LocalIpAddress);
+
+                return $"{identity.Address}:{port}";
+            }
+            catch (InvalidOperationException)
+            {
+                // No advertised interface - only reachable over loopback, so say so plainly.
+                return $"127.0.0.1:{port}";
+            }
+        }
+
+        /// <summary>
+        /// Where a renderer fetches a linked subtitle.
+        /// </summary>
+        /// <remarks>
+        /// Ends in the subtitle's own extension: some televisions decide whether a URL is a subtitle they
+        /// can read by how it ends, and the file server ignores that part of the path.
+        /// </remarks>
+        public static string SubtitleUrl(string endpoint, SubtitleFileDto subtitle)
+        {
+            ArgumentNullException.ThrowIfNull(subtitle);
+
+            var extension = Path.GetExtension(subtitle.RelativePath).TrimStart('.').ToLowerInvariant();
+
+            return $"http://{endpoint}/fileserver/subtitle/{subtitle.PublicId}.{extension}";
+        }
+
+        /// <summary>
+        /// The one subtitle a Samsung television is told about, which reads a single subtitle from
+        /// <c>sec:CaptionInfoEx</c> or the <c>CaptionInfo.sec</c> header: the first SRT, the format it is
+        /// surest to show, or else the first subtitle.
+        /// </summary>
+        public static SubtitleFileDto? PreferredCaption(IReadOnlyList<SubtitleFileDto> subtitles)
+        {
+            ArgumentNullException.ThrowIfNull(subtitles);
+
+            SubtitleFileDto? chosen = null;
+
+            foreach (var subtitle in subtitles)
+            {
+                if (subtitle.RelativePath.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+                {
+                    return subtitle;
+                }
+
+                chosen ??= subtitle;
+            }
+
+            return chosen;
         }
 
         /// <summary>
@@ -295,6 +380,45 @@ namespace DlnaServer.Host.Upnp.Control
             }
 
             return true;
+        }
+
+        private static IEnumerable<DidlResource> MapSubtitleResources(
+            IReadOnlyList<SubtitleFileDto> subtitles,
+            string endpoint)
+        {
+            var mapped = 0;
+
+            foreach (var subtitle in subtitles)
+            {
+                if (mapped == MaxSubtitleResources)
+                {
+                    yield break;
+                }
+
+                if (DlnaMimeCatalog.TryGetByFileExtension(Path.GetExtension(subtitle.RelativePath), out var mime))
+                {
+                    mapped++;
+
+                    yield return new DidlResource
+                    {
+                        ProtocolInfo = DlnaProtocolInfo.ForSubtitle(mime),
+                        Url = SubtitleUrl(endpoint, subtitle),
+                    };
+                }
+            }
+        }
+
+        private static DidlCaptionInfo? MapCaptionInfo(IReadOnlyList<SubtitleFileDto> subtitles, string endpoint)
+        {
+            var chosen = PreferredCaption(subtitles);
+
+            return chosen is null
+                ? null
+                : new DidlCaptionInfo
+                {
+                    Type = Path.GetExtension(chosen.RelativePath).TrimStart('.').ToLowerInvariant(),
+                    Url = SubtitleUrl(endpoint, chosen),
+                };
         }
     }
 }

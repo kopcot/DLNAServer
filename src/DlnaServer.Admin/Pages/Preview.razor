@@ -169,6 +169,12 @@ else
         </Panel>
     }
 
+    @* Subtitle files for a video, lyrics for a song - a picture has neither. *@
+    @if (_details.File.Mime.ToMedia() is DlnaMedia.Video or DlnaMedia.Audio)
+    {
+        <SubtitleEditor File="_details.File" OnCompleted="OnParametersSetAsync" />
+    }
+
     @if (_tags.Count > 0)
     {
         @* Collapsed by default, and a <details> rather than a toggle field: a music file can carry

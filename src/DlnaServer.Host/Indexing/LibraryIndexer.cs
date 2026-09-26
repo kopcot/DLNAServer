@@ -40,6 +40,7 @@ namespace DlnaServer.Host.Indexing
         private readonly ILibraryScanner _scanner;
         private readonly IMediaDirectoryRepository _directories;
         private readonly IMediaFileRepository _files;
+        private readonly ISubtitleRepository _subtitles;
         private readonly ISourceFolderChecker _sourceFolders;
         private readonly IServedFileCache _fileCache;
         private readonly ILibraryIndexLock _indexLock;
@@ -51,6 +52,7 @@ namespace DlnaServer.Host.Indexing
             ILibraryScanner scanner,
             IMediaDirectoryRepository directories,
             IMediaFileRepository files,
+            ISubtitleRepository subtitles,
             ISourceFolderChecker sourceFolders,
             IServedFileCache fileCache,
             ILibraryIndexLock indexLock,
@@ -61,6 +63,7 @@ namespace DlnaServer.Host.Indexing
             _scanner = scanner;
             _directories = directories;
             _files = files;
+            _subtitles = subtitles;
             _sourceFolders = sourceFolders;
             _fileCache = fileCache;
             _indexLock = indexLock;
@@ -109,11 +112,15 @@ namespace DlnaServer.Host.Indexing
             // What this pass inserts, so reconciliation can recognise a move. See IndexFilesAsync.
             var insertedPaths = new HashSet<string>(StringComparer.Ordinal);
 
+            // Subtitle files the walk found, by folder - linked once the files themselves are settled.
+            var subtitlesByDirectory = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
             var addedFiles = await IndexFilesAsync(
                 scanOptions,
                 directoryKeys,
                 firstFillRoots,
                 insertedPaths,
+                subtitlesByDirectory,
                 cancellationToken);
 
             var updatedFiles = 0;
@@ -142,6 +149,19 @@ namespace DlnaServer.Host.Indexing
                     scanOptions,
                     directoryKeys,
                     cancellationToken);
+
+                // After reconciliation, which may carry a moved file's old row across and delete the new
+                // one, and under the same gate: an unmounted volume must not look like every subtitle gone.
+                var (linked, unlinked) = await _subtitles.SyncAutomaticAsync(
+                    subtitlesByDirectory,
+                    scanOptions.ExcludedFolderNames,
+                    IsDefinitelyAbsent,
+                    cancellationToken);
+
+                if (linked + unlinked > 0)
+                {
+                    LogSubtitlesLinked(linked, unlinked);
+                }
             }
             else
             {
@@ -994,6 +1014,7 @@ namespace DlnaServer.Host.Indexing
             IReadOnlyDictionary<string, Guid> directoryKeys,
             IReadOnlyList<string> firstFillRoots,
             HashSet<string> insertedPaths,
+            Dictionary<string, HashSet<string>> subtitlesByDirectory,
             CancellationToken cancellationToken)
         {
             var added = 0;
@@ -1002,6 +1023,22 @@ namespace DlnaServer.Host.Indexing
             foreach (var scanned in _scanner.EnumerateFiles(scanOptions, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                // Never a row of its own. Kept out of the batch too, where a Subs folder - no directory
+                // row, since it holds no media - would log a missing parent for every file in it.
+                if (scanned.IsSubtitle)
+                {
+                    if (!subtitlesByDirectory.TryGetValue(scanned.DirectoryPath, out var names))
+                    {
+                        names = new HashSet<string>(StringComparer.Ordinal);
+                        subtitlesByDirectory.Add(scanned.DirectoryPath, names);
+                    }
+
+                    names.Add(scanned.FileName);
+
+                    continue;
+                }
+
                 batch.Add(scanned);
 
                 if (batch.Count >= BatchSize)

@@ -239,6 +239,9 @@ namespace DlnaServer.Core.Dlna
                 Subtitle(DlnaMime.SubtitleVtt, "text/vtt", [".vtt"]),
                 Subtitle(DlnaMime.SubtitleTtmlXml, "application/ttml+xml", [".ttml"]),
                 Subtitle(DlnaMime.SubtitleMicroDVD, "text/vnd.dlna.sub-title", [".sub"]),
+                Subtitle(DlnaMime.SubtitleSsa, "text/x-ssa", [".ass", ".ssa"]),
+                Subtitle(DlnaMime.SubtitleSami, "application/x-sami", [".smi"]),
+                Subtitle(DlnaMime.SubtitleLyrics, "text/x-lrc", [".lrc"]),
 
                 // Video - the rest of the reference's table, added 2026-09-04
                 Video(DlnaMime.VideoAnimaflex, "video/animaflex", [".afl"]),

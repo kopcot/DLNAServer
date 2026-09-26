@@ -161,5 +161,8 @@ namespace DlnaServer.Core.Dlna
         SubtitleTtmlXml = 302,
         SubtitleVtt = 303,
         SubtitleXSubrip = 304,
+        SubtitleSsa = 305,
+        SubtitleSami = 306,
+        SubtitleLyrics = 307,
     }
 }

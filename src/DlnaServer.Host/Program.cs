@@ -36,6 +36,7 @@ using DlnaServer.Core.Delivery;
 using DlnaServer.Core.Diagnostics;
 using DlnaServer.Core.Gena;
 using DlnaServer.Core.Uploads;
+using DlnaServer.Core.Subtitles;
 
 namespace DlnaServer.Host
 {
@@ -325,6 +326,7 @@ namespace DlnaServer.Host
             // Lets the settings page report what each source folder actually is before it is saved, rather
             // than the operator finding out from a server that refuses to start.
             _ = builder.Services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();
+            _ = builder.Services.AddSingleton<ISubtitleFileChecker, SubtitleFileChecker>();
 
             // And lets it ask the question startup asks - defaults applied first, then validated - which
             // it could not do for itself: DlnaOptionsDefaults is internal to this assembly.

@@ -428,6 +428,7 @@ button:disabled { opacity: .5; cursor: default; }
 .checks li:last-child { border-bottom: none; }
 .checks .verdict { color: var(--warn); }
 .checks li.ok .verdict { color: var(--accent); }
+.missing { color: var(--warn); }
 
 .notice { padding: 10px 14px; border-radius: 6px; border: 1px solid var(--line); margin-bottom: 16px; }
 .notice.ok { border-color: var(--accent); color: var(--accent); }
@@ -486,7 +487,8 @@ button:disabled { opacity: .5; cursor: default; }
    by the cover-fit rule above, and on the same ground as the .noimg box it replaced. */
 .tile img.kindicon { object-fit: contain; padding: 18px; background: var(--ground); }
 
-.tile .kindbadge {
+.tile .kindbadge,
+.tile .subbadge {
     position: absolute;
     top: 6px;
     right: 6px;
@@ -503,7 +505,11 @@ button:disabled { opacity: .5; cursor: default; }
     /* Readable over an arbitrary photograph, which the panel colour alone is not. */
     opacity: .92;
 }
-.tile .kindbadge svg { width: 12px; height: 12px; display: block; fill: currentColor; }
+.tile .kindbadge svg,
+.tile .subbadge svg { width: 12px; height: 12px; display: block; fill: currentColor; }
+
+/* Directly under the kind badge: 6px from the top, its 20px, and a 4px gap. */
+.tile .subbadge { top: 30px; }
 
 .divider {
     border: none;

@@ -1535,6 +1535,14 @@ Decided 2026-09-08, during the fix pass for the third `/review-all --full` (sect
     this one instance is allowed because moving the contract to `ReadOnlyMemory<byte>` would add a full
     copy of every generated thumbnail at the persistence boundary, where EF wants an array - in the one
     project whose hard constraint is memory. A **new** array on a DTO still fails the test.
+28. **Accepted limit: subtitle and media delivery check the path, then open it again** (maintainer ruling
+    2026-09-26, `docs/history.md` 6t). `SubtitlePath.TryLocate` refuses a symlinked file and a symlinked
+    sub-folder, but `PhysicalFile` opens the path afresh. So a file swapped for a link between the two is still
+    served. A FIFO, socket or hard link on the share also passes, and `GetFile` has no link check at all.
+    Every one of these needs write access to the media share, which on this deployment is already full control
+    of the library. Closing it would need an open-then-verify helper, for example reading `/proc/self/fd` on
+    Linux, shared by both endpoints. **Reporting this as a new finding is a false positive** unless the threat
+    model changes.
 
 ### Open work from the 2026-09-23 batches (6p to 6s)
 
@@ -1632,8 +1640,21 @@ Each says why, so none of it is re-derived as a fresh discovery.
 
 ### Open work inherited from those documents
 
-**Only W9 is left here, and it needs a database rather than a patch.** The dead preview player that
-sat in this list was fixed the same day - section 6h.
+**Only W9 and W10 are left here, and both need a database rather than a patch.** The dead preview player
+that sat in this list was fixed the same day - section 6h.
+
+- **W10. The subtitle sync reads every link on every scan. A MEASUREMENT** (added 2026-09-26,
+  `docs/history.md` 6t). `SubtitleRepository.SyncAutomaticAsync` loads the whole `SubtitleFiles` table, with
+  each link's media path, where every other bulk read in the indexer pages by 500. It cannot simply be
+  filtered to the folders the scan touched: a link whose folder vanished must still be seen to be dropped.
+  Estimated at a few MB per 10,000 links, for the length of one pass, and links are typically far fewer than
+  files. **Measure before changing it**: the row count of `SubtitleFiles` on the NAS, and the working set
+  during a scan. If it matters, page it the way `MediaFileRepository.GetIndexedPageAsync` pages `Files`
+  (keyset on `Id`).
+
+  The Browse-time lookup that used to be W10 needs no plan any more: `GetForFilesAsync` resolves the files'
+  `Id`s first and then filters `SubtitleFiles` on `MediaFileId`, which its unique index leads with, so no
+  join order can make it scan.
 
 - **W9. The two `Language` indexes may be dead weight. A MEASUREMENT.** Both exist -
   `IX_AudioStreams_Language` and `IX_SubtitleStreams_Language`, one per stream table. Run these against

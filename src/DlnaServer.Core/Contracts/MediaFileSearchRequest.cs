@@ -113,6 +113,12 @@ namespace DlnaServer.Core.Contracts
         public bool? IsKeptInMemory { get; init; }
 
         /// <summary>
+        /// Keeps only files with subtitles - a track inside the file or a linked subtitle file - or only
+        /// those with none. Unset means both.
+        /// </summary>
+        public bool? HasSubtitles { get; init; }
+
+        /// <summary>
         /// Most results to return.
         /// </summary>
         public int Take { get; init; } = 200;
