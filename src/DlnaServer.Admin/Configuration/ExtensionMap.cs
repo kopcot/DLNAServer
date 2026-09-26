@@ -1,4 +1,3 @@
-using System.Buffers;
 using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Dlna;
 
@@ -17,9 +16,6 @@ namespace DlnaServer.Admin.Configuration
     /// </remarks>
     internal static class ExtensionMap
     {
-        // Characters an extension may not contain past its leading dot.
-        private static readonly SearchValues<char> _rejected = SearchValues.Create(" \t\r\n/\\:*?\"<>|");
-
         /// <summary>
         /// Reads the configured map into editable rows, ordered by extension.
         /// </summary>
@@ -93,7 +89,7 @@ namespace DlnaServer.Admin.Configuration
 
             foreach (var row in rows)
             {
-                var extension = Normalise(row.Extension);
+                var extension = FileExtension.Normalise(row.Extension);
 
                 if (extension.Length <= 1)
                 {
@@ -103,7 +99,7 @@ namespace DlnaServer.Admin.Configuration
                     continue;
                 }
 
-                if (extension.AsSpan(1).ContainsAny(_rejected))
+                if (FileExtension.HasRejectedCharacter(extension.AsSpan(1)))
                 {
                     problems.Add($"'{extension}' cannot be used as an extension - it contains a space or a slash.");
 
@@ -147,7 +143,7 @@ namespace DlnaServer.Admin.Configuration
             {
                 var profile = row.ProfileName?.Trim();
 
-                map[Normalise(row.Extension)] = new MediaExtensionOptions
+                map[FileExtension.Normalise(row.Extension)] = new MediaExtensionOptions
                 {
                     Mime = row.Mime.ToString(),
 
@@ -174,24 +170,7 @@ namespace DlnaServer.Admin.Configuration
         internal static string DefaultProfileFor(DlnaMime mime, string extension)
         {
             return mime.ToMainProfileName()
-                ?? Normalise(extension).TrimStart('.').ToUpperInvariant();
-        }
-
-        /// <summary>
-        /// An extension as the configuration stores it - lower case, with a leading dot.
-        /// </summary>
-        internal static string Normalise(string? extension)
-        {
-            var trimmed = extension?.Trim().ToLowerInvariant() ?? string.Empty;
-
-            if (trimmed.Length == 0)
-            {
-                return string.Empty;
-            }
-
-            return trimmed.StartsWith('.')
-                ? trimmed
-                : "." + trimmed;
+                ?? FileExtension.Normalise(extension).TrimStart('.').ToUpperInvariant();
         }
     }
 }

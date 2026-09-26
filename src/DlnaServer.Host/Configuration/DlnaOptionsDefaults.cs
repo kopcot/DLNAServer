@@ -69,16 +69,11 @@ namespace DlnaServer.Host.Configuration
 
             foreach (var (extension, kind) in library.SubtitleFileExtensions)
             {
-                var key = extension.Trim().ToLowerInvariant();
+                var key = FileExtension.Normalise(extension);
 
                 if (key.Length == 0)
                 {
                     continue;
-                }
-
-                if (!key.StartsWith('.'))
-                {
-                    key = "." + key;
                 }
 
                 normalised[key] = kind;
@@ -177,10 +172,6 @@ namespace DlnaServer.Host.Configuration
         }
 
         /// <summary>
-        /// Adds a folder name to the exclusions once. Reloads re-run this, so appending blindly would
-        /// grow the list on every configuration change.
-        /// </summary>
-        /// <summary>
         /// The entries with blanks and repeats removed, each kept in the operator's own spelling.
         /// </summary>
         /// <remarks>
@@ -206,6 +197,10 @@ namespace DlnaServer.Host.Configuration
             return kept;
         }
 
+        /// <summary>
+        /// Adds a folder name to the exclusions once. Reloads re-run this, so appending blindly would
+        /// grow the list on every configuration change.
+        /// </summary>
         private static void Exclude(LibraryOptions library, string folderName)
         {
             if (string.IsNullOrWhiteSpace(folderName))

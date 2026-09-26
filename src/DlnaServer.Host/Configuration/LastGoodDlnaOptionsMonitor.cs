@@ -114,6 +114,8 @@ namespace DlnaServer.Host.Configuration
         /// </remarks>
         private static bool IsBindingFailure(InvalidOperationException exception)
         {
+            // Holds only while binding is reflection-based. EnableConfigurationBindingGenerator emits the binder
+            // into DlnaServer.Host, so Source would name this assembly and a wrong-typed value would escape again.
             return string.Equals(exception.Source, _binderAssemblyName, StringComparison.Ordinal);
         }
     }

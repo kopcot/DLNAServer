@@ -27,23 +27,29 @@ namespace DlnaServer.Host
                 return true;
             }
 
-            // A dual-stack socket reports an IPv4 peer as ::ffff:a.b.c.d, so the v4 rules below would
-            // never match without this.
-            var candidate = address.IsIPv4MappedToIPv6
-                ? address.MapToIPv4()
-                : address;
+            // Into the stack rather than GetAddressBytes: this runs on every admin request and every datagram.
+            Span<byte> bytes = stackalloc byte[16];
 
-            if (IPAddress.IsLoopback(candidate))
+            if (!address.TryWriteBytes(bytes, out var length))
             {
-                return true;
+                return false;
             }
 
-            return candidate.AddressFamily switch
+            // A dual-stack socket reports an IPv4 peer as ::ffff:a.b.c.d, so the v4 rules below would
+            // never match without this. The v4 address is its last four bytes.
+            if (address.IsIPv4MappedToIPv6)
             {
-                AddressFamily.InterNetwork => IsPrivateV4(candidate.GetAddressBytes()),
-                AddressFamily.InterNetworkV6 => candidate.IsIPv6LinkLocal
-                    || candidate.IsIPv6SiteLocal
-                    || IsUniqueLocalV6(candidate.GetAddressBytes()),
+                return IsPrivateV4(bytes[12..16]);
+            }
+
+            // 127.0.0.0/8, IPv4's loopback, is one of IsPrivateV4's ranges.
+            return address.AddressFamily switch
+            {
+                AddressFamily.InterNetwork => IsPrivateV4(bytes[..length]),
+                AddressFamily.InterNetworkV6 => IPAddress.IsLoopback(address)
+                    || address.IsIPv6LinkLocal
+                    || address.IsIPv6SiteLocal
+                    || IsUniqueLocalV6(bytes),
                 _ => false,
             };
         }
@@ -74,7 +80,7 @@ namespace DlnaServer.Host
                 && remoteBytes[..LinkPrefixBytes].SequenceEqual(localBytes[..LinkPrefixBytes]);
         }
 
-        private static bool IsPrivateV4(byte[] octets)
+        private static bool IsPrivateV4(ReadOnlySpan<byte> octets)
         {
             return octets[0] switch
             {
@@ -96,7 +102,7 @@ namespace DlnaServer.Host
         /// <c>fc00::/7</c>, the IPv6 unique-local range. <see cref="IPAddress.IsIPv6SiteLocal"/> covers
         /// only the deprecated <c>fec0::/10</c>, so it does not answer this on its own.
         /// </remarks>
-        private static bool IsUniqueLocalV6(byte[] octets)
+        private static bool IsUniqueLocalV6(ReadOnlySpan<byte> octets)
         {
             return (octets[0] & 0xFE) == 0xFC;
         }

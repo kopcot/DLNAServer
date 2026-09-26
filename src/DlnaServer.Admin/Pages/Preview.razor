@@ -369,23 +369,9 @@ else
 
         var links = await Subtitles.GetForFilesAsync([file.PublicId], cancellationToken);
 
-        if (!links.TryGetValue(file.PublicId, out var found))
-        {
-            return 0;
-        }
-
-        var mediaDirectory = Path.GetDirectoryName(file.FullPath) ?? string.Empty;
-        var count = 0;
-
-        foreach (var link in found)
-        {
-            if (SubtitleChecker.TryCheck(mediaDirectory, link.RelativePath, out _, out _))
-            {
-                count++;
-            }
-        }
-
-        return count;
+        return links.TryGetValue(file.PublicId, out var found)
+            ? SubtitleChecker.Usable(file.FullPath, found).Count
+            : 0;
     }
 
     // The folder this file was opened from: the route's, or the file's own when it was reached from

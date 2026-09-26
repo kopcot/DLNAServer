@@ -29,7 +29,7 @@ namespace DlnaServer.Host.Configuration
                     mediaDirectory,
                     input,
                     [.. _visibility.HiddenFromListings],
-                    _options.CurrentValue.Library.SubtitleFileExtensions.AsReadOnly(),
+                    _options.CurrentValue.Library.SubtitleFileExtensions,
                     out relativePath,
                     out _,
                     out problem);

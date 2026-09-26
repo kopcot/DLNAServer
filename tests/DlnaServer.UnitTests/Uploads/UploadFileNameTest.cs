@@ -58,6 +58,55 @@ namespace DlnaServer.UnitTests.Uploads
                 + "otherwise reach the disc, the report and the security log");
         }
 
+        [TestCase("film\u202Egnp.mp4")]
+        [TestCase("film\u200B.mp4")]
+        [TestCase("\uFEFFfilm.mp4")]
+        public void Sanitise_WithAnInvisibleFormattingCharacter_ReturnsEmpty(string sent)
+        {
+            // Arrange
+            // Act
+            var name = UploadFileName.Sanitise(sent);
+
+            // Assert
+            name.Should().BeEmpty(
+                "because a right-to-left override or a zero-width character makes the name read as something "
+                + "other than what lands on disc");
+        }
+
+        [TestCase("CON")]
+        [TestCase("con.mp4")]
+        [TestCase("Aux.part1.mkv")]
+        [TestCase("NUL .mp4")]
+        [TestCase("COM1.mp4")]
+        [TestCase("lpt9.jpg")]
+        public void Sanitise_WithAWindowsDeviceName_ReturnsEmpty(string sent)
+        {
+            // Arrange
+            // Act
+            var name = UploadFileName.Sanitise(sent);
+
+            // Assert
+            name.Should().BeEmpty(
+                "because Windows reads the name up to its first dot as a device, so a file written under it "
+                + "on the NAS could not be opened or deleted from a Windows machine on the share");
+        }
+
+        [TestCase("CONSOLE.mp4")]
+        [TestCase("com10.mp4")]
+        [TestCase("film.con.mp4")]
+        [TestCase("LPT.mp4")]
+        public void Sanitise_WithANameThatOnlyResemblesADeviceName_KeepsIt(string sent)
+        {
+            // Arrange
+            // Act
+            var name = UploadFileName.Sanitise(sent);
+
+            // Assert
+            name.Should().Be(sent,
+                "because only the exact reserved stems are devices, and refusing lookalikes would turn away "
+                + "real files");
+        }
+
         [Test]
         public void IsAcceptedMedia_ForAnExtensionInTheCatalog_IsTrue()
         {

@@ -114,7 +114,7 @@ namespace DlnaServer.Core.Configuration
         /// normalises every key to the stored form either way.
         /// </para>
         /// </remarks>
-        public IDictionary<string, DlnaMedia> SubtitleFileExtensions { get; set; } =
+        public Dictionary<string, DlnaMedia> SubtitleFileExtensions { get; set; } =
             new Dictionary<string, DlnaMedia>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>

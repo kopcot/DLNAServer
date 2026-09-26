@@ -48,6 +48,17 @@ namespace DlnaServer.Core.Subtitles
         }
 
         /// <summary>
+        /// Whether the file at this path is of a type still listed as a subtitle type - the test every
+        /// stored link is put to before it is served or offered.
+        /// </summary>
+        /// <param name="path">The file's name or path; only its extension is read.</param>
+        /// <param name="subtitleTypes">The configured subtitle types, keyed case-insensitively.</param>
+        public static bool IsLinkablePath(string path, IReadOnlyDictionary<string, DlnaMedia> subtitleTypes)
+        {
+            return IsLinkable(Path.GetExtension(path), subtitleTypes);
+        }
+
+        /// <summary>
         /// Pairs every linkable file in <paramref name="fileNames"/> with the media file it belongs to.
         /// </summary>
         /// <param name="media">The media files of one folder.</param>

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Sockets;
 using DlnaServer.Core.Gena;
 
 namespace DlnaServer.Host.Gena
@@ -23,6 +24,9 @@ namespace DlnaServer.Host.Gena
         /// reboot that never unsubscribed the first - which lapses within the granted lifetime anyway.
         /// </remarks>
         private const int MaxSubscriptionsPerSubscriber = 8;
+
+        // The bytes of an IPv6 address that name its network: a SLAAC prefix is always /64.
+        private const int LinkPrefixBytes = 8;
 
         // Serialises prune + count + add. Only Add contends, and only to keep the cap honest.
         private readonly object _addGate = new();
@@ -147,12 +151,25 @@ namespace DlnaServer.Host.Gena
         }
 
         // A dual-stack socket reports an IPv4 peer as ::ffff:a.b.c.d, which would otherwise count as a
-        // second device next to the same peer arriving over IPv4.
+        // second device next to the same peer arriving over IPv4. An IPv6 device is keyed by its /64: it
+        // can pick any address inside its own prefix, so counting per address would not cap it at all.
         private static IPAddress? Normalise(IPAddress? subscriber)
         {
-            return subscriber is { IsIPv4MappedToIPv6: true }
-                ? subscriber.MapToIPv4()
-                : subscriber;
+            if (subscriber is { IsIPv4MappedToIPv6: true })
+            {
+                return subscriber.MapToIPv4();
+            }
+
+            if (subscriber is not { AddressFamily: AddressFamily.InterNetworkV6 })
+            {
+                return subscriber;
+            }
+
+            Span<byte> bytes = stackalloc byte[16];
+            _ = subscriber.TryWriteBytes(bytes, out _);
+            bytes[LinkPrefixBytes..].Clear();
+
+            return new IPAddress(bytes);
         }
 
         private int CountHeldBy(IPAddress? subscriber)

@@ -72,7 +72,7 @@ namespace DlnaServer.Core.Subtitles
             {
                 problem = "Only one folder down is looked at - move the subtitle up, or next to the file.";
             }
-            else if (!SubtitleMatcher.IsLinkable(Path.GetExtension(segments[^1]), subtitleTypes))
+            else if (!SubtitleMatcher.IsLinkablePath(segments[^1], subtitleTypes))
             {
                 problem = "That is not a subtitle or lyrics type listed under Subtitle types on the Settings page.";
             }

@@ -254,6 +254,43 @@ namespace DlnaServer.IntegrationTests
                 "because the mapped form is the same television, not a ninth device with a fresh share");
         }
 
+        /// <summary>
+        /// An IPv6 device chooses its own address inside its /64, so a fresh address per SUBSCRIBE must not
+        /// buy it a fresh share.
+        /// </summary>
+        [Test]
+        public void Add_FromNineAddressesInOneIPv6Prefix_CountsThemAsOneDevice()
+        {
+            // Arrange
+            for (var index = 1; index <= 8; index++)
+            {
+                _store.Add(
+                        serviceId: "ContentDirectory",
+                        callbackUrls: _callback,
+                        granted: _granted,
+                        subscriber: IPAddress.Parse($"2001:db8:1:2::{index:x}"))
+                    .Should().NotBeNull($"because subscription {index} is within the prefix's share");
+            }
+
+            // Act
+            var ninthInPrefix = _store.Add(
+                serviceId: "ContentDirectory",
+                callbackUrls: _callback,
+                granted: _granted,
+                subscriber: IPAddress.Parse("2001:db8:1:2:abcd:ef01:2345:6789"));
+            var otherPrefix = _store.Add(
+                serviceId: "ContentDirectory",
+                callbackUrls: _callback,
+                granted: _granted,
+                subscriber: IPAddress.Parse("2001:db8:1:3::1"));
+
+            // Assert
+            ninthInPrefix.Should().BeNull(
+                "because every address in one /64 is the same device, and it already holds its eight");
+            otherPrefix.Should().NotBeNull(
+                "because a device on another /64 has a share of its own");
+        }
+
         [Test]
         public void Add_AfterADevicesSubscriptionsLapse_AcceptsThatDeviceAgain()
         {

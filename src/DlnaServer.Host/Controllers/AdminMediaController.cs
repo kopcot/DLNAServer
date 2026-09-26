@@ -218,51 +218,129 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
-            var mediaDirectory = Path.GetDirectoryName(file.FullPath) ?? string.Empty;
             var links = await _subtitles.GetForFilesAsync([id], cancellationToken);
-            var usable = new List<string>();
-
-            if (links.TryGetValue(id, out var found))
-            {
-                foreach (var link in found)
-                {
-                    if (_subtitleChecker.TryCheck(mediaDirectory, link.RelativePath, out var relativePath, out _))
-                    {
-                        usable.Add(relativePath);
-                    }
-                }
-            }
+            List<string> usable = links.TryGetValue(id, out var found)
+                ? _subtitleChecker.Usable(file.FullPath, found)
+                : [];
 
             if (usable.Count == 0)
             {
                 return NotFound();
             }
 
+            var mediaDirectory = Path.GetDirectoryName(file.FullPath) ?? string.Empty;
+
             if (usable.Count == 1)
             {
                 var fullPath = Path.Combine(mediaDirectory, usable[0]);
-                var contentType = DlnaMimeCatalog.TryGetByFileExtension(Path.GetExtension(fullPath), out var mime)
-                    ? mime.ToMimeString()
-                    : "text/plain";
 
-                return PhysicalFile(fullPath, contentType, Path.GetFileName(fullPath));
+                // Opened here rather than left to PhysicalFile, so a file deleted since the check is a 404 and
+                // not an exception once the response has started.
+                if (TryOpenSubtitle(fullPath) is not { } single)
+                {
+                    return NotFound();
+                }
+
+                var contentType = SubtitleContentType.For(fullPath, out var mime);
+
+                ScriptableContentHeaders.Apply(Response, mime);
+
+                return File(single, contentType, Path.GetFileName(fullPath));
             }
 
-            // ponytail: zipped in memory - subtitle files are a few tens of KB each; stream to a temp file if a
-            // library ever links dozens of large ones to one file.
-            using var buffer = new MemoryStream();
+            var zipFile = await WriteZipAsync(mediaDirectory, usable, cancellationToken);
 
-            using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+            if (zipFile is null)
             {
-                foreach (var relativePath in usable)
-                {
-                    zip.CreateEntryFromFile(Path.Combine(mediaDirectory, relativePath), relativePath, CompressionLevel.Optimal);
-                }
+                return NotFound();
             }
 
             var zipName = $"{Path.GetFileNameWithoutExtension(file.FileName)}.subtitles.zip";
 
-            return File(buffer.ToArray(), "application/zip", zipName);
+            // FileStreamResult disposes the stream once it is sent, and DeleteOnClose removes the file then.
+            return File(zipFile, "application/zip", zipName);
+        }
+
+        /// <summary>
+        /// Zips the files into a temporary file that deletes itself when closed, or returns null when none of
+        /// them could be read.
+        /// </summary>
+        /// <remarks>
+        /// On disc rather than in memory: a picture-based <c>.sub</c> runs to tens of megabytes, and this
+        /// server's hard constraint is memory. A file that went away since it was checked is left out rather
+        /// than failing the whole download.
+        /// </remarks>
+        private async Task<FileStream?> WriteZipAsync(
+            string mediaDirectory,
+            List<string> relativePaths,
+            CancellationToken cancellationToken)
+        {
+            var zipFile = new FileStream(
+                Path.Combine(Path.GetTempPath(), $"dlna-subtitles-{Guid.NewGuid():N}.zip"),
+                FileMode.CreateNew,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize: 4096,
+                FileOptions.DeleteOnClose | FileOptions.Asynchronous);
+
+            try
+            {
+                var written = 0;
+
+                using (var zip = new ZipArchive(zipFile, ZipArchiveMode.Create, leaveOpen: true))
+                {
+                    foreach (var relativePath in relativePaths)
+                    {
+                        await using var source = TryOpenSubtitle(Path.Combine(mediaDirectory, relativePath));
+
+                        if (source is null)
+                        {
+                            continue;
+                        }
+
+                        await using var entry = zip.CreateEntry(relativePath, CompressionLevel.Fastest).Open();
+                        await source.CopyToAsync(entry, cancellationToken);
+                        written++;
+                    }
+                }
+
+                if (written == 0)
+                {
+                    await zipFile.DisposeAsync();
+
+                    return null;
+                }
+
+                zipFile.Position = 0;
+
+                return zipFile;
+            }
+            catch
+            {
+                await zipFile.DisposeAsync();
+
+                throw;
+            }
+        }
+
+        private FileStream? TryOpenSubtitle(string fullPath)
+        {
+            try
+            {
+                return new FileStream(
+                    fullPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize: 4096,
+                    useAsync: true);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                LogSubtitleSkipped(fullPath, exception);
+
+                return null;
+            }
         }
     }
 }

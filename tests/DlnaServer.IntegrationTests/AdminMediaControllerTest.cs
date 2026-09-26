@@ -133,10 +133,12 @@ namespace DlnaServer.IntegrationTests
             var result = await controller.GetSubtitles(_fileId, cancellationToken: CancellationToken.None);
 
             // Assert
-            result.Should().BeOfType<PhysicalFileResult>(
+            var single = result.Should().BeOfType<FileStreamResult>(
                     "because a single linked subtitle is downloaded as itself, not wrapped in a zip")
-                .Which.FileDownloadName.Should().Be("film.en.srt",
-                    "because the browser saves it under the subtitle's own name");
+                .Which;
+            await using var stream = single.FileStream;
+            single.FileDownloadName.Should().Be("film.en.srt",
+                "because the browser saves it under the subtitle's own name");
         }
 
         [Test]
@@ -157,15 +159,143 @@ namespace DlnaServer.IntegrationTests
             var result = await controller.GetSubtitles(_fileId, cancellationToken: CancellationToken.None);
 
             // Assert
-            var zipped = result.Should().BeOfType<FileContentResult>(
+            var zipped = result.Should().BeOfType<FileStreamResult>(
                     "because several linked subtitles arrive as one download")
                 .Which;
             zipped.FileDownloadName.Should().Be("film.subtitles.zip",
                 "because the zip is named after the media file it belongs to");
-
-            using var archive = new ZipArchive(new MemoryStream(zipped.FileContents), ZipArchiveMode.Read);
-            archive.Entries.Select(static e => e.FullName).Should().BeEquivalentTo(["film.en.srt", "Subs/film.en.srt"],
+            EntryNames(zipped).Should().BeEquivalentTo(["film.en.srt", "Subs/film.en.srt"],
                 "because each entry keeps its path from the film's folder, so two files of one name stay apart");
+        }
+
+        [Test]
+        public async Task GetSubtitles_ZipsIntoATemporaryFileThatGoesWithTheResponse()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine(_root, "film.mkv"));
+            await File.WriteAllTextAsync(Path.Combine(_root, "film.en.srt"), "en");
+            await File.WriteAllTextAsync(Path.Combine(_root, "film.fr.srt"), "fr");
+            var subtitles = new FakeSubtitleRepository();
+            subtitles.Links.Add(CreateSubtitle(film, "film.en.srt"));
+            subtitles.Links.Add(CreateSubtitle(film, "film.fr.srt"));
+
+            var controller = CreateController(
+                repository: new RecordingMediaFileRepository { File = film },
+                subtitles: subtitles,
+                checker: null);
+
+            // Act
+            var result = await controller.GetSubtitles(_fileId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            var zipFile = result.Should().BeOfType<FileStreamResult>(
+                    "because the zip is streamed from disc rather than built in memory")
+                .Which.FileStream.Should().BeOfType<FileStream>("because a picture-based .sub runs to tens of megabytes")
+                .Which;
+            var path = zipFile.Name;
+            File.Exists(path).Should().BeTrue("because the zip is on disc while the response is being sent");
+
+            await zipFile.DisposeAsync();
+
+            File.Exists(path).Should().BeFalse(
+                "because the response disposes the stream once it is sent, and the file deletes itself then");
+        }
+
+        [Test]
+        public async Task GetSubtitles_WhenALinkedFileVanishedAfterTheCheck_LeavesItOutOfTheZip()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine(_root, "film.mkv"));
+            await File.WriteAllTextAsync(Path.Combine(_root, "film.en.srt"), "en");
+            await File.WriteAllTextAsync(Path.Combine(_root, "film.de.srt"), "de");
+            var subtitles = new FakeSubtitleRepository();
+            subtitles.Links.Add(CreateSubtitle(film, "film.en.srt"));
+            subtitles.Links.Add(CreateSubtitle(film, "film.fr.srt"));
+            subtitles.Links.Add(CreateSubtitle(film, "film.de.srt"));
+
+            var controller = CreateController(
+                repository: new RecordingMediaFileRepository { File = film },
+                subtitles: subtitles,
+                checker: new AcceptingSubtitleFileChecker());
+
+            // Act
+            var result = await controller.GetSubtitles(_fileId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            var zipped = result.Should().BeOfType<FileStreamResult>(
+                    "because one missing file must not fail the download of the others")
+                .Which;
+            EntryNames(zipped).Should().BeEquivalentTo(["film.en.srt", "film.de.srt"],
+                "because the file deleted since it was checked is left out and the rest still arrive");
+        }
+
+        [Test]
+        public async Task GetSubtitles_WhenEveryLinkedFileVanishedAfterTheCheck_ReturnsNotFound()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine(_root, "film.mkv"));
+            var subtitles = new FakeSubtitleRepository();
+            subtitles.Links.Add(CreateSubtitle(film, "film.en.srt"));
+            subtitles.Links.Add(CreateSubtitle(film, "film.fr.srt"));
+
+            var controller = CreateController(
+                repository: new RecordingMediaFileRepository { File = film },
+                subtitles: subtitles,
+                checker: new AcceptingSubtitleFileChecker());
+
+            // Act
+            var result = await controller.GetSubtitles(_fileId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            result.Should().BeOfType<NotFoundResult>("because an empty zip is not a download of anything");
+        }
+
+        [Test]
+        public async Task GetSubtitles_WhenTheOnlyLinkedFileVanishedAfterTheCheck_ReturnsNotFound()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine(_root, "film.mkv"));
+            var subtitles = new FakeSubtitleRepository();
+            subtitles.Links.Add(CreateSubtitle(film, "film.en.srt"));
+
+            var controller = CreateController(
+                repository: new RecordingMediaFileRepository { File = film },
+                subtitles: subtitles,
+                checker: new AcceptingSubtitleFileChecker());
+
+            // Act
+            var result = await controller.GetSubtitles(_fileId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            result.Should().BeOfType<NotFoundResult>(
+                "because a file deleted since the check is a 404, not an exception once the response has begun");
+        }
+
+        [Test]
+        public async Task GetSubtitles_WithOneFileLinkedTwice_DownloadsItOnce()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine(_root, "film.mkv"));
+            await File.WriteAllTextAsync(Path.Combine(_root, "film.en.srt"), "en");
+            var subtitles = new FakeSubtitleRepository();
+            subtitles.Links.Add(CreateSubtitle(film, "film.en.srt"));
+            subtitles.Links.Add(CreateSubtitle(film, "film.en.srt"));
+
+            var controller = CreateController(
+                repository: new RecordingMediaFileRepository { File = film },
+                subtitles: subtitles,
+                checker: null);
+
+            // Act
+            var result = await controller.GetSubtitles(_fileId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            var single = result.Should().BeOfType<FileStreamResult>(
+                    "because two links to one file are one subtitle, not a zip holding a duplicate entry")
+                .Which;
+            await using var stream = single.FileStream;
+            single.FileDownloadName.Should().Be("film.en.srt",
+                "because the one file is downloaded as itself");
         }
 
         [Test]
@@ -188,9 +318,17 @@ namespace DlnaServer.IntegrationTests
                 "because a stored path the subtitle rule refuses is never served, so nothing is left to download");
         }
 
+        private static List<string> EntryNames(FileStreamResult zipped)
+        {
+            using var archive = new ZipArchive(zipped.FileStream, ZipArchiveMode.Read, leaveOpen: false);
+
+            return archive.Entries.Select(static e => e.FullName).ToList();
+        }
+
         private AdminMediaController CreateController(
             RecordingMediaFileRepository repository,
-            FakeSubtitleRepository? subtitles = null)
+            FakeSubtitleRepository? subtitles = null,
+            ISubtitleFileChecker? checker = null)
         {
             var options = new StaticOptionsMonitor<DlnaOptions>(
                 new DlnaOptions { Library = { SubtitleFileExtensions = SubtitleFileExtensionDefaults.Create() } });
@@ -198,7 +336,7 @@ namespace DlnaServer.IntegrationTests
             return new AdminMediaController(
                 repository,
                 subtitles ?? new FakeSubtitleRepository(),
-                new SubtitleFileChecker(new TemporaryFolderVisibility(options, TimeProvider.System), options),
+                checker ?? new SubtitleFileChecker(new TemporaryFolderVisibility(options, TimeProvider.System), options),
                 _cache,
                 new MediaContentResolver(_cache, new MediaCacheBacklog()),
                 NullLogger<AdminMediaController>.Instance)

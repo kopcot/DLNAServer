@@ -65,7 +65,7 @@ namespace DlnaServer.Admin.Configuration
 
             foreach (var row in rows)
             {
-                var extension = ExtensionMap.Normalise(row.Extension);
+                var extension = FileExtension.Normalise(row.Extension);
 
                 if (extension.Length == 0)
                 {
@@ -98,7 +98,7 @@ namespace DlnaServer.Admin.Configuration
 
             foreach (var row in rows)
             {
-                map[ExtensionMap.Normalise(row.Extension)] = row.Kind;
+                map[FileExtension.Normalise(row.Extension)] = row.Kind;
             }
 
             return map;
