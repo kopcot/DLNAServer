@@ -1,3 +1,4 @@
+using System.Globalization;
 using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Dlna;
 
@@ -8,6 +9,15 @@ namespace DlnaServer.Core.Uploads
     /// </summary>
     public static class UploadFileName
     {
+        // Names Windows reserves for devices whatever extension follows them. Writing one from a Linux NAS
+        // succeeds, and the file then cannot be opened, moved or deleted from a Windows machine on the share.
+        private static readonly string[] _reservedDeviceNames =
+        [
+            "CON", "PRN", "AUX", "NUL",
+            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        ];
+
         /// <summary>
         /// The name to write, taken from what the browser said. Empty when nothing usable is left.
         /// </summary>
@@ -47,15 +57,19 @@ namespace DlnaServer.Core.Uploads
 
             // Control characters too: on Linux the filesystem refuses only '\0' and '/', so a line break
             // sent through filename*= would otherwise reach the disc, the report and every log line.
+            // Formatting characters as well - a right-to-left override makes film.exe.mp4 read differently.
             foreach (var character in name)
             {
-                if (char.IsControl(character))
+                if (char.IsControl(character)
+                    || CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.Format)
                 {
                     return string.Empty;
                 }
             }
 
-            return name;
+            return IsReservedDeviceName(name)
+                ? string.Empty
+                : name;
         }
 
         /// <summary>
@@ -88,6 +102,28 @@ namespace DlnaServer.Core.Uploads
 
             return DlnaMimeCatalog.TryGetByFileExtension(extension, out var fromCatalog)
                 && fromCatalog.IsPresentableMedia();
+        }
+
+        // CON, CON.mp4 and CON.part1.mp4 are all the device: Windows reads the name up to its first dot,
+        // ignoring trailing spaces.
+        private static bool IsReservedDeviceName(ReadOnlySpan<char> name)
+        {
+            var dot = name.IndexOf('.');
+            var stem = dot < 0
+                ? name
+                : name[..dot];
+
+            stem = stem.TrimEnd(' ');
+
+            foreach (var reserved in _reservedDeviceNames)
+            {
+                if (stem.Equals(reserved, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

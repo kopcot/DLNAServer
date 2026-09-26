@@ -217,6 +217,35 @@ namespace DlnaServer.IntegrationTests
                 .Which.ContentType.Should().Be("text/srt", "because the MIME comes from the subtitle's own extension");
         }
 
+        /// <summary>
+        /// The validator refuses TTML as a subtitle type, so this reaches it only through options built past
+        /// validation - which is exactly the case the response header is there for.
+        /// </summary>
+        [Test]
+        public async Task GetSubtitle_ForAnXmlSubtitle_SandboxesTheResponse()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine(_root, "film.mkv"));
+            File.WriteAllText(Path.Combine(_root, "film.en.ttml"), "<tt xmlns=\"http://www.w3.org/ns/ttml\"/>");
+            var subtitles = new FakeSubtitleRepository();
+            var subtitle = CreateSubtitle(film, "film.en.ttml");
+            subtitles.Links.Add(subtitle);
+
+            var controller = CreateController(
+                repository: new RecordingMediaFileRepository { File = film },
+                content: new FakeContentResolver(),
+                cache: new FakeCache(),
+                subtitles: subtitles,
+                subtitleTypes: new Dictionary<string, DlnaMedia>(StringComparer.OrdinalIgnoreCase) { [".ttml"] = DlnaMedia.Video });
+
+            // Act
+            _ = await controller.GetSubtitle(subtitle.PublicId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            controller.HttpContext.Response.Headers.ContentSecurityPolicy.ToString().Should().Be("sandbox",
+                "because an XML subtitle is served inline, and a browser opening it would render it as a page");
+        }
+
         [Test]
         public async Task GetSubtitle_ForAStoredPathOutsideTheFilmsFolder_RefusesIt()
         {
@@ -357,10 +386,14 @@ namespace DlnaServer.IntegrationTests
             RecordingMediaFileRepository repository,
             IMediaContentResolver content,
             FakeCache cache,
-            FakeSubtitleRepository? subtitles = null)
+            FakeSubtitleRepository? subtitles = null,
+            Dictionary<string, DlnaMedia>? subtitleTypes = null)
         {
             var options = new StaticOptionsMonitor<DlnaOptions>(
-                new DlnaOptions { Library = { SubtitleFileExtensions = SubtitleFileExtensionDefaults.Create() } });
+                new DlnaOptions
+                {
+                    Library = { SubtitleFileExtensions = subtitleTypes ?? SubtitleFileExtensionDefaults.Create() },
+                });
 
             return new FileServerController(
                 repository,

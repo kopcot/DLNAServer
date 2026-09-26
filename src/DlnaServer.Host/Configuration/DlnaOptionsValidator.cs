@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.ComponentModel.DataAnnotations;
 using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Dlna;
@@ -20,8 +19,12 @@ namespace DlnaServer.Host.Configuration
         // hide half the library - segment alignment took that away rather than this rule.
         private const int MinimumExcludeFolderLength = 3;
 
-        // What an extension may not contain past its leading dot - the set the file types editor refuses.
-        private static readonly SearchValues<char> _rejectedExtensionCharacters = SearchValues.Create(" \t\r\n/\\:*?\"<>|");
+        // What the subtitle-types message offers instead: every subtitle format this server links and serves.
+        private static readonly string _servableSubtitleExtensions = string.Join(
+            ", ",
+            DlnaMimeCatalog.All
+                .Where(static i => IsServableSubtitle(i.Mime))
+                .SelectMany(static i => i.FileExtensions));
 
         /// <remarks>
         /// Every failure this class produces is rendered verbatim by the admin Settings page, which is for
@@ -212,30 +215,6 @@ namespace DlnaServer.Host.Configuration
         }
 
         /// <summary>
-        /// Exclusion entries have to be folder names, partial paths or full paths that cannot be typos.
-        /// </summary>
-        /// <remarks>
-        /// A <b>path is now allowed</b> - <c>Films/Private</c>, or the whole path as it reads on this
-        /// server. This used to refuse any entry containing a separator, which was half of a
-        /// customer-reported defect: the other half was that matching was a raw substring, so
-        /// <c>path1</c> also hid <c>path1L</c>. Both halves had to be fixed together, because allowing a
-        /// path without aligning the match to segment boundaries would have made the over-matching worse
-        /// rather than better. Either separator may be used; they are equivalent.
-        /// <para>
-        /// A rooted entry is <b>not</b> refused, and an earlier version of this validator did refuse one.
-        /// <see cref="Core.Files.PathExclusion"/> trims an entry's surrounding separators and then looks
-        /// for it as a run of whole segments anywhere in the path, so a leading <c>/</c> or a drive
-        /// letter is simply part of that run and matches - which is what makes pasting a folder's full
-        /// path the obvious thing an operator would try, and correct.
-        /// </para>
-        /// <para>
-        /// The minimum length is kept as a typo guard, though segment alignment has taken most of its
-        /// force: a one-character entry now hides only folders named exactly that character, where before
-        /// a single letter typed into the Settings page hid the entire library from renderers and from
-        /// the admin UI while the scanner carried on indexing it, with nothing saying so.
-        /// </para>
-        /// </remarks>
-        /// <summary>
         /// The folder uploads are pinned to has to be one the library actually reads.
         /// </summary>
         /// <remarks>
@@ -305,6 +284,30 @@ namespace DlnaServer.Host.Configuration
                 + "appear in the library.";
         }
 
+        /// <summary>
+        /// Exclusion entries have to be folder names, partial paths or full paths that cannot be typos.
+        /// </summary>
+        /// <remarks>
+        /// A <b>path is now allowed</b> - <c>Films/Private</c>, or the whole path as it reads on this
+        /// server. This used to refuse any entry containing a separator, which was half of a
+        /// customer-reported defect: the other half was that matching was a raw substring, so
+        /// <c>path1</c> also hid <c>path1L</c>. Both halves had to be fixed together, because allowing a
+        /// path without aligning the match to segment boundaries would have made the over-matching worse
+        /// rather than better. Either separator may be used; they are equivalent.
+        /// <para>
+        /// A rooted entry is <b>not</b> refused, and an earlier version of this validator did refuse one.
+        /// <see cref="Core.Files.PathExclusion"/> trims an entry's surrounding separators and then looks
+        /// for it as a run of whole segments anywhere in the path, so a leading <c>/</c> or a drive
+        /// letter is simply part of that run and matches - which is what makes pasting a folder's full
+        /// path the obvious thing an operator would try, and correct.
+        /// </para>
+        /// <para>
+        /// The minimum length is kept as a typo guard, though segment alignment has taken most of its
+        /// force: a one-character entry now hides only folders named exactly that character, where before
+        /// a single letter typed into the Settings page hid the entire library from renderers and from
+        /// the admin UI while the scanner carried on indexing it, with nothing saying so.
+        /// </para>
+        /// </remarks>
         private static IEnumerable<string> ValidateExcludeFolders(DlnaOptions options)
         {
             // DlnaOptionsDefaults adds the preview folder to this list unconditionally, before validation
@@ -391,6 +394,13 @@ namespace DlnaServer.Host.Configuration
         /// A type that is also media is the one mistake here that fails quietly: the scanner resolves media
         /// first, so those files would be indexed as items of their own and never linked. The catalog counts
         /// as well as <c>MediaFileExtensions</c>, because the scanner falls back to it.
+        /// <para>
+        /// <b>Only a subtitle format the catalog knows is accepted.</b> A linked file is served inline on the
+        /// media port and downloaded from the admin one, so a free-form type would let the Settings page turn
+        /// any sidecar into a served file - <c>.json</c>, <c>.db</c> or <c>.log</c> beside the binaries, when
+        /// the application folder is the library. TTML is refused too: it is served as XML, which a browser
+        /// renders as a document rather than downloading.
+        /// </para>
         /// </remarks>
         private static IEnumerable<string> ValidateSubtitleFileExtensions(DlnaOptions options)
         {
@@ -399,7 +409,7 @@ namespace DlnaServer.Host.Configuration
 
             foreach (var (extension, kind) in options.Library.SubtitleFileExtensions)
             {
-                if (extension.Length <= 1 || extension.AsSpan(1).ContainsAny(_rejectedExtensionCharacters))
+                if (extension.Length <= 1 || FileExtension.HasRejectedCharacter(extension.AsSpan(1)))
                 {
                     yield return
                         $"'{extension}' in the {label} cannot be used as an extension - give one such as .srt, "
@@ -414,14 +424,35 @@ namespace DlnaServer.Host.Configuration
                         $"'{extension}' in the {label} has to go with Video, for subtitles, or Audio, for lyrics.";
                 }
 
-                if (mediaExtensions.Contains(extension)
-                    || (DlnaMimeCatalog.TryGetByFileExtension(extension, out var mime) && mime.IsPresentableMedia()))
+                var isKnown = DlnaMimeCatalog.TryGetByFileExtension(extension, out var mime);
+
+                if (mediaExtensions.Contains(extension) || (isKnown && mime.IsPresentableMedia()))
                 {
                     yield return
                         $"'{extension}' is in the {label} but is also a media file type, so those files would be "
                         + "added to the library on their own instead of being linked as subtitles.";
+
+                    continue;
+                }
+
+                if (isKnown && mime == DlnaMime.SubtitleTtmlXml)
+                {
+                    yield return
+                        $"'{extension}' cannot be one of the {label}. It is an XML format, which a web browser opens "
+                        + "as a page instead of saving, so it is not served. Convert it to .srt or .vtt instead.";
+                }
+                else if (!isKnown || !IsServableSubtitle(mime))
+                {
+                    yield return
+                        $"'{extension}' is not a subtitle or lyrics format this server can serve, so it cannot be "
+                        + $"one of the {label}. Choose from: {_servableSubtitleExtensions}.";
                 }
             }
+        }
+
+        private static bool IsServableSubtitle(DlnaMime mime)
+        {
+            return mime.ToMedia() == DlnaMedia.Subtitle && mime != DlnaMime.SubtitleTtmlXml;
         }
 
         /// <summary>

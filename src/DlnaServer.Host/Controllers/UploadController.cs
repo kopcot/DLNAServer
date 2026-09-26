@@ -67,6 +67,12 @@ namespace DlnaServer.Host.Controllers
         /// </remarks>
         private const string PartialSuffix = ".uploading";
 
+        // The length of the per-part identifier between the file's name and PartialSuffix: a Guid as "N".
+        private const int PartialIdLength = 32;
+
+        // What the report calls the part an upload was cut short at, which has no file name of its own.
+        private const string StoppedEntryName = "(the rest of the upload)";
+
         /// <summary>
         /// The most a form field may hold. The real ones are a folder path and a radio button.
         /// </summary>
@@ -160,6 +166,8 @@ namespace DlnaServer.Host.Controllers
             string? destination = null;
             var written = 0;
             var sections = 0;
+            var movedNames = new HashSet<string>(StringComparer.Ordinal);
+            string? stoppedBecause = null;
 
             // No BodyLengthLimit: it applies to every part alike, so it would cap the files as well.
             // Fields are bounded by ReadFieldAsync instead, and the part count by MaxSections.
@@ -170,7 +178,8 @@ namespace DlnaServer.Host.Controllers
             {
                 if (++sections > MaxSections)
                 {
-                    return BadRequest($"An upload may carry at most {MaxSections} files and fields.");
+                    stoppedBecause = $"An upload may carry at most {MaxSections} files and fields.";
+                    break;
                 }
 
                 if (!ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var disposition))
@@ -205,6 +214,7 @@ namespace DlnaServer.Host.Controllers
                     if (file.Outcome is UploadOutcome.Uploaded or UploadOutcome.Overwritten)
                     {
                         written++;
+                        movedNames.Add(file.FileName);
                     }
                 }
                 else if (disposition.Name.HasValue)
@@ -219,7 +229,8 @@ namespace DlnaServer.Host.Controllers
 
                         if (value is null)
                         {
-                            return BadRequest($"A form field may hold at most {MaxFieldLengthInBytes} bytes.");
+                            stoppedBecause = $"A form field may hold at most {MaxFieldLengthInBytes} bytes.";
+                            break;
                         }
 
                         switch (name)
@@ -245,16 +256,33 @@ namespace DlnaServer.Host.Controllers
                 section = await reader.ReadNextSectionAsync(cancellationToken);
             }
 
+            if (stoppedBecause is not null && written == 0)
+            {
+                return BadRequest(stoppedBecause);
+            }
+
             if (destination is null
                 && !UploadDestination.TryResolve(options, root, subFolder, out destination, out var unresolved))
             {
                 return BadRequest(unresolved);
             }
 
+            // Files before the refused part are already in place, so they are reported, scanned and remembered
+            // like any other - a bare 400 would leave them on disc with nothing but the security log saying so.
+            if (stoppedBecause is not null)
+            {
+                files.Add(Refuse(sender, destination, StoppedEntryName, $"{stoppedBecause} Nothing after it was read."));
+            }
+
+            if (movedNames.Count > 0)
+            {
+                DeleteStalePartials(destination, movedNames);
+            }
+
             var report = new UploadReport
             {
                 Id = Guid.NewGuid(),
-                CompletedUtc = DateTimeOffset.UtcNow,
+                CompletedUtc = _timeProvider.GetUtcNow(),
                 Destination = destination,
                 Files = files,
             };
@@ -315,13 +343,7 @@ namespace DlnaServer.Host.Controllers
 
             if (exists && !overwrite)
             {
-                return Record(
-                    sender,
-                    destination,
-                    fileName,
-                    sizeInBytes: 0,
-                    UploadOutcome.Skipped,
-                    "A file of that name was already there.");
+                return Skip(sender, destination, fileName);
             }
 
             // Unique to this part, so two uploads of the same name at once cannot delete each other's file
@@ -354,17 +376,10 @@ namespace DlnaServer.Host.Controllers
                 {
                     // Another upload of the same name finished while this one was copying, and the
                     // operator asked for existing files to be kept.
-                    return Record(
-                        sender,
-                        destination,
-                        fileName,
-                        sizeInBytes: 0,
-                        UploadOutcome.Skipped,
-                        "A file of that name was already there.");
+                    return Skip(sender, destination, fileName);
                 }
 
                 isMoved = true;
-                DeleteStalePartials(destination, fileName);
 
                 return Record(
                     sender,
@@ -494,19 +509,19 @@ namespace DlnaServer.Host.Controllers
         }
 
         // Partials are uniquely named, so a crashed upload's leftover is no longer overwritten by the next
-        // upload of that name; this is where it goes instead. Only this name's, and only once long idle.
-        private void DeleteStalePartials(string destination, string fileName)
+        // upload of that name; this is where it goes instead. Only these names', and only once long idle.
+        // One listing for the whole request: every file in it went to the same folder.
+        private void DeleteStalePartials(string destination, HashSet<string> fileNames)
         {
             var staleBefore = _timeProvider.GetUtcNow().UtcDateTime - _stalePartialAge;
-            var prefix = fileName + ".";
 
             try
             {
-                // Filtered by prefix here rather than in the pattern: '*' and '?' are legal in a Linux file
+                // Filtered by name here rather than in the pattern: '*' and '?' are legal in a Linux file
                 // name, and inside a search pattern they would widen it to other files' partials.
                 foreach (var partial in Directory.EnumerateFiles(destination, $"*{PartialSuffix}"))
                 {
-                    if (Path.GetFileName(partial).StartsWith(prefix, StringComparison.Ordinal)
+                    if (IsPartialOf(Path.GetFileName(partial), fileNames)
                         && System.IO.File.GetLastWriteTimeUtc(partial) < staleBefore)
                     {
                         Delete(partial);
@@ -519,9 +534,33 @@ namespace DlnaServer.Host.Controllers
             }
         }
 
+        // Exactly the shape ReceiveAsync writes - <name>.<32 hex digits>.uploading - so another file whose
+        // name merely starts with an uploaded one's, film.mp4.mp4 beside film.mp4, is never taken for it.
+        private static bool IsPartialOf(string partialName, HashSet<string> fileNames)
+        {
+            var stemLength = partialName.Length - PartialSuffix.Length - PartialIdLength - 1;
+
+            return stemLength > 0
+                && partialName.EndsWith(PartialSuffix, StringComparison.Ordinal)
+                && partialName[stemLength] == '.'
+                && Guid.TryParseExact(partialName.AsSpan(stemLength + 1, PartialIdLength), "N", out _)
+                && fileNames.Contains(partialName[..stemLength]);
+        }
+
         private UploadedFile Refuse(Sender sender, string destination, string fileName, string reason)
         {
             return Record(sender, destination, fileName, sizeInBytes: 0, UploadOutcome.Failed, reason);
+        }
+
+        private UploadedFile Skip(Sender sender, string destination, string fileName)
+        {
+            return Record(
+                sender,
+                destination,
+                fileName,
+                sizeInBytes: 0,
+                UploadOutcome.Skipped,
+                "A file of that name was already there.");
         }
 
         /// <summary>
@@ -592,7 +631,7 @@ namespace DlnaServer.Host.Controllers
                 HttpOnly = true,
                 SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Strict,
                 IsEssential = true,
-                Expires = DateTimeOffset.UtcNow.AddYears(1),
+                Expires = _timeProvider.GetUtcNow().AddYears(1),
             });
 
             try

@@ -3,6 +3,7 @@ using System.Text;
 using System.Xml;
 using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Dlna;
+using DlnaServer.Core.Subtitles;
 using DlnaServer.Upnp.Constants;
 using DlnaServer.Upnp.Didl;
 using DlnaServer.Upnp.Ssdp;
@@ -184,16 +185,16 @@ namespace DlnaServer.Host.Upnp.Control
         /// </remarks>
         public static IReadOnlyList<SubtitleFileDto> Offerable(
             IReadOnlyList<SubtitleFileDto> subtitles,
-            IDictionary<string, DlnaMedia> subtitleTypes)
+            IReadOnlyDictionary<string, DlnaMedia> subtitleTypes)
         {
             ArgumentNullException.ThrowIfNull(subtitles);
             ArgumentNullException.ThrowIfNull(subtitleTypes);
 
             for (var i = 0; i < subtitles.Count; i++)
             {
-                if (!subtitleTypes.ContainsKey(Path.GetExtension(subtitles[i].RelativePath)))
+                if (!SubtitleMatcher.IsLinkablePath(subtitles[i].RelativePath, subtitleTypes))
                 {
-                    return subtitles.Where(s => subtitleTypes.ContainsKey(Path.GetExtension(s.RelativePath))).ToArray();
+                    return subtitles.Where(s => SubtitleMatcher.IsLinkablePath(s.RelativePath, subtitleTypes)).ToArray();
                 }
             }
 

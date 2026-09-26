@@ -59,13 +59,18 @@ namespace DlnaServer.Host.Uploads
         }
 
         /// <summary>
-        /// Rewrites line breaks, other control characters and double quotes as <c>\uXXXX</c>, so one
-        /// upload stays one line.
+        /// Rewrites line breaks, other control characters, invisible formatting characters, double quotes
+        /// and backslashes as <c>\uXXXX</c>, so one upload stays one line and reads as what was sent.
         /// </summary>
         /// <remarks>
         /// A refused file is logged under the name the browser sent, and <c>filename*=</c> can carry a
         /// percent-encoded line break. Written raw, that name would end the line and start a forged one,
         /// and a stray quote would end the quoted value early - in the one log that exists to be trusted.
+        /// <para>
+        /// A backslash is escaped so a name that already spells <c>\u000A</c> cannot pass for an escaped line
+        /// break, and a formatting character - a right-to-left override, a zero-width space - so the name a
+        /// reader sees is the one on disc rather than one reordered or split by the invisible character.
+        /// </para>
         /// </remarks>
         internal static string Escape(string value)
         {
@@ -104,7 +109,9 @@ namespace DlnaServer.Host.Uploads
         // U+2028 and U+2029 are not control characters, but an editor breaks the line on them all the same.
         private static bool NeedsEscaping(char character)
         {
-            return char.IsControl(character) || character is '"' or '\u2028' or '\u2029';
+            return char.IsControl(character)
+                || character is '"' or '\\' or '\u2028' or '\u2029'
+                || CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.Format;
         }
     }
 }

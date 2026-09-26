@@ -473,6 +473,46 @@ namespace DlnaServer.IntegrationTests
             result.FailureMessage.Should().Contain(extension, "because the operator has to know which line to change");
         }
 
+        [TestCase(".json")]
+        [TestCase(".sqlite")]
+        [TestCase(".db")]
+        [TestCase(".log")]
+        [TestCase(".txt")]
+        public void Validate_ForASubtitleTypeTheCatalogDoesNotKnowAsASubtitle_Fails(string extension)
+        {
+            // Arrange
+            var options = CreateValidOptions();
+            options.Library.SubtitleFileExtensions = new Dictionary<string, DlnaMedia> { [extension] = DlnaMedia.Video };
+
+            // Act
+            var result = _validator.Validate(name: null, options: options);
+
+            // Assert
+            result.Failed.Should().BeTrue(
+                $"because a linked file is served, and '{extension}' would let the Settings page serve any sidecar "
+                + "- the database or the logs beside the binaries, when the application folder is the library");
+            result.FailureMessage.Should().Contain(extension, "because the operator has to know which line to change");
+            result.FailureMessage.Should().Contain(".srt",
+                "because the message lists the formats that can be used instead");
+        }
+
+        [Test]
+        public void Validate_ForTtmlAsASubtitleType_Fails()
+        {
+            // Arrange
+            var options = CreateValidOptions();
+            options.Library.SubtitleFileExtensions = new Dictionary<string, DlnaMedia> { [".ttml"] = DlnaMedia.Video };
+
+            // Act
+            var result = _validator.Validate(name: null, options: options);
+
+            // Assert
+            result.Failed.Should().BeTrue(
+                "because TTML is served as XML, which a browser renders as a page instead of downloading, although "
+                + "the catalog knows it as a subtitle");
+            result.FailureMessage.Should().Contain(".ttml", "because the operator has to know which line to change");
+        }
+
         private DlnaOptions CreateValidOptions()
         {
             return new DlnaOptions

@@ -131,8 +131,8 @@ namespace DlnaServer.IntegrationTests
         public async Task Upload_RemovesALongIdlePartialOfTheSameNameOnly()
         {
             // Arrange - one left by a crashed upload of this name, one of another name.
-            var abandoned = Path.Combine(_destination, "film.mp4.0123456789abcdef.uploading");
-            var otherName = Path.Combine(_destination, "other.mp4.0123456789abcdef.uploading");
+            var abandoned = Path.Combine(_destination, $"film.mp4.{Guid.NewGuid():N}.uploading");
+            var otherName = Path.Combine(_destination, $"other.mp4.{Guid.NewGuid():N}.uploading");
             var longAgo = DateTime.UtcNow.AddHours(-2);
 
             foreach (var path in new[] { abandoned, otherName })
@@ -154,6 +154,68 @@ namespace DlnaServer.IntegrationTests
                 "because an hour-idle partial of this name was left by an upload that died with the process");
             File.Exists(otherName).Should().BeTrue(
                 "because only partials of the file just uploaded are tidied, never another file's");
+        }
+
+        [Test]
+        public async Task Upload_LeavesAPartialOfALongerNameAlone()
+        {
+            // Arrange - film.mp4.mp4 is another file, whose partial merely starts with this upload's name.
+            var longerName = Path.Combine(_destination, $"film.mp4.mp4.{Guid.NewGuid():N}.uploading");
+            await File.WriteAllTextAsync(longerName, "half", CancellationToken.None);
+            File.SetLastWriteTimeUtc(longerName, DateTime.UtcNow.AddHours(-2));
+
+            var body = Body(
+                Field(name: "root", value: _destination),
+                FilePart(fileName: "film.mp4", content: new byte[] { 1, 2, 3 }));
+            var controller = CreateController(body: new MemoryStream(body), devices: new FakeUploadDeviceRepository());
+
+            // Act
+            _ = await controller.Upload(cancellationToken: CancellationToken.None);
+
+            // Assert
+            File.Exists(longerName).Should().BeTrue(
+                "because only a partial of exactly the uploaded name is tidied, and film.mp4.mp4 is a different file");
+        }
+
+        [Test]
+        public async Task Upload_WithMorePartsThanTheCapAfterAFileWasWritten_ReportsTheFileAndStillScans()
+        {
+            // Arrange
+            var parts = new byte[1002][];
+            parts[0] = Field(name: "root", value: _destination);
+            parts[1] = FilePart(fileName: "film.mp4", content: new byte[] { 1, 2, 3 });
+
+            for (var index = 2; index < parts.Length; index++)
+            {
+                parts[index] = Field(name: "comment", value: string.Empty);
+            }
+
+            var devices = new FakeUploadDeviceRepository();
+            var controller = CreateController(body: new MemoryStream(Body(parts)), devices: devices);
+
+            // Act
+            var result = await controller.Upload(cancellationToken: CancellationToken.None);
+
+            // Assert
+            await AssertFinishedAfterStoppingAsync(result: result, controller: controller, devices: devices);
+        }
+
+        [Test]
+        public async Task Upload_WithAFormFieldPastTheLimitAfterAFileWasWritten_ReportsTheFileAndStillScans()
+        {
+            // Arrange
+            var body = Body(
+                Field(name: "root", value: _destination),
+                FilePart(fileName: "film.mp4", content: new byte[] { 1, 2, 3 }),
+                Field(name: "existing", value: new string('a', 5 * 1024)));
+            var devices = new FakeUploadDeviceRepository();
+            var controller = CreateController(body: new MemoryStream(body), devices: devices);
+
+            // Act
+            var result = await controller.Upload(cancellationToken: CancellationToken.None);
+
+            // Assert
+            await AssertFinishedAfterStoppingAsync(result: result, controller: controller, devices: devices);
         }
 
         [Test]
@@ -259,6 +321,30 @@ namespace DlnaServer.IntegrationTests
                     HttpContext = httpContext,
                 },
             };
+        }
+
+        // The shared outcome of a post refused part-way through, once a file had already been moved into place.
+        private async Task AssertFinishedAfterStoppingAsync(
+            IActionResult result,
+            UploadController controller,
+            FakeUploadDeviceRepository devices)
+        {
+            result.Should().BeOfType<StatusCodeResult>().Which.StatusCode.Should().Be(StatusCodes.Status303SeeOther,
+                "because a file is already in place, so the post finishes with its report rather than a bare 400");
+            File.Exists(Path.Combine(_destination, "film.mp4")).Should().BeTrue(
+                "because the file before the refused part was written before the refusal");
+
+            var files = ReportFor(controller).Files;
+            files.Should().HaveCount(2, "because the report lists the written file and the point the post was refused at");
+            files[0].Outcome.Should().Be(UploadOutcome.Uploaded, "because the first file was written whole");
+            files[1].Outcome.Should().Be(UploadOutcome.Failed,
+                "because the rest of the post was refused, and the report has to say so");
+
+            (await _scanSignal.WaitForRequestAsync(timeout: TimeSpan.Zero, cancellationToken: CancellationToken.None))
+                .Should().BeTrue("because the written file is on disc and must be indexed like any other");
+            devices.Recorded.Should().ContainSingle(
+                    "because the destination is remembered for a post that wrote something")
+                .Which.FileCount.Should().Be(1, "because one file was written");
         }
 
         private UploadReport ReportFor(UploadController controller)

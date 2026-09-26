@@ -13,8 +13,9 @@ namespace DlnaServer.Core.Configuration
     /// </remarks>
     public static class SubtitleFileExtensionDefaults
     {
-        // Not .ttml, which the catalog knows: it is served as application/ttml+xml, and an XML document is
-        // one a browser opening the media port's URL would render rather than download.
+        // Not .ttml, which the catalog knows: it is served as application/ttml+xml, which a browser renders
+        // rather than downloads. DlnaOptionsValidator refuses it, and anything the catalog does not know as a
+        // subtitle, so every entry here has to stay a catalog subtitle type or the defaults fail to boot.
         private static readonly (string Extension, DlnaMedia Kind)[] _entries =
         [
             (".srt", DlnaMedia.Video),

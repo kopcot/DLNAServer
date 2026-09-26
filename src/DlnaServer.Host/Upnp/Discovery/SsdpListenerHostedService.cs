@@ -123,6 +123,8 @@ namespace DlnaServer.Host.Upnp.Discovery
                     // A unicast M-SEARCH reaches port 1900 from anywhere that can route to it, with a
                     // source nobody verifies, so answering all of them made this a ~27x reflector aimed at
                     // whoever the source named. Televisions search by multicast, which no router forwards.
+                    // No same-/64 IPv6 test, unlike AdminSurfaceMiddleware: this socket is IPv4 only, so no
+                    // IPv6 peer ever arrives here - and UdpReceiveResult carries no local address to compare.
                     if (!LocalNetworkAddress.IsLocal(received.RemoteEndPoint.Address))
                     {
                         LogSearchFromOutsideIgnored(received.RemoteEndPoint);

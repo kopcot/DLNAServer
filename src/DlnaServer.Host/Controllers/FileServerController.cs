@@ -226,7 +226,7 @@ namespace DlnaServer.Host.Controllers
                     Path.GetDirectoryName(subtitle.MediaFileFullPath) ?? string.Empty,
                     subtitle.RelativePath,
                     [.. _visibility.HiddenFromDelivery],
-                    _options.CurrentValue.Library.SubtitleFileExtensions.AsReadOnly(),
+                    _options.CurrentValue.Library.SubtitleFileExtensions,
                     out _,
                     out var fullPath,
                     out _))
@@ -234,9 +234,11 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
-            var contentType = DlnaMimeCatalog.TryGetByFileExtension(Path.GetExtension(fullPath), out var mime)
-                ? mime.ToMimeString()
-                : "text/plain";
+            var contentType = SubtitleContentType.For(fullPath, out var mime);
+
+            // Served inline, so a type that can carry script is confined like any other media response. The
+            // validator already refuses to link one; this holds if that ever changes.
+            ScriptableContentHeaders.Apply(Response, mime);
 
             LogServed(fullPath, SourceDisc);
 

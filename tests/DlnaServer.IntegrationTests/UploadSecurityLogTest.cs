@@ -42,6 +42,21 @@ namespace DlnaServer.IntegrationTests
                 + "close its quoted value early");
         }
 
+        [TestCase("a\\u000Ab", @"a\u005Cu000Ab")]
+        [TestCase("film\u202Egnp.mp4", @"film\u202Egnp.mp4")]
+        [TestCase("a\u200Bb", @"a\u200Bb")]
+        public void Escape_RewritesBackslashesAndInvisibleFormattingCharacters(string value, string expected)
+        {
+            // Arrange
+            // Act
+            var escaped = UploadSecurityLog.Escape(value);
+
+            // Assert
+            escaped.Should().Be(expected,
+                "because a raw backslash could pass for an escape the log never wrote, and an invisible "
+                + "formatting character makes the name read as something other than what was sent");
+        }
+
         [Test]
         public void Escape_WithNothingToEscape_ReturnsTheSameInstance()
         {
