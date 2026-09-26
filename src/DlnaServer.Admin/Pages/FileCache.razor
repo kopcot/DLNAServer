@@ -80,8 +80,9 @@
 
     private ServedFileCacheReport _report = null!;
 
-    // Virtualize binds Items to ICollection<T>, which the cache's IReadOnlyList is not.
-    private List<string> _paths = [];
+    // Virtualize binds Items to ICollection<T>. The cache's IReadOnlyList is an array, which already is one,
+    // so a cache full of paths is not copied a second time on every reload.
+    private ICollection<string> _paths = [];
 
     // The work below blocks for the length of two compacting gen2 collections, and the button stayed
     // live throughout - a second press re-entered it.
@@ -176,7 +177,9 @@
     private void Reload()
     {
         _report = FileCacheStore.Describe();
-        _paths = [.. FileCacheStore.ListPaths()];
+        var paths = FileCacheStore.ListPaths();
+
+        _paths = paths as ICollection<string> ?? [.. paths];
     }
 
     /// <summary>

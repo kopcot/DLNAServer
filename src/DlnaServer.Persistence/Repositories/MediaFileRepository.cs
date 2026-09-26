@@ -257,17 +257,6 @@ namespace DlnaServer.Persistence.Repositories
             return await query.Skip(skip).Take(take).ToListAsync(cancellationToken);
         }
 
-        public async Task<IReadOnlyList<MediaFileDto>> GetByDirectoryAsync(
-            Guid directoryPublicId,
-            CancellationToken cancellationToken = default)
-        {
-            return await ProjectFiles(
-                    f => f.Directory != null && f.Directory.PublicId == directoryPublicId,
-                    hiddenFolders: _visibility.HiddenFromListings)
-                .OrderBy(static f => f.Title)
-                .ToListAsync(cancellationToken);
-        }
-
         public async Task<MediaFileNeighboursDto> GetPlayableNeighboursAsync(
             Guid directoryPublicId,
             Guid filePublicId,

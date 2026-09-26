@@ -143,6 +143,8 @@ else
     // indexed file is not worth a round trip per circuit per second.
     private static readonly TimeSpan _recentRefreshInterval = TimeSpan.FromSeconds(30);
 
+    private const string RecentRefreshFailure = "Recently added could not be refreshed.";
+
     private MediaDirectoryDto? _directory;
     private IReadOnlyList<MediaDirectoryDto> _trail = [];
     // A List rather than the repository's IReadOnlyList: Virtualize binds Items to ICollection<T>.
@@ -194,15 +196,15 @@ else
                     continue;
                 }
 
-                // Guarded rather than gated: this task is discarded, so a DbException - "database is
+                // Guarded, not only gated: this task is discarded, so a DbException - "database is
                 // locked" while VACUUM holds the file - would end the loop and freeze the list silently.
-                Message = null;
+                Message = WithoutRecentRefreshFailure(Message);
 
                 await RunGuardedAsync(
                     async token => _recent = await Files.GetRecentlyAddedAsync(
                         Options.CurrentValue.Library.RecentlyAddedCount,
                         token),
-                    "Recently added could not be refreshed.");
+                    RecentRefreshFailure);
 
                 await InvokeAsync(StateHasChanged);
             }
@@ -211,6 +213,20 @@ else
         {
             // The operator navigated away, or the circuit went down. Nothing left to refresh.
         }
+    }
+
+    /// <summary>
+    /// Clears the message only when it is the refresh loop's own failure.
+    /// </summary>
+    /// <remarks>
+    /// Every tick used to clear whatever was showing, so another action's result vanished within thirty
+    /// seconds of appearing.
+    /// </remarks>
+    internal static string? WithoutRecentRefreshFailure(string? message)
+    {
+        return message is not null && message.StartsWith(RecentRefreshFailure, StringComparison.Ordinal)
+            ? null
+            : message;
     }
 
     protected override void Dispose(bool disposing)

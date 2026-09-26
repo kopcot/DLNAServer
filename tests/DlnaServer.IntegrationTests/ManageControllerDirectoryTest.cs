@@ -108,14 +108,18 @@ namespace DlnaServer.IntegrationTests
                 files: files,
                 cancellationToken: CancellationToken.None,
                 skip: 0,
-                take: 2));
+                take: 2,
+                skipChildren: null,
+                skipFiles: null));
             var secondPage = Read(await controller.GetDirectoryAsync(
                 id: root.PublicId,
                 directories: directories,
                 files: files,
                 cancellationToken: CancellationToken.None,
                 skip: 2,
-                take: 2));
+                take: 2,
+                skipChildren: null,
+                skipFiles: null));
 
             // Assert
             firstPage.GetProperty("files").GetArrayLength().Should().Be(2, "because take bounds the page");
@@ -146,11 +150,51 @@ namespace DlnaServer.IntegrationTests
                 files: scope.ServiceProvider.GetRequiredService<IMediaFileRepository>(),
                 cancellationToken: CancellationToken.None,
                 skip: -5,
-                take: int.MaxValue));
+                take: int.MaxValue,
+                skipChildren: null,
+                skipFiles: null));
 
             // Assert
             page.GetProperty("files").GetArrayLength().Should().Be(1,
                 "because a negative skip is read as the start and an oversized take is clamped, not refused");
+        }
+
+        /// <summary>
+        /// One offset used to page both listings, so the next page of files also skipped folders.
+        /// </summary>
+        [Test]
+        public async Task GetDirectoryAsync_WithSeparateOffsets_PagesTheChildrenAndTheFilesIndependently()
+        {
+            // Arrange
+            CreateFile("a.mkv");
+            CreateFile("b.mkv");
+            CreateFile("c.mkv");
+            CreateFile(Path.Combine("one", "x.mkv"));
+            CreateFile(Path.Combine("two", "y.mkv"));
+            CreateFile(Path.Combine("three", "z.mkv"));
+
+            using var scope = _provider.CreateScope();
+            _ = await scope.ServiceProvider.GetRequiredService<ILibraryIndexer>().IndexAsync(CancellationToken.None);
+
+            var directories = scope.ServiceProvider.GetRequiredService<IMediaDirectoryRepository>();
+            var root = (await directories.GetSourceRootsAsync(CancellationToken.None)).Single();
+
+            // Act - the second page of files, while the folders stay on their first page.
+            var page = Read(await CreateController().GetDirectoryAsync(
+                id: root.PublicId,
+                directories: directories,
+                files: scope.ServiceProvider.GetRequiredService<IMediaFileRepository>(),
+                cancellationToken: CancellationToken.None,
+                skip: 0,
+                take: 2,
+                skipChildren: 0,
+                skipFiles: 2));
+
+            // Assert
+            page.GetProperty("children").GetArrayLength().Should().Be(2,
+                "because skipChildren keeps the folders on their first page");
+            page.GetProperty("files").GetArrayLength().Should().Be(1,
+                "because skipFiles moves the files past their first two");
         }
 
         private static ManageController CreateController()

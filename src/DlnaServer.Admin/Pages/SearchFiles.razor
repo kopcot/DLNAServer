@@ -350,6 +350,20 @@
     }
 
     /// <summary>
+    /// The value itself when it names a <see cref="SubtitlePresence"/>, otherwise "any".
+    /// </summary>
+    /// <remarks>
+    /// <c>@bind</c> parses a numeric string into any number, named or not, and an unnamed one used to
+    /// reach a switch that threw and ended the circuit.
+    /// </remarks>
+    internal static SubtitlePresence? DefinedOrAny(SubtitlePresence? value)
+    {
+        return value is { } presence && Enum.IsDefined(presence)
+            ? presence
+            : null;
+    }
+
+    /// <summary>
     /// Whether a filter wants the files that have something or the ones that do not. Null is "any".
     /// </summary>
     /// <remarks>
@@ -406,7 +420,13 @@
 
         public Presence? KeptInMemory { get; set; }
 
-        public SubtitlePresence? HasSubtitles { get; set; }
+        private SubtitlePresence? _hasSubtitles;
+
+        public SubtitlePresence? HasSubtitles
+        {
+            get => _hasSubtitles;
+            set => _hasSubtitles = DefinedOrAny(value);
+        }
 
         public int Take { get; } = 200;
 

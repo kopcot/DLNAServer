@@ -2373,7 +2373,7 @@ namespace DlnaServer.UnitTests.Persistence
         }
 
         [Test]
-        public async Task GetByDirectoryAsync_WithExcludeHidden_OmitsFilesUnderAnExcludedFolder()
+        public async Task GetByDirectoryPageAsync_WithExcludeHidden_OmitsFilesUnderAnExcludedFolder()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -2387,8 +2387,12 @@ namespace DlnaServer.UnitTests.Persistence
                 cancellationToken: CancellationToken.None);
 
             // Act
-            var actual = await repository.GetByDirectoryAsync(
-                stored[0].PublicId,
+            var actual = await repository.GetByDirectoryPageAsync(
+                directoryPublicId: stored[0].PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             // Assert
@@ -2403,7 +2407,7 @@ namespace DlnaServer.UnitTests.Persistence
         /// while the admin UI de-duplicates the list case-insensitively and implies otherwise.
         /// </summary>
         [Test]
-        public async Task GetByDirectoryAsync_WithAnExcludedFolderInADifferentCase_StillOmitsTheFiles()
+        public async Task GetByDirectoryPageAsync_WithAnExcludedFolderInADifferentCase_StillOmitsTheFiles()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -2417,8 +2421,12 @@ namespace DlnaServer.UnitTests.Persistence
                 cancellationToken: CancellationToken.None);
 
             // Act
-            var actual = await repository.GetByDirectoryAsync(
-                stored[0].PublicId,
+            var actual = await repository.GetByDirectoryPageAsync(
+                directoryPublicId: stored[0].PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             // Assert
@@ -2432,7 +2440,7 @@ namespace DlnaServer.UnitTests.Persistence
         /// is a single-character wildcard - so an entry of <c>a_b</c> would hide <c>aXb</c> as well.
         /// </summary>
         [Test]
-        public async Task GetByDirectoryAsync_WithAnExcludedNameHoldingAWildcard_MatchesItLiterally()
+        public async Task GetByDirectoryPageAsync_WithAnExcludedNameHoldingAWildcard_MatchesItLiterally()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -2446,8 +2454,12 @@ namespace DlnaServer.UnitTests.Persistence
                 cancellationToken: CancellationToken.None);
 
             // Act
-            var actual = await repository.GetByDirectoryAsync(
-                stored[0].PublicId,
+            var actual = await repository.GetByDirectoryPageAsync(
+                directoryPublicId: stored[0].PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             // Assert

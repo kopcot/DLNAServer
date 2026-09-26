@@ -383,7 +383,8 @@
     <p class="muted">
         A change is picked up by the next scan. Adding a type links its files then. Removing one stops those
         files being sent straight away, and the next scan takes their links away - including any added by
-        hand on a file's page.
+        hand on a file's page. The subtitle count on the dashboard and the search filters for subtitle files
+        still include them until that scan.
     </p>
 
     <SubtitleTypeEditor Rows="_subtitleTypes" />
@@ -697,11 +698,22 @@
                 return;
             }
 
+            // Read before the save, which reloads the options: this is what the server ran with until now.
+            var removedSubtitleTypes = RemovedSubtitleTypes(
+                Options.CurrentValue.Library.SubtitleFileExtensions.Keys,
+                _edited.Library.SubtitleFileExtensions.Keys);
+
             await Writer.SaveAsync(_edited, CancellationToken.None);
 
             _failed = false;
             _message = "Saved. The settings were reloaded straight away; the ones marked as needing a "
                 + "restart take effect the next time the server starts.";
+
+            if (removedSubtitleTypes.Count > 0)
+            {
+                _message += $" Subtitle types removed: {string.Join(", ", removedSubtitleTypes)}. The next scan "
+                    + "removes every subtitle link of those types, including the ones added by hand.";
+            }
         }
         // JsonException and ArgumentException are here for reasons the earlier filter missed:
         // SerializeToNode throws the first on a value it cannot represent, and Path.GetFullPath throws
@@ -721,6 +733,23 @@
         {
             _saving = false;
         }
+    }
+
+    /// <summary>
+    /// The subtitle extensions in <paramref name="previous"/> that <paramref name="saved"/> no longer has, sorted.
+    /// </summary>
+    /// <remarks>
+    /// Named after a save because removing a type deletes its links at the next scan, hand-added ones
+    /// included, and the panel's hint is easy to miss.
+    /// </remarks>
+    internal static List<string> RemovedSubtitleTypes(IEnumerable<string> previous, IEnumerable<string> saved)
+    {
+        var kept = new HashSet<string>(saved, StringComparer.OrdinalIgnoreCase);
+        var removed = previous.Where(extension => !kept.Contains(extension)).ToList();
+
+        removed.Sort(StringComparer.OrdinalIgnoreCase);
+
+        return removed;
     }
 
     private void RestoreDefaultFileTypes()

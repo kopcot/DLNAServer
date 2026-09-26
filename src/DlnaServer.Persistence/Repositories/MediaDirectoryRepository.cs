@@ -125,17 +125,6 @@ namespace DlnaServer.Persistence.Repositories
             return await query.Skip(skip).Take(take).ToListAsync(cancellationToken);
         }
 
-        public async Task<IReadOnlyList<MediaDirectoryDto>> GetChildrenAsync(
-            Guid parentPublicId,
-            CancellationToken cancellationToken = default)
-        {
-            return await ProjectDirectories(
-                    d => d.ParentDirectory != null && d.ParentDirectory.PublicId == parentPublicId,
-                    listing: true)
-                .OrderBy(static d => d.Name)
-                .ToListAsync(cancellationToken);
-        }
-
         public async Task<IReadOnlyDictionary<string, MediaDirectoryDto>> GetExistingByPathAsync(
             IReadOnlyCollection<string> fullPaths,
             CancellationToken cancellationToken = default)

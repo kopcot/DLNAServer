@@ -44,10 +44,6 @@ namespace DlnaServer.Persistence.Repositories
             bool descending,
             CancellationToken cancellationToken = default);
 
-        Task<IReadOnlyList<MediaDirectoryDto>> GetChildrenAsync(
-            Guid parentPublicId,
-            CancellationToken cancellationToken = default);
-
         /// <summary>
         /// The indexed directories among the supplied paths, keyed by path.
         /// </summary>

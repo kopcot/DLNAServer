@@ -81,7 +81,7 @@ namespace DlnaServer.UnitTests.Persistence
         }
 
         [Test]
-        public async Task GetChildrenAsync_ReturnsOnlyDirectChildren_OrderedByName()
+        public async Task GetChildrenPageAsync_ReturnsOnlyDirectChildren_OrderedByName()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -114,8 +114,12 @@ namespace DlnaServer.UnitTests.Persistence
             await AddMediaAsync(context, "/media/apple/seeds", "/media/zebra");
 
             // Act
-            var actual = await repository.GetChildrenAsync(
-                rootPublicId,
+            var actual = await repository.GetChildrenPageAsync(
+                parentPublicId: rootPublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             // Assert
@@ -344,7 +348,7 @@ namespace DlnaServer.UnitTests.Persistence
         }
 
         [Test]
-        public async Task GetChildrenAsync_OmitsExcludedDirectories()
+        public async Task GetChildrenPageAsync_OmitsExcludedDirectories()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -364,8 +368,12 @@ namespace DlnaServer.UnitTests.Persistence
             await AddMediaAsync(context, "/media/@Recycle", "/media/movies");
 
             // Act
-            var visible = await repository.GetChildrenAsync(
-                roots[0].PublicId,
+            var visible = await repository.GetChildrenPageAsync(
+                parentPublicId: roots[0].PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             // Assert
@@ -401,7 +409,7 @@ namespace DlnaServer.UnitTests.Persistence
         /// nothing playable, and they were being offered to a television as top-level containers.
         /// </summary>
         [Test]
-        public async Task GetChildrenAsync_OmitsAFolderWithNoMediaBeneathIt()
+        public async Task GetChildrenPageAsync_OmitsAFolderWithNoMediaBeneathIt()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -420,8 +428,12 @@ namespace DlnaServer.UnitTests.Persistence
             await AddMediaAsync(context, "/media/movies");
 
             // Act
-            var visible = await repository.GetChildrenAsync(
-                roots[0].PublicId,
+            var visible = await repository.GetChildrenPageAsync(
+                parentPublicId: roots[0].PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             // Assert
@@ -434,7 +446,7 @@ namespace DlnaServer.UnitTests.Persistence
         /// groups other folders would vanish and the tree would have no way in.
         /// </summary>
         [Test]
-        public async Task GetChildrenAsync_KeepsAFolderWhoseMediaIsOnlyDeeperDown()
+        public async Task GetChildrenPageAsync_KeepsAFolderWhoseMediaIsOnlyDeeperDown()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -458,8 +470,12 @@ namespace DlnaServer.UnitTests.Persistence
             await AddMediaAsync(context, "/media/Films/2024/SciFi");
 
             // Act
-            var visible = await repository.GetChildrenAsync(
-                roots[0].PublicId,
+            var visible = await repository.GetChildrenPageAsync(
+                parentPublicId: roots[0].PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             // Assert
@@ -472,7 +488,7 @@ namespace DlnaServer.UnitTests.Persistence
         /// visible anywhere beneath it.
         /// </summary>
         [Test]
-        public async Task GetChildrenAsync_OmitsAFolderWhoseOnlyMediaIsHidden()
+        public async Task GetChildrenPageAsync_OmitsAFolderWhoseOnlyMediaIsHidden()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -496,8 +512,12 @@ namespace DlnaServer.UnitTests.Persistence
             await AddMediaAsync(context, "/media/Films/@Recycle");
 
             // Act
-            var visible = await repository.GetChildrenAsync(
-                roots[0].PublicId,
+            var visible = await repository.GetChildrenPageAsync(
+                parentPublicId: roots[0].PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             // Assert
@@ -515,7 +535,7 @@ namespace DlnaServer.UnitTests.Persistence
         /// would count it as content of <c>/media/Films</c> and keep an empty folder listed.
         /// </remarks>
         [Test]
-        public async Task GetChildrenAsync_DoesNotCountMediaInASiblingWithALongerName()
+        public async Task GetChildrenPageAsync_DoesNotCountMediaInASiblingWithALongerName()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -534,8 +554,12 @@ namespace DlnaServer.UnitTests.Persistence
             await AddMediaAsync(context, "/media/Films2");
 
             // Act
-            var visible = await repository.GetChildrenAsync(
-                roots[0].PublicId,
+            var visible = await repository.GetChildrenPageAsync(
+                parentPublicId: roots[0].PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             // Assert
@@ -553,7 +577,7 @@ namespace DlnaServer.UnitTests.Persistence
         /// operations hit.
         /// </remarks>
         [Test]
-        public async Task GetChildrenAsync_RecognisesMediaUnderAWindowsStylePath()
+        public async Task GetChildrenPageAsync_RecognisesMediaUnderAWindowsStylePath()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -572,8 +596,12 @@ namespace DlnaServer.UnitTests.Persistence
             await AddMediaAsync(context, @"C:\media\Films");
 
             // Act
-            var visible = await repository.GetChildrenAsync(
-                roots[0].PublicId,
+            var visible = await repository.GetChildrenPageAsync(
+                parentPublicId: roots[0].PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             // Assert

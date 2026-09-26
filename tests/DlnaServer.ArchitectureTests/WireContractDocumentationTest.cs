@@ -33,13 +33,17 @@ namespace DlnaServer.ArchitectureTests
 
             var wireProperties = assembly
                 .GetTypes()
-                .Where(static type => type.IsClass && !type.IsNested)
+                // Public nested types too, so a DTO declared inside another cannot slip past the rule.
+                .Where(static type => type.IsClass && (!type.IsNested || type.IsNestedPublic))
                 .SelectMany(static type => type.GetProperties(
                     BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
                 .Where(static property =>
                     property.GetCustomAttribute<XmlElementAttribute>() is not null
                     || property.GetCustomAttribute<XmlAttributeAttribute>() is not null
-                    || property.GetCustomAttribute<XmlTextAttribute>() is not null)
+                    || property.GetCustomAttribute<XmlTextAttribute>() is not null
+                    || property.GetCustomAttribute<XmlArrayAttribute>() is not null
+                    || property.GetCustomAttribute<XmlArrayItemAttribute>() is not null
+                    || property.GetCustomAttribute<XmlAnyElementAttribute>() is not null)
                 .ToList();
 
             // Act

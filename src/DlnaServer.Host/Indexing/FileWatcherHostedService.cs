@@ -145,6 +145,11 @@ namespace DlnaServer.Host.Indexing
         private int _consecutiveFaultRestarts;
         private long _lastFaultRestartTimestamp;
 
+        // What the current watch was built over, what actually attached, and when it was built.
+        private WatchTargets _watched = new([], []);
+        private IReadOnlyList<string> _attached = [];
+        private long _lastAttachTimestamp;
+
         public FileWatcherHostedService(
             IFileSystemChangeWatcher watcher,
             IServiceScopeFactory scopeFactory,
@@ -166,16 +171,13 @@ namespace DlnaServer.Host.Indexing
             // Every settled change ends in a scan, and a scan needs a schema - see IDatabaseReadySignal.
             await _readySignal.WaitAsync(stoppingToken);
 
-            WatchTargets watched;
-            IReadOnlyList<string> attached;
-
             try
             {
                 // Inside the guard, which it was not: reading the options can throw, and so can
                 // normalising a malformed configured path - either one ended this service before the
                 // loop it is guarded by had started.
-                watched = ReadWatchTargets();
-                attached = _watcher.Start(watched.SourceFolders, watched.ExcludeFolders);
+                _watched = ReadWatchTargets();
+                _attached = _watcher.Start(_watched.SourceFolders, _watched.ExcludeFolders);
             }
             catch (Exception exception)
             {
@@ -186,7 +188,7 @@ namespace DlnaServer.Host.Indexing
                 return;
             }
 
-            var lastAttachTimestamp = _timeProvider.GetTimestamp();
+            _lastAttachTimestamp = _timeProvider.GetTimestamp();
 
             try
             {
@@ -194,36 +196,7 @@ namespace DlnaServer.Host.Indexing
                 {
                     try
                     {
-                        // Re-read every tick. SourceFolders and ExcludeFolders are hot-reloadable and
-                        // neither carries a restart hint in the admin UI, so a folder added there has to
-                        // move the watch with it - it used to be indexed by the next scan and never
-                        // watched, while a removed one kept its inotify handle.
-                        var current = ReadWatchTargets();
-                        var faulted = TryTakeFaultRestart(_watcher.ConsumeRestartRequest());
-
-                        // Comparing what ATTACHED against what was asked for. Comparing the request
-                        // against the previous request - which is what this did - always matched, so a
-                        // source folder absent when the watch was built stayed unwatched for the life of
-                        // the process, and with UsePeriodicRescan shipping off nothing else would ever
-                        // have noticed. Retried on an interval rather than every tick, because tearing
-                        // every watcher down twice a second while a share stays unmounted is its own
-                        // outage.
-                        var isRetryDue = attached.Count < current.SourceFolders.Length
-                            && _timeProvider.GetElapsedTime(lastAttachTimestamp) >= _unwatchedRetryInterval;
-
-                        if (faulted || isRetryDue || !current.Matches(watched))
-                        {
-                            // Both assigned BEFORE the rebuild. A Restart that throws part-way used to
-                            // leave them alone, so every later tick tore down whatever had attached and
-                            // rebuilt it again - every two seconds, indefinitely, losing events in each
-                            // gap, and reaching the generic tick-failed line rather than this one.
-                            watched = current;
-                            lastAttachTimestamp = _timeProvider.GetTimestamp();
-                            attached = [];
-
-                            attached = _watcher.Restart(current.SourceFolders, current.ExcludeFolders);
-                            LogWatchRebuilt(faulted);
-                        }
+                        RefreshWatch();
 
                         Drain(stoppingToken);
                         CollectSettled();
@@ -263,6 +236,68 @@ namespace DlnaServer.Host.Indexing
             {
                 // Normal shutdown.
             }
+        }
+
+        /// <summary>
+        /// Rebuilds the watch when it faulted, when configuration moved it, or when a folder that did not
+        /// attach is due another try.
+        /// </summary>
+        /// <remarks>
+        /// A <see cref="IFileSystemChangeWatcher.Restart"/> that throws counts as a fault and joins the
+        /// fault backoff; one that succeeds, for whatever reason, satisfies any fault still waiting.
+        /// </remarks>
+        internal void RefreshWatch()
+        {
+            // Re-read every tick. SourceFolders and ExcludeFolders are hot-reloadable and
+            // neither carries a restart hint in the admin UI, so a folder added there has to
+            // move the watch with it - it used to be indexed by the next scan and never
+            // watched, while a removed one kept its inotify handle.
+            var current = ReadWatchTargets();
+            var faulted = TryTakeFaultRestart(_watcher.ConsumeRestartRequest());
+
+            // Comparing what ATTACHED against what was asked for. Comparing the request
+            // against the previous request - which is what this did - always matched, so a
+            // source folder absent when the watch was built stayed unwatched for the life of
+            // the process, and with UsePeriodicRescan shipping off nothing else would ever
+            // have noticed. Retried on an interval rather than every tick, because tearing
+            // every watcher down twice a second while a share stays unmounted is its own
+            // outage. Not while a fault is backing off: that wait is the longer one.
+            var isRetryDue = !_isFaultRestartPending
+                && _attached.Count < current.SourceFolders.Length
+                && _timeProvider.GetElapsedTime(_lastAttachTimestamp) >= _unwatchedRetryInterval;
+
+            if (!faulted && !isRetryDue && current.Matches(_watched))
+            {
+                return;
+            }
+
+            // Both assigned BEFORE the rebuild. A Restart that throws part-way used to
+            // leave them alone, so every later tick tore down whatever had attached and
+            // rebuilt it again - every two seconds, indefinitely, losing events in each
+            // gap, and reaching the generic tick-failed line rather than this one.
+            _watched = current;
+            _lastAttachTimestamp = _timeProvider.GetTimestamp();
+            _attached = [];
+
+            try
+            {
+                _attached = _watcher.Restart(current.SourceFolders, current.ExcludeFolders);
+            }
+            catch
+            {
+                // A fault rebuild already counted itself when it was taken.
+                if (!faulted)
+                {
+                    RecordFaultRestart();
+                }
+
+                _isFaultRestartPending = true;
+
+                throw;
+            }
+
+            _isFaultRestartPending = false;
+            LogWatchRebuilt(faulted);
         }
 
         /// <summary>
@@ -308,17 +343,28 @@ namespace DlnaServer.Host.Indexing
                 return false;
             }
 
+            _isFaultRestartPending = false;
+            RecordFaultRestart();
+
+            return true;
+        }
+
+        /// <summary>
+        /// Counts one fault restart into the current streak, or starts a new streak after a healthy period.
+        /// </summary>
+        private void RecordFaultRestart()
+        {
+            var isStreak = _consecutiveFaultRestarts > 0
+                && _timeProvider.GetElapsedTime(_lastFaultRestartTimestamp) < _faultHealthyPeriod;
+
             _consecutiveFaultRestarts = isStreak ? _consecutiveFaultRestarts + 1 : 1;
             _lastFaultRestartTimestamp = _timeProvider.GetTimestamp();
-            _isFaultRestartPending = false;
 
             // Once per streak: the second fault in a row is the one that says the watch cannot stay up.
             if (_consecutiveFaultRestarts == 2)
             {
                 LogWatchKeepsFaulting((int)_firstFaultRestartDelay.TotalMinutes, (int)_maxFaultRestartDelay.TotalMinutes);
             }
-
-            return true;
         }
 
         /// <remarks>
