@@ -3157,3 +3157,50 @@ commercial build pipeline is still a use of it. ffmpeg itself is not distributed
 **Not done, and a judgement call left open:** `DlnaServer.Host.csproj` copies `release-notes.md` and
 `LICENSE` into the output so a deployment carries them. `THIRD-PARTY-NOTICES.md` is not in that list. It
 arguably should be if the server is ever redistributed.
+
+## 6t. Operator asks raised after 2026-09-25 (`1.1.0926`)
+
+The inbox batch in `NOTES.local.md` headed "after 25.09.2026". This section records it as it closes.
+
+### Columns, labels, a page title and a phone menu (items 1-4, 6, 8)
+
+**The tile grid has four fixed columns** (`.grid` in `admin.css`), two at 1200 px of viewport and below. It was
+`repeat(auto-fit, minmax(180px, 1fr))`, which stretched every panel's tiles across its own row: a two-tile
+panel put its second figure half-way across the page, so no figure lined up with the one above it. The
+operator had started on this with an empty `<div/>` padding the Dashboard's kinds row to four cells when
+*Other* is absent. It is kept at the operator's request, but under fixed tracks it has no visual effect -
+the grid now does what it was reaching for. With fixed columns the pinned panel on the *Recently served
+files* page (`/admin/cache`) falls into exactly the layout asked for - *In use / Limit / Largest file kept
+/ Files kept* on the first row, the served counts and *Reading now* on the second.
+
+**The breakpoint is 1200 px, not 1000 px.** It is a viewport width, and the viewport carries the 220 px
+sidebar and 64 px of padding the grid does not get: at 1000 px four columns came to about 160 px each, which
+wraps a figure such as `2026-09-26 09:22` and puts its first line above its neighbours' - the misalignment
+the change was for. At 1200 px each column still gets about 200 px.
+
+**A tile is now a flex column with its figure at the foot**, so a label that wraps to two lines no longer
+pushes its figure below its neighbours'. That is what made a longer label affordable:
+*Memory / disc / database* became *Times served from memory / disc / database*, with a sentence under the
+grid saying what the three counts are. The comment that had kept the label short "so Reading now does not
+drop onto its own row" was only true under auto-fit, and was updated with the change.
+
+*Tidy-ups so far* became *Memory tidy-ups so far*.
+
+**Page title.** `App.razor` carried a static `<title>`; it is gone, `MainLayout` renders a default
+`<PageTitle>` ahead of `@Body`, and the preview page and the phone's photo page render
+`<file title> - ZEN DLNA Server`. The static element had to go, not merely be overridden: once any
+`<PageTitle>` renders, `HeadOutlet` adds a `<title>` of its own, and with two in the head the browser shows
+the first. **Preview is interactive while `HeadOutlet` is static**, so its title reaches the tab through the
+prerender and through enhanced page loads, which is also how *next* and *previous* arrive; with
+prerendering off the tab would keep the default. Verified on the running server - one `<title>` element,
+the file's name in the tab, and the name following a step to the next file.
+
+**The phone menu is a checkbox and a label, with no JavaScript**, in keeping with the rest of the admin UI.
+The label is the button; the stylesheet shows the menu while the checkbox is ticked. The layout is
+statically rendered, so an interactive toggle would have cost a SignalR circuit on every page - the
+reason `App.razor` gives for keeping the router static. **Enhanced navigation re-renders the checkbox
+unticked, so choosing a page closes the menu** - verified in the browser rather than assumed, since
+`checked` is a property and not every DOM-patching scheme resets one. A reload or a back-forward restore
+does not go through enhanced navigation, and Firefox restores a checkbox's state on both, so it carries
+`autocomplete="off"`. On a phone the checkbox is visually hidden rather than `display:none`, so it stays
+reachable from a keyboard; on a wide screen it is `display:none`, so it is not an invisible tab stop.

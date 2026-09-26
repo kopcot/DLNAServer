@@ -81,6 +81,10 @@ body {
     color: var(--accent);
 }
 
+/* The phone layout's menu button and the checkbox it toggles, neither of which a wide screen needs - and
+   display:none keeps the checkbox out of the keyboard's tab order there. */
+.menutoggle, .menubutton { display: none; }
+
 .brand::before {
     content: "";
     display: inline-block;
@@ -142,7 +146,18 @@ h2 { font-size: 17px; margin: 28px 0 10px; }
     overflow-x: auto;
 }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+/*
+    Four fixed columns, so the figures of every panel on a page line up under one another. auto-fit
+    stretched a panel's tiles to fill its row, which put a two-tile panel's second figure half-way across
+    the page. minmax(0, ...) lets a long label wrap inside its column instead of widening it.
+*/
+.grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+
+/* Measured against the viewport, which is 220px of sidebar and 64px of padding wider than the grid - so
+   four columns only while each still gets about 200px, enough for "2026-09-26 09:22" on one line. */
+@media (max-width: 1200px) {
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* Two grids stacked in one panel read as two rows, so they keep the grid's own gap between them. */
 .grid + .grid { margin-top: 14px; }
@@ -204,8 +219,11 @@ h2 { font-size: 17px; margin: 28px 0 10px; }
 .tech:hover::after,
 .tech:focus::after { display: block; }
 
+/* A column whose figure sits at the foot, so a label that wraps onto two lines does not push its figure
+   below the figures of the tiles beside it. */
+.stat { display: flex; flex-direction: column; }
 .stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
-.stat .value { font-size: 24px; font-variant-numeric: tabular-nums; }
+.stat .value { margin-top: auto; font-size: 24px; font-variant-numeric: tabular-nums; }
 .stat .value.over { color: var(--warn); }
 
 
@@ -680,7 +698,7 @@ dl.meta dd { margin: 0; word-break: break-all; }
 
 /*
     Phones and narrow windows. The desktop layout is a fixed 220px sidebar beside the content, which on a
-    phone leaves a column too narrow to read - so the sidebar becomes a scrollable top bar and everything
+    phone leaves a column too narrow to read - so the sidebar becomes a bar with a menu button and everything
     that was sized for a wide viewport is resized rather than merely reflowed.
 */
 @media (max-width: 760px) {
@@ -698,40 +716,50 @@ dl.meta dd { margin: 0; word-break: break-all; }
         top: 0;
         z-index: 5;
 
-        /* Undo the desktop column: here the bar is as tall as its own content and scrolls sideways. */
+        /* Undo the desktop column: here the bar is as tall as its own content - the name row, plus the
+           menu while it is open. */
         align-self: auto;
         height: auto;
         overflow-y: visible;
     }
 
-    .brand { padding: 0 16px 10px; }
+    /* The name and the menu button share one row, so a closed menu costs a single line at the top. */
+    .brandbar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; }
+    .brand { padding: 0 16px; }
 
-    /* Horizontal and scrollable: five items do not fit a phone's width, and wrapping them would push the
-       content down the screen on every page. */
-    .nav {
-        display: flex;
-        overflow-x: auto;
-        scrollbar-width: none;
+    .menubutton {
+        display: block;
+        padding: 2px 16px;
+        font-size: 24px;
+        line-height: 1;
+        color: var(--ink);
+        cursor: pointer;
+        user-select: none;
     }
 
-    .nav::-webkit-scrollbar { display: none; }
-    .nav li { flex: 0 0 auto; }
+    /* Visually hidden rather than display:none, so the menu can still be opened from a keyboard. */
+    .menutoggle { display: block; position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+    .menutoggle:focus-visible + .brandbar .menubutton { outline: 2px solid var(--accent); }
+
+    /* Hidden until the button is pressed, then a list down the screen - scrolled inside itself if the
+       phone is too short to show all of it, so the page underneath does not scroll away. 60px is the
+       name row with the sidebar's padding; dvh follows a mobile browser's toolbar where vh does not. */
+    .nav { display: none; }
+
+    .menutoggle:checked ~ .nav {
+        display: block;
+        max-height: calc(100vh - 60px);
+        max-height: calc(100dvh - 60px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        border-top: 1px solid var(--line);
+    }
 
     /* No room for it across the top, and nowhere else here that reads as "the bottom of the page". The
        About page shows the same notice. */
     .sitefoot { display: none; }
 
-    .nav a {
-        padding: 10px 14px;
-        border-left: none;
-        border-bottom: 3px solid transparent;
-        white-space: nowrap;
-    }
-
-    .nav a.active {
-        border-left-color: transparent;
-        border-bottom-color: var(--accent);
-    }
+    .nav a { padding: 11px 16px; }
 
     .content { padding: 18px 14px; }
 
@@ -740,7 +768,7 @@ dl.meta dd { margin: 0; word-break: break-all; }
 
     .panel { padding: 14px; border-radius: 6px; }
 
-    .grid { grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); gap: 10px; }
+    .grid { gap: 10px; }
     .grid + .grid { margin-top: 10px; }
     .stat .value { font-size: 20px; }
 
@@ -776,5 +804,5 @@ dl.meta dd { margin: 0; word-break: break-all; }
 
     .searchform, .fieldpair { grid-template-columns: 1fr; gap: 0; }
     .field select { width: 100%; }
-    .nav li.sub a { padding-left: 14px; }
+    .nav li.sub a { padding-left: 32px; }
 }

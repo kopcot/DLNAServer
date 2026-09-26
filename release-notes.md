@@ -10,6 +10,12 @@ worth telling you about is added to the version it belongs to.
 
 ## 1.1
 
+**A menu button on a phone.** On a narrow screen the pages were a sideways-scrolling strip across the top, and most of it was out of sight. There is now a menu button beside the server's name that opens the full list, and it closes again once you pick a page.
+
+**Figures line up.** The figures on the Dashboard and on *Recently served* sit in four columns (two on a narrower screen), so each one sits under the one above it in every group, rather than each group spreading its own few across the page. *Tidy-ups so far* is now *Memory tidy-ups so far*, and *Memory / disc / database* is now *Times served from memory / disc / database*, with a line underneath explaining it.
+
+**A file's page is named after the file**, and so is the photograph page a phone opens, in the browser tab and in your history, instead of every page being called *ZEN DLNA Server*.
+
 **A missing settings file no longer empties your library.** If the server starts and cannot find its settings file, it writes a fresh one and shares its own folder until you set your media folders again. That used to be taken as you deciding to stop sharing your media, so the next scan forgot the whole library - and restoring the file meant indexing everything again from scratch, with every preview remade. Your library is now kept while the server runs on that fallback, and picks up where it left off once your folders are set again. The fresh file also lists the usual file types now; it used to list none, so nothing at all was found until you added them back on Settings.
 
 **One damaged video can no longer fill the log.** When a preview could not be made from a broken video, the server wrote everything the video tool printed into the log - on one real library that was over 139,000 lines for a single file, and three of those filled a whole day's log file. It now writes the few lines that say what went wrong, and how much it left out.

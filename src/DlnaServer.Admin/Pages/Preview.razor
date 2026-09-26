@@ -15,6 +15,9 @@
 else
 {
     <PageHeader Title="@_details.File.Title" />
+    @* HeadOutlet is static, so this reaches the tab through the prerender and enhanced page loads - which
+       is also how next/previous arrive. Turning prerendering off would leave the tab on the default. *@
+    <PageTitle>@_details.File.Title - ZEN DLNA Server</PageTitle>
 
     <p class="crumbs">
         @* Falls back to the file's own folder, as the sibling stepping below already did: the root's

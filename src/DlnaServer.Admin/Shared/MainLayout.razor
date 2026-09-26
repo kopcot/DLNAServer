@@ -1,8 +1,18 @@
 @inherits LayoutComponentBase
 
 <div class="layout">
+    @* The page's own PageTitle, rendered later inside @Body, replaces this one. *@
+    <PageTitle>ZEN DLNA Server</PageTitle>
     <nav class="sidebar">
-        <div class="brand">ZEN DLNA Server</div>
+        @* The phone layout's menu button, without JavaScript: the label toggles the checkbox and the
+           stylesheet shows the menu while it is ticked. Enhanced navigation re-renders the checkbox
+           unticked, so choosing a page closes the menu again. Both are hidden on a wide screen. *@
+        @* autocomplete off: Firefox otherwise restores it ticked on a reload or a back-forward restore. *@
+        <input type="checkbox" id="menutoggle" class="menutoggle" autocomplete="off" />
+        <div class="brandbar">
+            <div class="brand">ZEN DLNA Server</div>
+            <label for="menutoggle" class="menubutton" title="Menu" aria-label="Menu">&#9776;</label>
+        </div>
         <NavMenu />
         @* Held at the foot of the column by the menu growing above it, so it sits at the bottom of the
            screen on a short menu and below the last item on a long one - never floating mid-column. It is

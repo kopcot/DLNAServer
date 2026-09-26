@@ -57,7 +57,7 @@
         <StatTile Label="Total in use" Source="Working Set (MB)" IsOverTarget="_workingSetBytes > WorkingSetTargetBytes">@Fmt.Megabytes(_workingSetBytes)</StatTile>
         <StatTile Label="Used by the server itself" Source="GC Total Memory (MB)">@Fmt.Megabytes(_managedBytes)</StatTile>
         <StatTile Label="Used by large items" Source="GC Large Object Heap (MB)">@Fmt.Megabytes(_lohBytes)</StatTile>
-        <StatTile Label="Tidy-ups so far" Source="GC Collections Gen0/Gen1/Gen2">@_gen0 / @_gen1 / @_gen2</StatTile>
+        <StatTile Label="Memory tidy-ups so far" Source="GC Collections Gen0/Gen1/Gen2">@_gen0 / @_gen1 / @_gen2</StatTile>
     </StatGrid>
     <p class="muted">
         <em>Total in use</em> is the figure that matters on a small machine; the target is
@@ -94,6 +94,10 @@
         @if (_counts.Other > 0)
         {
             <StatTile Label="Other" Source="database Files grouped by MIME, types that map to no kind">@_counts.Other</StatTile>
+        }
+        else
+        {
+            <div/>
         }
     </StatGrid>
     <p class="muted">
