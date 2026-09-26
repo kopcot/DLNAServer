@@ -18,7 +18,7 @@ today keep working. The internals are new.
 > 177.7 MB was taken 255 s after a restart — and confirmation on a real television of the four DIDL
 > fields added on 2026-09-06.
 >
-> **Version `1.1.0923`.** It is `Major.Minor.MonthDate`, and each project carries its own, so a number
+> **Version `1.1.0924`.** It is `Major.Minor.MonthDate`, and each project carries its own, so a number
 > says which assembly changed. The one on the About page is the host's, which is the product version;
 > the assembly table on that page lists the rest. `release-notes.md` says what changed for whoever runs the server,
 > one entry per `Major.Minor`; `docs/` holds everything internal. `release-notes.md` and `LICENSE` are
@@ -88,7 +88,8 @@ bridge does not forward it.
 | [docs/decisions.md](docs/decisions.md) | Why it is built this way: decisions, conventions, traps, open work |
 | [docs/history.md](docs/history.md) | Status, milestones, and the batch-by-batch record |
 | `release-notes.md` | What changed, for whoever runs the server |
-| `CONTRIBUTING.md` | Build, the two hard rules, versioning, releases |
+| [docs/development.md](docs/development.md) | Build, the two hard rules, versioning, releases |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Who contributes, and where to start |
 
 ## Licence
 

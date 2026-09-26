@@ -3204,3 +3204,24 @@ unticked, so choosing a page closes the menu** - verified in the browser rather 
 does not go through enhanced navigation, and Firefox restores a checkbox's state on both, so it carries
 `autocomplete="off"`. On a phone the checkbox is visually hidden rather than `display:none`, so it stays
 reachable from a keyboard; on a wide screen it is `display:none`, so it is not an invisible tab stop.
+
+### `CONTRIBUTING.md` became `docs/development.md` (items 5, 5a)
+
+The operator's reading was right: the file was a developer guide - setup, the two hard rules, test layout,
+versioning and releases - under a name that promises something else. It moved to `docs/development.md`,
+and **`CONTRIBUTING.md` was recreated as a short page
+naming who contributes** - the maintainer, and Claude Code as the assistant the maintainer works with.
+The name is kept at the root rather than dropped because GitHub links to that exact file from its
+new-issue and new-pull-request pages; a plain rename would have removed the link. Because the old name
+still exists, git records the move as a new file, so the guide's earlier history is in the log of
+`CONTRIBUTING.md`.
+
+Every other Markdown file was checked name against content (5a). None needed renaming. What the audit did
+find was an index with gaps: `docs/README.md` now lists `development.md` and the two deployment guides,
+`Docker.usage.md` and `NasBuild.usage.txt`, which it had never mentioned. Moving those two into `docs/` was
+considered and left alone - about twenty references across the `Dockerfile`, both compose files, the
+solution, `.dockerignore`, `NasBuild.sh` and a C# comment, for a gain of one folder. The README version line
+and the example release tag were both still `1.1.0923` against a host at `1.1.0924`, and were corrected.
+
+Left as found: this file carries a second `#` heading, *DlnaServer rewrite — working plan*, which opens the
+archived plan inside it. Demoting it would put it on the same level as the `##` sections it contains.

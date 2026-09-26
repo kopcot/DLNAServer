@@ -18,7 +18,7 @@ question needs settling, and write nothing into it.
 `architecture.md`, `dlna-compatibility.md` (the behaviours that intentionally differ from that server),
 `configuration.md`, `operations.md`, `performance.md` and `troubleshooting.md`, indexed by
 `docs/README.md`. There is deliberately no `docs/decisions/` ADR tree: `docs/decisions.md` section 7b is the
-decision record and running two of them is how they drift apart. `CONTRIBUTING.md` covers the build, the two hard rules and the release flow;
+decision record and running two of them is how they drift apart. `docs/development.md` covers the build, the two hard rules and the release flow (it was `CONTRIBUTING.md` until 2026-09-26, which is now a short page naming the contributors);
 `.github/SECURITY.md` covers reporting.
 
 ## The server
