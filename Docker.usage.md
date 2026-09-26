@@ -197,10 +197,12 @@ publishing the admin port does not publish the management API.
    brute-force limiting of its own, and cost 14 is roughly a second of NAS CPU per guess, which is an
    unauthenticated lever an attacker can pull from the internet. Cost 10-12 still costs real time per
    guess without making a real login sluggish. Run `fail2ban` against `admin-access.log` (below) if this
-   proxy faces the open internet and that residual guess rate still worries you:
+   proxy faces the open internet and that residual guess rate still worries you. Prefer the prompting
+   form — it asks twice and never puts the password in shell history:
    ```bash
-   docker run --rm caddy:2-alpine caddy hash-password --cost 12 --plaintext 'your-password'
+   docker run --rm -it caddy:2-alpine caddy hash-password --cost 12
    ```
+   `--plaintext 'your-password'` works too, but leaves the password sitting in shell history.
 3. Put it in `.env`, doubling every `$` so compose does not read it as a variable:
    ```
    ADMIN_HOSTNAME=dlna.example.com

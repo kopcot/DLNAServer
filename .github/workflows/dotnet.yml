@@ -27,14 +27,14 @@ jobs:
     steps:
       # persist-credentials: false - nothing in this job pushes to the repository, so the token has no
       # reason to sit in .git/config for the rest of the job.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       # global.json pins the SDK band the NAS runs, so CI resolves the same one rather than whatever
       # the runner happens to carry.
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
 
@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload test results and coverage
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: test-results
           path: ./TestResults
@@ -74,14 +74,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       # Build only - nothing is pushed. The image is multi-stage and installs ffmpeg from Debian, so a
       # broken base image or a missing package surfaces here rather than on the next deploy.
       - name: Build the image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           push: false

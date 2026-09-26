@@ -22,7 +22,11 @@ config.json
 
 # Secrets for the admin-remote compose stack - an admin password hash and whatever else operators put
 # there. COPY . . (Dockerfile:40) would otherwise put it straight into the build context and image layers.
-.env
+# Every .env* is excluded, then .env.example is re-included below - later lines win, so order matters.
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
 
 # Tooling and editor state. graphify-out/ and .claude/ arrived at the context root when the
 # Current/ folder was flattened away; the graph alone is tens of megabytes of generated JSON.

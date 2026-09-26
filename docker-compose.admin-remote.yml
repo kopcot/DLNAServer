@@ -66,8 +66,9 @@ services:
       ADMIN_HOSTNAME: ${ADMIN_HOSTNAME:?set ADMIN_HOSTNAME in .env}
 
       # bcrypt hash, NOT the password. Generate it with cost 10-12, not the tool's default 14 - see
-      # .env.example for why:
-      #     docker run --rm caddy:2-alpine caddy hash-password --cost 12 --plaintext 'your-password'
+      # .env.example for why. Prefer the prompting form, it never puts the password in shell history:
+      #     docker run --rm -it caddy:2-alpine caddy hash-password --cost 12
+      # --plaintext 'your-password' works too, but leaves the password sitting in shell history.
       # Escape every $ as $$ when you paste it into .env, or compose will treat it as a variable.
       ADMIN_USER: ${ADMIN_USER:?set ADMIN_USER in .env}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?set ADMIN_PASSWORD_HASH in .env}
