@@ -4,6 +4,118 @@ How the solution is laid out, what each project may depend on, and the naming
 that makes a boundary violation visible. The rules here are enforced by
 `tests/DlnaServer.ArchitectureTests`, not merely written down.
 
+## How the pieces talk
+
+The one process, as a renderer and an operator see it. Arrows point from the caller.
+
+![How the pieces talk: renderer and operator at the top, the media-port services, delivery, the admin port and the library in the middle, persistence and the media folders below](architecture.png)
+
+<details>
+<summary>The same diagram as Mermaid - edit this, then re-render the picture</summary>
+
+```mermaid
+flowchart TB
+    Renderer(("DLNA renderer"))
+    Admin(("Operator"))
+
+    subgraph Protocol["Media port - UPnP, SOAP and HTTP"]
+        SsdpListener["SSDP listener"]
+        SsdpNotifier["SSDP notifier"]
+        ContentDirectory["ContentDirectory"]
+        ConnectionManager["ConnectionManager"]
+        AvTransport["AVTransport (accepts and logs)"]
+        Events["EventController (GENA)"]
+        FileServer["FileServerController<br/>media, thumbnails, subtitles"]
+        Manage["ManageController<br/>/manage"]
+    end
+
+    subgraph Delivery["Delivery"]
+        Resolver["MediaContentResolver"]
+        Cache["ServedFileCache"]
+        CacheFill["MediaCacheFillHostedService"]
+    end
+
+    subgraph AdminPort["Admin port"]
+        AdminUi["Admin UI (Blazor)<br/>DlnaServer.Admin"]
+        Upload["UploadController"]
+    end
+
+    subgraph Library["Library and processing"]
+        Watcher["FileWatcherHostedService"]
+        Indexer["LibraryIndexer"]
+        Scanner["LibraryScanner"]
+        Processing["MediaProcessingHostedService"]
+        Processor["MediaProcessor<br/>ffprobe, ffmpeg, SkiaSharp"]
+    end
+
+    subgraph State["Persistence and state"]
+        Repositories["Repositories<br/>files, directories, subtitles"]
+        Db[("SQLite<br/>DlnaDbContext")]
+        Initializer["DatabaseInitializerHostedService"]
+        Ready["DatabaseReadySignal"]
+        Subscriptions["SubscriptionStore (in memory)"]
+    end
+
+    Disc[("Media folders")]
+
+    Renderer -- "M-SEARCH" --> SsdpListener
+    SsdpNotifier -- "NOTIFY" --> Renderer
+    Renderer -- "Browse, Search" --> ContentDirectory
+    Renderer -- "GetProtocolInfo" --> ConnectionManager
+    Renderer -- "SetAVTransportURI" --> AvTransport
+    Renderer -- "SUBSCRIBE" --> Events
+    Renderer -- "GET, HEAD" --> FileServer
+
+    Admin -- "uses" --> AdminUi
+    Admin -- "uploads" --> Upload
+    Admin -- "scripts" --> Manage
+
+    ContentDirectory -- "reads the index" --> Repositories
+    Events -- "keeps subscriptions" --> Subscriptions
+    FileServer -- "looks up the file" --> Repositories
+    FileServer -- "resolves bytes" --> Resolver
+    Resolver -- "memory first" --> Cache
+    Resolver -- "queues a fill" --> CacheFill
+    CacheFill -- "reads" --> Disc
+    FileServer -- "streams from disc" --> Disc
+    Manage -- "reads" --> Repositories
+    Manage -- "clears" --> Cache
+
+    AdminUi -- "reads and edits" --> Repositories
+    Upload -- "writes files" --> Disc
+
+    Watcher -- "reports changes" --> Indexer
+    Indexer -- "walks" --> Scanner
+    Scanner -- "reads" --> Disc
+    Indexer -- "writes the index, links subtitles" --> Repositories
+    Processing -- "claims pending, saves results" --> Repositories
+    Processing -- "extracts" --> Processor
+    Processor -- "reads" --> Disc
+
+    Repositories --> Db
+    Initializer -- "creates or migrates" --> Db
+    Initializer -- "marks ready" --> Ready
+    Indexer -. "waits for" .-> Ready
+    Processing -. "waits for" .-> Ready
+    CacheFill -. "waits for" .-> Ready
+    Watcher -. "waits for" .-> Ready
+
+    classDef actor fill:#dbe4ff,stroke:#3b5bdb,color:#1c2e7a
+    classDef protocol fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef admin fill:#ffe3ec,stroke:#d6336c,color:#8a1538
+    classDef library fill:#fff3cd,stroke:#e0a100,color:#6b4200
+    classDef state fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef disc fill:#ffe8b3,stroke:#e08e00,color:#6b4200
+    class Renderer,Admin actor
+    class SsdpListener,SsdpNotifier,ContentDirectory,ConnectionManager,AvTransport,Events,FileServer,Manage,Resolver,Cache,CacheFill protocol
+    class AdminUi,Upload admin
+    class Watcher,Indexer,Scanner,Processing,Processor library
+    class Repositories,Db,Initializer,Ready,Subscriptions state
+    class Disc disc
+```
+
+</details>
+
 ## Layout
 
 | Project | Role |

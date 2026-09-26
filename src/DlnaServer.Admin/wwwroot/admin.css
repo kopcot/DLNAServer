@@ -745,7 +745,8 @@ dl.meta dd { margin: 0; word-break: break-all; }
 
     /* Visually hidden rather than display:none, so the menu can still be opened from a keyboard. */
     .menutoggle { display: block; position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
-    .menutoggle:focus-visible + .brandbar .menubutton { outline: 2px solid var(--accent); }
+    /* Inset: the button reaches the screen's right edge, where an outside outline loses its right side. */
+    .menutoggle:focus-visible + .brandbar .menubutton { outline: 2px solid var(--accent); outline-offset: -2px; }
 
     /* Hidden until the button is pressed, then a list down the screen - scrolled inside itself if the
        phone is too short to show all of it, so the page underneath does not scroll away. 60px is the

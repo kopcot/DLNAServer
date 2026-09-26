@@ -37,6 +37,21 @@ today keep working. The internals are new.
 - Ships a Blazor admin UI on a second port: browse, search, per-file details, diagnostics, maintenance and an optional upload page.
 - Reproduces the reference server's wire behaviour, with every deliberate difference written down and tested.
 
+## What it looks like
+
+The admin UI, on a made-up library - generated test pictures, tones and colour bars, nothing from a real server.
+
+| | |
+| --- | --- |
+| [![Library](docs/screenshots/library.png)](docs/screenshots/library.png) | [![Dashboard](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png) |
+| **Library** - the newest files, with a preview, the kind and a subtitles badge on each | **Dashboard** - uptime, memory, the served-bytes cache and what the library holds |
+| [![A film's page](docs/screenshots/preview.png)](docs/screenshots/preview.png) | [![Subtitle files on a film's page](docs/screenshots/preview-subtitles.png)](docs/screenshots/preview-subtitles.png) |
+| **A file's page** - play it in the browser, step through the folder, see everything read from it | **Its audio tracks and subtitle files** - found by name, or added, removed and relabelled by hand |
+| [![Search files](docs/screenshots/search.png)](docs/screenshots/search.png) | [![Settings](docs/screenshots/settings.png)](docs/screenshots/settings.png) |
+| **Search files** - every filter optional, here *with subtitles* | **Settings** - most changes apply as soon as you save |
+
+On a phone the menu folds behind a button: [phone menu](docs/screenshots/phone-menu.png).
+
 ## Projects
 
 | Project | Role |
@@ -79,7 +94,7 @@ bridge does not forward it.
 | Where | What |
 | --- | --- |
 | [docs/](docs/README.md) | How it works, in detail |
-| [docs/architecture.md](docs/architecture.md) | Layout, dependency rules, naming |
+| [docs/architecture.md](docs/architecture.md) | A picture of how the pieces talk, then layout, dependency rules and naming |
 | [docs/dlna-compatibility.md](docs/dlna-compatibility.md) | What goes on the wire, and every deliberate difference |
 | [docs/configuration.md](docs/configuration.md) | Every setting, and which need a restart |
 | [docs/operations.md](docs/operations.md) | Running it, uploading, rebuilding, the admin UI, the management endpoints |

@@ -3306,6 +3306,28 @@ project is touched. Each test `.csproj` now sets its own `<Version>`: `DlnaServe
 `1.1.0926`, since this batch changed it, and the other two unchanged at `1.1.0923`. `docs/decisions.md`
 section 7, `docs/development.md` and `CLAUDE.md` say so.
 
+### Screenshots for the repository (item 9)
+
+Seven pictures of the admin UI now sit in `docs/screenshots/`, and the README shows them under *What it looks like*: Dashboard, Library, a film's page and its subtitle section, *Search files*, Settings, and the phone menu. Nothing in them comes from the NAS. The library is generated:
+- painted landscapes (Pillow);
+- tones encoded to tagged MP3s, with a lyrics file;
+- `testsrc`/`smptehdbars`/`mandelbrot` colour-bar videos, the films with two dubbed audio tracks and two subtitle files each.
+
+The library was served from a throwaway server at `C:\DemoMedia`, a neutral path, since the pages show folders. ffmpeg was downloaded for that run only, on the maintainer's go-ahead, so that videos have previews and the dashboard shows no ffmpeg warning.
+
+**The machine name must never appear in a committed picture or note** (maintainer ruling). *Friendly name* shows it when left blank, so the server ran with `Dlna.Server.FriendlyName` set to `ZEN DLNA Server`. Every page used was checked for the host name before it was captured. The About page names the machine and is deliberately not among the shots.
+
+Shooting found one defect: on a phone, the menu button reaches the screen's right edge, so its keyboard focus outline lost its right side. The outline is now drawn inside the button (`outline-offset: -2px`).
+
+### An architecture picture that matches the code
+
+The maintainer supplied a generated diagram (`diagram.png`, gitdiagram.com, 21.09.2026) to be put on the architecture page if it was right. Most of it was, but three arrows were not:
+- The admin UI does not call `/manage`. Its pages inject the repositories directly and use the restart and scan signals; `/manage` is plain HTTP for an operator or a script.
+- `LibraryScanner` does not write the index. It only reads the disc, and `LibraryIndexer` writes.
+- `EventController` keeps subscriptions in the in-memory `SubscriptionStore`, not in the database.
+
+The picture also predated the subtitles and left out the repositories' own database and the cache-fill service. `docs/architecture.md` therefore gained *How the pieces talk*: a Mermaid flowchart drawn from the code, in the same colours as the original, with the picture rendered from it as `docs/architecture.png`. The Mermaid sits under the picture as its source, so a change to one is a change to both. The original `diagram.png` was then deleted from the repository root and from the solution items, on the maintainer's instruction, since it had been replaced and was wrong. The ready signal is drawn as each background service "waits for" it: pointing the edges the other way pulled the persistence group to the top of the layout.
+
 ### Subtitles: linked by name, served, edited, found (items 7-7j)
 
 The batch's largest item, and the first time anything about subtitles goes on the wire: the reference

@@ -27,7 +27,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DlnaServer.ArchitectureTest
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{C3D10F7A-9BCB-44B0-8FF0-35E637B57830}"
 	ProjectSection(SolutionItems) = preProject
-		diagram.png = diagram.png
 		docker-compose.admin-remote.yml = docker-compose.admin-remote.yml
 		docker-compose.yml = docker-compose.yml
 		Docker.usage.md = Docker.usage.md
