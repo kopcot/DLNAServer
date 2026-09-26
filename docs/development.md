@@ -77,11 +77,10 @@ that televisions reject, so VLC alone does not settle it.
 
 ## Versioning and releases
 
-Each project under `src/` carries its own `<Version>`, in the form `Major.Minor.MonthDate`. Bump the
-ones your change actually touched, and leave the rest alone - that is the whole point of the number.
-`DlnaServer.Host` is the product version: it is what the release tag names and what the About page
-shows. Test projects are not versioned individually and take the product version from
-`Directory.Build.props`.
+Every project carries its own `<Version>`, in the form `Major.Minor.MonthDate` - the test projects
+included. Bump the ones your change actually touched, and leave the rest alone - that is the whole point
+of the number. `DlnaServer.Host` is the product version: it is what the release tag names and what the
+About page shows. No other project tracks it.
 
 If an operator would notice the change, add an entry to `release-notes.md` in their terms - it is not
 a build log.
@@ -93,7 +92,7 @@ headings, its trap entries, `release-notes.md`'s section headings - is a **histo
 correct as written. Do not sweep those; rewriting history to match the present is how a decision record
 stops being one.
 
-A release is a `v`-prefixed tag on the host's version (`v1.1.0924`); pushing it builds, tests and
+A release is a `v`-prefixed tag on the host's version (`v1.1.0926`); pushing it builds, tests and
 attaches the linux-x64 archive.
 
 ## Pull requests

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using DlnaServer.Core.Configuration;
 using DlnaServer.Host.Delivery;
@@ -183,7 +184,7 @@ namespace DlnaServer.IntegrationTests
             var options = new DlnaOptions { FileCache = new FileCacheOptions() };
             var monitor = new MutableOptionsMonitor<DlnaOptions>(options);
 
-            using var cache = new ServedFileCache(monitor, NullLogger<ServedFileCache>.Instance);
+            using var cache = new ServedFileCache(monitor, TimeProvider.System, NullLogger<ServedFileCache>.Instance);
 
             _ = await cache.LoadAsync(path, CachedContentClass.Media, CancellationToken.None);
             cache.TryGet(path, out _).Should().BeTrue("because the file was cached while caching was on");
@@ -424,11 +425,127 @@ namespace DlnaServer.IntegrationTests
                 "because callers evict on every regeneration and most files are not in the cache");
         }
 
+        /// <summary>
+        /// <see cref="Microsoft.Extensions.Caching.Memory.MemoryCache"/> removes an expired entry only when
+        /// it is read or written, so a server nobody was using held every expired payload - 1.09 GB on the
+        /// NAS, 12.5 hours after the last request. The sweep is what removes them now.
+        /// </summary>
+        [Test]
+        public async Task RemoveExpired_OnACacheNobodyIsUsing_DropsOnlyTheEntriesPastTheirExpiry()
+        {
+            // Arrange
+            var time = new MutableTimeProvider(new DateTimeOffset(2026, 9, 26, 10, 0, 0, TimeSpan.Zero));
+            var monitor = new MutableOptionsMonitor<DlnaOptions>(
+                new DlnaOptions { FileCache = new FileCacheOptions { ThumbnailSlidingExpirationInMinutes = 10 } });
+            using var cache = new ServedFileCache(monitor, time, NullLogger<ServedFileCache>.Instance);
+            var keptPath = Path.Combine(_root, "kept.jpg");
+
+            // Both stored before the clock moves: a write after it would let the cache start its own scan.
+            cache.Store(Path.Combine(_root, "expired.jpg"), CachedContentClass.Thumbnail, new byte[16]);
+            monitor.CurrentValue = new DlnaOptions
+            {
+                FileCache = new FileCacheOptions { ThumbnailSlidingExpirationInMinutes = 60 },
+            };
+            cache.Store(keptPath, CachedContentClass.Thumbnail, new byte[16]);
+            time.Advance(TimeSpan.FromMinutes(11));
+
+            var heldBeforeSweep = cache.Describe().EntryCount;
+
+            // Act
+            cache.RemoveExpired();
+            var isSwept = await WaitUntilAsync(() => cache.Describe().EntryCount == 1, TimeSpan.FromSeconds(10));
+
+            // Assert
+            heldBeforeSweep.Should().Be(2,
+                "because nothing removes an expired entry while the cache is neither read nor written");
+            isSwept.Should().BeTrue("because the sweep starts the cache's own scan for expired entries");
+            cache.Describe().Paths.Should().Equal([keptPath],
+                "because expired.jpg is a minute past its 10-minute sliding expiry and kept.jpg has 49 minutes left");
+        }
+
+        /// <summary>
+        /// Switching the cache off is how an operator reclaims its memory, and only a request used to notice
+        /// the switch - so on a server nobody was using, the payloads stayed until a television asked.
+        /// </summary>
+        [Test]
+        public void RemoveExpired_AfterCachingIsSwitchedOff_EmptiesTheCache()
+        {
+            // Arrange
+            var monitor = new MutableOptionsMonitor<DlnaOptions>(new DlnaOptions());
+            using var cache = new ServedFileCache(monitor, TimeProvider.System, NullLogger<ServedFileCache>.Instance);
+
+            cache.Store(Path.Combine(_root, "thumb.jpg"), CachedContentClass.Thumbnail, new byte[16]);
+            monitor.CurrentValue = new DlnaOptions { FileCache = new FileCacheOptions { Enabled = false } };
+
+            // Act
+            cache.RemoveExpired();
+
+            // Assert
+            cache.Describe().EntryCount.Should().Be(0,
+                "because a switched-off cache must give its memory back without waiting for a request");
+        }
+
+        /// <summary>
+        /// The eviction callback forced a compacting collection from inside itself, while
+        /// <see cref="Microsoft.Extensions.Caching.Memory.MemoryCache"/> still held the evicted entry - so the one buffer the collection was
+        /// for survived it. On the NAS that left 264.9 MB on the large object heap with the cache empty.
+        /// </summary>
+        [Test]
+        public async Task Evict_ForAFilm_TheCollectionItTriggersFreesItsBuffer()
+        {
+            // Arrange
+            using var cache = CreateCache(new FileCacheOptions());
+            var path = Path.Combine(_root, "film.mkv");
+
+            // A collection still running for an earlier test would swallow this eviction's request.
+            (await WaitUntilAsync(static () => !ServedFileCache.IsCollectingEvictedMedia, TimeSpan.FromSeconds(30)))
+                .Should().BeTrue("because an earlier eviction's collection finishes within seconds");
+
+            var buffer = StoreFilm(cache, path);
+
+            // Act
+            cache.Evict(path);
+            var isFreed = await WaitUntilAsync(() => !buffer.IsAlive, TimeSpan.FromSeconds(15));
+
+            // Assert
+            isFreed.Should().BeTrue(
+                "because the collection an evicted film triggers must run once the cache has let go of it, "
+                + "and nothing else here forces a full collection");
+        }
+
         private static ServedFileCache CreateCache(FileCacheOptions fileCache)
         {
             var monitor = new StaticOptionsMonitor<DlnaOptions>(new DlnaOptions { FileCache = fileCache });
 
-            return new ServedFileCache(monitor, NullLogger<ServedFileCache>.Instance);
+            return new ServedFileCache(monitor, TimeProvider.System, NullLogger<ServedFileCache>.Instance);
+        }
+
+        // Not inlined, so no local of the caller's frame keeps the payload reachable.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static WeakReference StoreFilm(ServedFileCache cache, string path)
+        {
+            var payload = new byte[4 * BytesPerMegabyte];
+
+            cache.Store(path, CachedContentClass.Media, payload);
+
+            return new WeakReference(payload);
+        }
+
+        private static async Task<bool> WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+
+            while (!condition())
+            {
+                if (DateTime.UtcNow > deadline)
+                {
+                    return false;
+                }
+
+                await Task.Delay(50);
+            }
+
+            return true;
         }
 
         private string CreateFile(string name, int sizeInBytes)

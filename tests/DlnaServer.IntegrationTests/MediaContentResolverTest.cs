@@ -32,7 +32,7 @@ namespace DlnaServer.IntegrationTests
         {
             var options = new StaticOptionsMonitor<DlnaOptions>(new DlnaOptions());
 
-            _cache = new ServedFileCache(options, NullLogger<ServedFileCache>.Instance);
+            _cache = new ServedFileCache(options, TimeProvider.System, NullLogger<ServedFileCache>.Instance);
             _backlog = new MediaCacheBacklog();
             _resolver = new MediaContentResolver(_cache, _backlog);
         }
@@ -110,6 +110,7 @@ namespace DlnaServer.IntegrationTests
 
             using var cache = new ServedFileCache(
                 new StaticOptionsMonitor<DlnaOptions>(options),
+                TimeProvider.System,
                 NullLogger<ServedFileCache>.Instance);
 
             var resolver = new MediaContentResolver(cache, _backlog);
@@ -137,7 +138,7 @@ namespace DlnaServer.IntegrationTests
 
             var monitor = new StaticOptionsMonitor<DlnaOptions>(options);
 
-            using var cache = new ServedFileCache(monitor, NullLogger<ServedFileCache>.Instance);
+            using var cache = new ServedFileCache(monitor, TimeProvider.System, NullLogger<ServedFileCache>.Instance);
             var resolver = new MediaContentResolver(cache, _backlog);
             var file = CreateFile(sizeInBytes: 4 * 1024 * 1024);
 

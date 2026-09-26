@@ -33,6 +33,7 @@ namespace DlnaServer.IntegrationTests
         {
             _cache = new ServedFileCache(
                 new StaticOptionsMonitor<DlnaOptions>(new DlnaOptions()),
+                TimeProvider.System,
                 NullLogger<ServedFileCache>.Instance);
             _backlog = new MediaCacheBacklog();
         }

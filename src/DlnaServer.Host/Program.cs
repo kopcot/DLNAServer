@@ -1,4 +1,6 @@
-﻿using DlnaServer.Admin;
+﻿using System.Reflection;
+using System.Runtime.InteropServices;
+using DlnaServer.Admin;
 using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Hosting;
 using DlnaServer.Host.Configuration;
@@ -37,7 +39,7 @@ using DlnaServer.Core.Uploads;
 
 namespace DlnaServer.Host
 {
-    public static class Program
+    public static partial class Program
     {
         /// <summary>
         /// Name of the configuration file holding <see cref="DlnaOptions"/>, resolved relative to the content root.
@@ -130,10 +132,23 @@ namespace DlnaServer.Host
 
                 await using (var app = BuildApplication(args, restartSignal, databaseResetSignal))
                 {
+                    // Every start, so a log read after a deploy says which build wrote each line.
+                    LogStarting(app.Logger, ProductVersion(), RuntimeInformation.FrameworkDescription);
+
                     await app.RunAsync();
                 }
             }
             while (restartSignal.IsRestartRequested);
+        }
+
+        // The number the About page shows - the informational version carries the leading zero of MonthDate.
+        private static string ProductVersion()
+        {
+            var assembly = typeof(Program).Assembly;
+
+            return assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                ?? assembly.GetName().Version?.ToString()
+                ?? "unknown";
         }
 
         private static WebApplication BuildApplication(

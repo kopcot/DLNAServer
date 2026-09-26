@@ -675,6 +675,12 @@ table track, and what the About page shows. Test projects are not versioned indi
 assembly ships to nobody - and take the product version from the `Tests`-conditioned group in
 `Directory.Build.props`, which is the one place a version is still set centrally.
 
+**Changed 2026-09-26, on the maintainer's decision: the test projects carry their own `<Version>` too**, in
+their own `.csproj`, and are bumped only when that test project is touched. Nothing tracks the product
+version any more. The central value had not tracked it in practice either - it still read `1.1.0923` with
+the host at `1.1.0924` - and one shared number for three test assemblies would have bumped all three for a
+change to one. The `Tests`-conditioned group in `Directory.Build.props` no longer sets a version.
+
 The About page reads `AssemblyInformationalVersionAttribute` off the **entry** assembly rather than its
 own. That distinction did not matter while every assembly carried the same number and it is load-bearing
 now: `typeof(About).Assembly` is `DlnaServer.Admin`, so the page would have reported the admin library's

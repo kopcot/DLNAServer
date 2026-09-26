@@ -32,7 +32,7 @@ namespace DlnaServer.IntegrationTests
             _restartSignal = new RestartSignal();
 
             _options = new StaticOptionsMonitor<DlnaOptions>(new DlnaOptions());
-            _fileCache = new ServedFileCache(_options, NullLogger<ServedFileCache>.Instance);
+            _fileCache = new ServedFileCache(_options, TimeProvider.System, NullLogger<ServedFileCache>.Instance);
             _blocker = new ApiBlocker(TimeProvider.System);
 
             _controller = new ManageController(

@@ -4,7 +4,7 @@
     <!-- NO <Version> BELONGS IN THIS FILE. Each shipped project carries its own, so that a version says
          which assembly changed rather than only when the solution was last touched - the scheme, who may
          bump which part, and which project is the product version are in docs/decisions.md section 7 under
-         "Assembly version". The only version set here is the test fallback at the bottom. -->
+         "Assembly version". That includes the test projects, which set their own since 2026-09-26. -->
     <TargetFramework>net8.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
@@ -52,9 +52,6 @@
   <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Tests'))">
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <!-- A test assembly ships to nobody, so versioning it per project would say nothing. It takes the
-         product version instead, and is the one place a version is still set centrally. -->
-    <Version>1.1.0923</Version>
   </PropertyGroup>
 
 </Project>

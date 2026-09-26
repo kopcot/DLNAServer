@@ -10,6 +10,10 @@ worth telling you about is added to the version it belongs to.
 
 ## 1.1
 
+**Memory is handed back when nobody is watching.** Films and previews kept in memory are meant to be let go after a while, but the server only noticed they had expired the next time something asked it for a file - so a server left alone overnight kept everything it had served the evening before, over a gigabyte on one real library. It now checks every minute. A film let go of is also really freed now, rather than lingering until you pressed *Empty the memory*.
+
+**The log says which version started.** Every start writes the server's version to the log, so after an upgrade you can tell which lines came from which build.
+
 **A menu button on a phone.** On a narrow screen the pages were a sideways-scrolling strip across the top, and most of it was out of sight. There is now a menu button beside the server's name that opens the full list, and it closes again once you pick a page.
 
 **Figures line up.** The figures on the Dashboard and on *Recently served* sit in four columns (two on a narrower screen), so each one sits under the one above it in every group, rather than each group spreading its own few across the page. *Tidy-ups so far* is now *Memory tidy-ups so far*, and *Memory / disc / database* is now *Times served from memory / disc / database*, with a line underneath explaining it.

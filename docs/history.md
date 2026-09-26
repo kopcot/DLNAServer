@@ -1236,7 +1236,7 @@ backlog, fixes the crowding complaint and one contributor to section 3b at the s
 
 **Item 9, and what the reference actually does.** `MemoryCache` expiration is lazy: an entry past its
 sliding window is not evicted until something touches the cache or the 30 s `ExpirationScanFrequency`
-sweep runs, and until then it keeps its payload reachable - so with the byte cache that is up to 512 MB
+sweep runs (*it only runs when something touches the cache - see section 6t*), and until then it keeps its payload reachable - so with the byte cache that is up to 512 MB
 per entry held past its own expiry. The reference's
 `MemoryCacheHelper.ScheduleCacheKeyEviction` is **not** a timer on the entry and never removes the key it
 is given. It is a fire-and-forget `Task.Run` that waits `delay + clamp(delay/2, 2s, 10s)`, writes a
@@ -3225,3 +3225,83 @@ and the example release tag were both still `1.1.0923` against a host at `1.1.09
 
 Left as found: this file carries a second `#` heading, *DlnaServer rewrite — working plan*, which opens the
 archived plan inside it. Demoting it would put it on the same level as the `##` sections it contains.
+
+### Memory the served-bytes cache kept after it was done with it (metrics pass)
+
+The live server was read on 2026-09-26 at `1.1.0924`, 14 h 38 min after its deploy: **1310.4 MB** working
+set, **1088.9 MB** of it in the served-bytes cache - 24,305 entries, 24,298 of them previews, loaded by one
+television paging through every folder with `WarmPreviewsOnBrowse` on, **12.5 hours after its last
+request**. Thumbnails slide out after 60 minutes and films after 10; nothing had left.
+
+**Expired entries were never removed from an idle server.** `MemoryCache` looks for expired entries only
+when it is read or written; `ExpirationScanFrequency` rate-limits that look, it does not schedule one.
+Section 6h item 9 described the 30 s scan as a sweep that "runs", which was the misreading. `Describe()`
+reads `Count` and `Keys`, neither of which triggers the scan, so the dashboard reported the held bytes
+faithfully and nothing released them. One request for `contentDirectory.xml` dropped the cache from
+24,305 entries to 1. **`ServedFileCache` now runs a timer every minute that removes a key it never
+stores**, which is the cheapest call that starts `MemoryCache`'s own scan - and that scan, unlike
+`Compact(0)`, allocates nothing: `Compact` sorts every live entry into three lists before removing the
+expired ones, about 1.5 MB of large-object garbage a minute at the NAS's 24,305 entries. The scan runs on
+the cache's own task, so nothing it could throw reaches the timer, where an unhandled exception would end
+the process. The store's clock now comes from the injected `TimeProvider`, so a test can move past an
+expiry rather than wait an hour for it.
+
+**The collection an evicted film triggers could never free that film.** The media post-eviction callback
+forced its compacting collection from inside the callback, and `MemoryCache` holds the evicted entry - so
+its buffer - until the callback returns. Read on the NAS afterwards: **264.9 MB on the large object heap
+with 0 MB and 2 entries in the cache**, 733.9 MB working set. *Empty the memory*, which collects outside
+any callback, took it to **0.5 MB and 200.2 MB**. The collection now waits a second and then runs once:
+by then the callback has returned, and any other film the same sweep evicted is released by that one
+collection rather than each paying for its own. It replaces two back-to-back blocking compacting
+collections, the first of which ran while the entry was still held and so paid the pause for nothing. The
+`SemaphoreSlim` beside the in-progress flag went with it - the flag already admitted one collection at a
+time, and the semaphore's `Wait` result was ignored before `Release`, which on a timeout would have thrown
+from a task nobody observes. A film evicted while a collection is already running sets a second flag, and the running
+collection goes round once more rather than leaving that film for some later, unrelated eviction.
+
+**The sweep also empties a cache that has been switched off.** Only `IsEnabled` releases the payloads when
+`FileCache.Enabled` goes false, and only the request path read it - so switching the cache off to reclaim
+memory did nothing on a server nobody was using. The sweep reads it first. `ExpirationScanFrequency` is now
+derived as half the sweep interval rather than written as its own 30 s, because the sweep only works while
+it is shorter: the scan a tick asks for runs only if the last one is older than that frequency.
+
+Both are covered by tests that fail on the old code - verified by putting the collection back inside the
+callback and removing the sweep: 2 of 21 `ServedFileCacheTest` cases fail, and all pass with the fix. A
+third covers the switched-off cache. The repeated collection has no test of its own: provoking an eviction
+inside the one-second window of a running collection is a timing test, and the code is five lines.
+The sweep test stores both of its entries before moving the clock, because any write after the clock
+has moved lets the cache start its own scan and would make the test pass or fail on thread timing. The eviction test holds only a `WeakReference` to a 4 MB payload and waits for it to die without
+forcing a collection of its own.
+
+**The startup log names the build.** `Starting ZEN DLNA Server <informational version> on <runtime>`, on
+every start including an in-process restart; until now a deploy could only be dated from the DLL
+timestamp.
+
+**Looked into and left alone, with the reason:**
+
+- **The nightly 01:00 slow query** - 452.6 ms on 09-16, 585.9 ms on 09-26, once a night and never
+  otherwise. It is `GetPendingProcessingAsync`, the idle poll of `MediaProcessingHostedService`, which walks
+  every row by design. Warm, it stays under the 50 ms threshold; the one slow run a night is the first poll
+  after something on the NAS around 01:00 pushes `dlna.sqlite` out of the operating system's cache. Rows
+  grew 0.2% over the period while the time grew 29%, which fits a cold walk through a 909 MB file whose
+  `Files` pages sit ever further apart between stored preview images, not a query that got worse. Half a
+  second a night on a background thread nobody waits for; if it ever matters, a partial index matching the
+  pending predicate, checked with `EXPLAIN QUERY PLAN` alongside W9.
+- **Capping preview warming** - not needed at these numbers. 580 MB is 11% of the NAS's 5120 MB budget;
+  thumbnails outrank films in eviction priority, so warming could only push a film out once about nine
+  films were live at the same moment. What made it look expensive was the retention fixed above: with the
+  sweep, a full crawl costs about 580 MB for an hour and then nothing. Lowering
+  `ThumbnailSlidingExpirationInMinutes` shortens that hour without code. Revisit if the budget drops below
+  about 1.5 GB. One consequence belongs with the maintainer rather than with this change: films are cached at
+  `Low` priority and previews at `Normal`, deliberately, so if warming ever does fill the budget, the film
+  being watched is what gives way first - its response is unaffected, but its next range request reads the
+  disc.
+
+### Test projects version themselves (maintainer's correction)
+
+Review found the `Tests`-conditioned `<Version>` in `Directory.Build.props` still at `1.1.0923` while
+`docs/development.md` said test projects take the product version from it. The maintainer's ruling: they do
+not track the product version at all - every assembly carries its own version and is bumped only when that
+project is touched. Each test `.csproj` now sets its own `<Version>`: `DlnaServer.IntegrationTests` at
+`1.1.0926`, since this batch changed it, and the other two unchanged at `1.1.0923`. `docs/decisions.md`
+section 7, `docs/development.md` and `CLAUDE.md` say so.

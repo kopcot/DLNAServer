@@ -25,7 +25,24 @@ namespace DlnaServer.Host.Delivery.Caching
 
         private const int BucketSize = 64 * 1024;
 
+        /// <summary>
+        /// How often expired entries are removed while nothing is asking for anything.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="MemoryCacheOptions.ExpirationScanFrequency"/> is not a timer: <see cref="MemoryCache"/>
+        /// only looks for expired entries when it is read or written. An idle server therefore held every
+        /// expired payload indefinitely - 1.09 GB in 24,305 entries on the NAS, 12.5 hours after the last
+        /// request, on 2026-09-26.
+        /// </remarks>
+        private static readonly TimeSpan _expiredSweepInterval = TimeSpan.FromMinutes(1);
+
+        // Never stored. Removing it is the cheapest call that makes MemoryCache run its own expired-entry
+        // scan, which walks the entries without allocating - Compact(0) builds three lists of every live one.
+        private static readonly object _expirationScanTrigger = new();
+
         private readonly MemoryCache _cache;
+
+        private readonly ITimer _expiredSweep;
 
         /// <summary>
         /// Reads currently in progress, keyed by path, so simultaneous callers share one.
@@ -52,13 +69,18 @@ namespace DlnaServer.Host.Delivery.Caching
         /// </summary>
         private long _databaseFills;
 
-        private readonly static SemaphoreSlim _blockGC = new(1, 1);
         private static int _blockGCCollectInProgress;
+
+        // Set by every film eviction, so one that lands while a collection is already running gets another.
+        private static int _blockGCCollectRequested;
 
         private readonly IOptionsMonitor<DlnaOptions> _options;
         private readonly ILogger<ServedFileCache> _logger;
 
-        public ServedFileCache(IOptionsMonitor<DlnaOptions> options, ILogger<ServedFileCache> logger)
+        public ServedFileCache(
+            IOptionsMonitor<DlnaOptions> options,
+            TimeProvider timeProvider,
+            ILogger<ServedFileCache> logger)
         {
             _options = options;
             _logger = logger;
@@ -68,8 +90,10 @@ namespace DlnaServer.Host.Delivery.Caching
 
             _cache = new MemoryCache(new MemoryCacheOptions
             {
-                Clock = new SystemClock(),
-                ExpirationScanFrequency = TimeSpan.FromSeconds(30),
+                // The injected clock, so a test can move past an expiry instead of waiting for it.
+                Clock = new TimeProviderClock(timeProvider),
+                // Half the sweep interval, so every tick is late enough for the scan it asks for to run.
+                ExpirationScanFrequency = _expiredSweepInterval / 2,
                 SizeLimit = BudgetInBytes,
 
                 // Without this GetCurrentStatistics() returns null, and the hit rate is the only number
@@ -81,6 +105,12 @@ namespace DlnaServer.Host.Delivery.Caching
                 BudgetInBytes / BytesPerMegabyte,
                 fileCache.MaxTotalSizeInMegabytes,
                 GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / BytesPerMegabyte);
+
+            _expiredSweep = timeProvider.CreateTimer(
+                static state => ((ServedFileCache)state!).RemoveExpired(),
+                this,
+                _expiredSweepInterval,
+                _expiredSweepInterval);
         }
 
         public long BudgetInBytes { get; }
@@ -222,31 +252,44 @@ namespace DlnaServer.Host.Delivery.Caching
             LogStored(filePath, content.Length, contentClass);
         }
 
+        /// <summary>
+        /// Whether the collection an evicted film asked for is still running.
+        /// </summary>
+        internal static bool IsCollectingEvictedMedia => Volatile.Read(ref _blockGCCollectInProgress) != 0;
+
         private static void OnMediaEvicted(object key, object? value, EvictionReason reason, object? state)
         {
+            Volatile.Write(ref _blockGCCollectRequested, 1);
+
             if (Interlocked.Exchange(ref _blockGCCollectInProgress, 1) != 0)
             {
                 return;
             }
 
-            _blockGC.Wait(TimeSpan.FromMinutes(5));
+            // Not collected here: MemoryCache holds the evicted entry, and so its buffer, until this callback
+            // returns, so a collection inside it could never free the film that triggered it. On the NAS
+            // that left 264.9 MB on the large object heap with the cache empty, until a manual release.
+            _ = CollectEvictedMediaAsync();
+        }
 
-            try
+        private static async Task CollectEvictedMediaAsync()
+        {
+            do
             {
+                Volatile.Write(ref _blockGCCollectRequested, 0);
+
+                // Long enough for the callback that queued this to have returned, and for any other film
+                // evicted by the same sweep to be released with it by one collection instead of several.
+                await Task.Delay(TimeSpan.FromSeconds(1));
+
                 GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
                 GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
-                GC.WaitForPendingFinalizers();
 
-                Thread.Sleep(TimeSpan.FromSeconds(1));
-
-                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
-            }
-            finally
-            {
                 Volatile.Write(ref _blockGCCollectInProgress, 0);
-                _blockGC.Release();
             }
+            // Again if a film was evicted meanwhile - unless its own callback has already started a run.
+            while (Volatile.Read(ref _blockGCCollectRequested) != 0
+                && Interlocked.Exchange(ref _blockGCCollectInProgress, 1) == 0);
         }
 
 
@@ -284,6 +327,34 @@ namespace DlnaServer.Host.Delivery.Caching
             return cleared;
         }
 
+        /// <summary>
+        /// Removes every entry past its expiry, and nothing else.
+        /// </summary>
+        /// <remarks>
+        /// The removal itself is done by <see cref="MemoryCache"/>'s own scan, which this starts on a
+        /// thread-pool task and does not wait for. The scan runs when it last ran longer ago than
+        /// <see cref="MemoryCacheOptions.ExpirationScanFrequency"/>, which is set to half the sweep interval
+        /// for exactly that reason.
+        /// </remarks>
+        internal void RemoveExpired()
+        {
+            // IsEnabled empties a cache that has been switched off, which an idle server otherwise never asks.
+            if (_isDisposed || !IsEnabled)
+            {
+                return;
+            }
+
+            try
+            {
+                _cache.Remove(_expirationScanTrigger);
+            }
+            catch (ObjectDisposedException)
+            {
+                // A tick that was already running when the store was disposed. An exception escaping a
+                // timer callback ends the process, and there is nothing left to sweep.
+            }
+        }
+
         public bool Evict(string filePath)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
@@ -306,6 +377,7 @@ namespace DlnaServer.Host.Delivery.Caching
             // swallowed as an unobserved task exception, with no log line, on every shutdown that caught
             // a fill in progress.
             _isDisposed = true;
+            _expiredSweep.Dispose();
             _cache.Dispose();
         }
 
@@ -506,6 +578,19 @@ namespace DlnaServer.Host.Delivery.Caching
                 CachedContentClass.StaticAsset => CacheItemPriority.High,
                 _ => throw new ArgumentOutOfRangeException(nameof(contentClass), contentClass, null),
             };
+        }
+
+        // MemoryCacheOptions.Clock takes the older ISystemClock rather than a TimeProvider.
+        private sealed class TimeProviderClock : ISystemClock
+        {
+            private readonly TimeProvider _timeProvider;
+
+            public TimeProviderClock(TimeProvider timeProvider)
+            {
+                _timeProvider = timeProvider;
+            }
+
+            public DateTimeOffset UtcNow => _timeProvider.GetUtcNow();
         }
     }
 }
