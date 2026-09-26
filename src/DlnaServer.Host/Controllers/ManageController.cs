@@ -378,7 +378,12 @@ namespace DlnaServer.Host.Controllers
         /// Paged because a single folder can hold thousands of files, and the unpaged reads materialised
         /// every one of them into one response. <c>take</c> defaults to the cap rather than to
         /// <see cref="DefaultPageSize"/>, so a call without parameters still gets a whole ordinary folder,
-        /// and the two totals say when there is more to fetch with <c>skip</c>.
+        /// and the two totals say when there is more to fetch.
+        /// <para>
+        /// The two listings page independently: <c>skipChildren</c> and <c>skipFiles</c> move each one on its
+        /// own, and <c>skip</c> is the offset for whichever of them is not given - so a caller that pages
+        /// with <c>skip</c> alone moves both together, as before.
+        /// </para>
         /// </remarks>
         [HttpGet("directory/{id:guid}")]
         public async Task<IActionResult> GetDirectoryAsync(
@@ -387,7 +392,9 @@ namespace DlnaServer.Host.Controllers
             [FromServices] IMediaFileRepository files,
             CancellationToken cancellationToken,
             [FromQuery] int skip = 0,
-            [FromQuery] int take = MaxPageSize)
+            [FromQuery] int take = MaxPageSize,
+            [FromQuery] int? skipChildren = null,
+            [FromQuery] int? skipFiles = null)
         {
             var directory = await directories.GetByPublicIdAsync(id, cancellationToken);
 
@@ -396,7 +403,8 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
-            var offset = Math.Max(skip, 0);
+            var childOffset = Math.Max(skipChildren ?? skip, 0);
+            var fileOffset = Math.Max(skipFiles ?? skip, 0);
             var pageSize = ClampPageSize(take);
 
             return Ok(new
@@ -406,14 +414,14 @@ namespace DlnaServer.Host.Controllers
                 FileCount = await files.CountByDirectoryAsync(id, cancellationToken),
                 Children = await directories.GetChildrenPageAsync(
                     id,
-                    offset,
+                    childOffset,
                     pageSize,
                     sortByDate: false,
                     descending: false,
                     cancellationToken),
                 Files = await files.GetByDirectoryPageAsync(
                     id,
-                    offset,
+                    fileOffset,
                     pageSize,
                     sortByDate: false,
                     descending: false,

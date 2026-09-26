@@ -35,18 +35,22 @@ namespace DlnaServer.Host.Diagnostics
             _readySignal = readySignal;
         }
 
-        public async Task InvokeAsync(HttpContext context)
+        public Task InvokeAsync(HttpContext context)
         {
             ArgumentNullException.ThrowIfNull(context);
 
             // The steady state for the whole life of the process, so it must cost nothing: no linked
-            // token source and no timer per request once the schema is known to be there.
+            // token source, no timer and no state machine per request once the schema is known to be there.
             if (_readySignal.IsReady)
             {
-                await _next(context);
-                return;
+                return _next(context);
             }
 
+            return WaitThenNextAsync(context);
+        }
+
+        private async Task WaitThenNextAsync(HttpContext context)
+        {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
             timeout.CancelAfter(_waitLimit);
 

@@ -226,19 +226,23 @@ namespace DlnaServer.Host.Upnp.Control
 
             var subtitles = await LoadSubtitlesAsync(pagedFiles, cancellationToken);
 
+            // One snapshot for the whole page, not a read per item: while configuration is invalid every
+            // read logs an error, and one page is one decision about which subtitle types are offered.
+            var current = _options.CurrentValue;
+
             var document = new DidlDocument
             {
                 Containers = pagedContainers
                     .Select(c => DidlMapper.MapContainer(c, endpoint, listingParentId))
                     .ToArray(),
                 Items = pagedFiles
-                    .Select(f => DidlMapper.MapItem(f, endpoint, listingParentId, SubtitlesOf(subtitles, f)))
+                    .Select(f => DidlMapper.MapItem(f, endpoint, listingParentId, SubtitlesOf(subtitles, f, current)))
                     .ToArray(),
             };
 
             ApplyFilter(document, options);
 
-            WarmPreviews(pagedFiles, _options.CurrentValue, _backlog);
+            WarmPreviews(pagedFiles, current, _backlog);
 
             return new BrowseResponse
             {
@@ -288,7 +292,14 @@ namespace DlnaServer.Host.Upnp.Control
             {
                 var subtitles = await LoadSubtitlesAsync([file], cancellationToken);
 
-                document.Items = [DidlMapper.MapItem(file, endpoint, DidlMapper.ParentIdOf(file), SubtitlesOf(subtitles, file))];
+                document.Items =
+                [
+                    DidlMapper.MapItem(
+                        file,
+                        endpoint,
+                        DidlMapper.ParentIdOf(file),
+                        SubtitlesOf(subtitles, file, _options.CurrentValue)),
+                ];
             }
 
             var count = (uint)(document.Containers.Length + document.Items.Length);
@@ -457,12 +468,13 @@ namespace DlnaServer.Host.Upnp.Control
                 : await _subtitles.GetForFilesAsync(withSubtitles, cancellationToken);
         }
 
-        private IReadOnlyList<SubtitleFileDto> SubtitlesOf(
+        private static IReadOnlyList<SubtitleFileDto> SubtitlesOf(
             IReadOnlyDictionary<Guid, IReadOnlyList<SubtitleFileDto>> subtitles,
-            MediaFileDto file)
+            MediaFileDto file,
+            DlnaOptions options)
         {
             return subtitles.TryGetValue(file.PublicId, out var found)
-                ? DidlMapper.Offerable(found, _options.CurrentValue.Library.SubtitleFileExtensions)
+                ? DidlMapper.Offerable(found, options.Library.SubtitleFileExtensions)
                 : [];
         }
 

@@ -149,13 +149,6 @@ namespace DlnaServer.IntegrationTests
             throw new NotSupportedException();
         }
 
-        public Task<IReadOnlyList<MediaFileDto>> GetByDirectoryAsync(
-            Guid directoryPublicId,
-            CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException();
-        }
-
         public Task<MediaFileNeighboursDto> GetPlayableNeighboursAsync(
             Guid directoryPublicId,
             Guid filePublicId,

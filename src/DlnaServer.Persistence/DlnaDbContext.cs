@@ -42,7 +42,7 @@ namespace DlnaServer.Persistence
         /// test forbids it - so they catch <see cref="DbException"/>, and a wrapped <c>database is locked</c>
         /// slipped past them. The inner exception is rethrown with its original stack.
         /// </remarks>
-        public async Task<int> SaveChangesSurfacingDbExceptionAsync(CancellationToken cancellationToken)
+        public async Task<int> SaveChangesSurfacingDbExceptionAsync(CancellationToken cancellationToken = default)
         {
             try
             {

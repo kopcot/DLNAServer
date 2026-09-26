@@ -30,6 +30,7 @@ namespace DlnaServer.IntegrationTests
         private FakeChangeWatcher _watcher = null!;
         private RecordingIndexer _indexer = null!;
         private ServiceProvider _provider = null!;
+        private DlnaOptions _options = null!;
         private FileWatcherHostedService _service = null!;
 
         [SetUp]
@@ -43,13 +44,14 @@ namespace DlnaServer.IntegrationTests
             _ = services.AddScoped<ILibraryIndexer>(_ => _indexer);
             _provider = services.BuildServiceProvider();
 
-            var options = new DlnaOptions();
-            options.Library.FileSettleSeconds = 30;
+            _options = new DlnaOptions();
+            _options.Library.FileSettleSeconds = 30;
+            _options.Library.SourceFolders = ["/share/Media"];
 
             _service = new FileWatcherHostedService(
                 _watcher,
                 _provider.GetRequiredService<IServiceScopeFactory>(),
-                new StaticOptionsMonitor<DlnaOptions>(options),
+                new StaticOptionsMonitor<DlnaOptions>(_options),
                 _time,
                 new DatabaseReadySignal(),
                 NullLogger<FileWatcherHostedService>.Instance);
@@ -260,6 +262,61 @@ namespace DlnaServer.IntegrationTests
             restarted.Should().BeFalse("because nothing faulted");
         }
 
+        /// <summary>
+        /// A rebuild that throws backs off like a fault instead of retrying every minute.
+        /// </summary>
+        /// <remarks>
+        /// A throwing Restart leaves nothing attached, and the unattached-folder retry used to rebuild it
+        /// every minute regardless of the fault backoff.
+        /// </remarks>
+        [Test]
+        public void RefreshWatch_WhenRestartKeepsThrowing_BacksOffLikeAFault()
+        {
+            // Arrange
+            _watcher.FailRestart = true;
+
+            // Act - the first build throws, the retry a minute later throws again, then one more minute.
+            var first = FluentActions.Invoking(_service.RefreshWatch);
+            _ = first.Should().Throw<IOException>("because the fake watcher refuses every rebuild");
+
+            _time.Advance(TimeSpan.FromSeconds(61));
+            var second = FluentActions.Invoking(_service.RefreshWatch);
+            _ = second.Should().Throw<IOException>("because the fake watcher refuses every rebuild");
+
+            _time.Advance(TimeSpan.FromSeconds(61));
+            _service.RefreshWatch();
+
+            // Assert
+            _watcher.Restarts.Should().Be(2,
+                "because two failed rebuilds in a row wait two minutes before the third, "
+                + "and the one-minute retry for an unattached folder must not cut that short");
+        }
+
+        [Test]
+        public void RefreshWatch_ARebuildForAConfigurationChange_SatisfiesAFaultThatWasBackingOff()
+        {
+            // Arrange - a watch built, then a fault rebuild, then a second fault that has to wait.
+            _service.RefreshWatch();
+
+            _watcher.IsRestartRequested = true;
+            _service.RefreshWatch();
+
+            _watcher.IsRestartRequested = true;
+            _service.RefreshWatch();
+
+            // Act - the operator adds a folder, which rebuilds at once, and the fault's wait then ends.
+            _options.Library.SourceFolders = ["/share/Media", "/share/Music"];
+            _service.RefreshWatch();
+
+            _time.Advance(TimeSpan.FromSeconds(61));
+            _service.RefreshWatch();
+
+            // Assert
+            _watcher.Restarts.Should().Be(3,
+                "because the configuration rebuild already replaced the faulted watch, "
+                + "so the fault that was waiting must not tear down a healthy one a minute later");
+        }
+
         [TestCase(1, 1)]
         [TestCase(2, 2)]
         [TestCase(3, 4)]
@@ -310,11 +367,21 @@ namespace DlnaServer.IntegrationTests
                 return [.. sourceFolders];
             }
 
+            public int Restarts { get; private set; }
+
+            public bool FailRestart { get; set; }
+
+            public bool IsRestartRequested { get; set; }
+
             public IReadOnlyList<string> Restart(
                 IReadOnlyList<string> sourceFolders,
                 IReadOnlyList<string> excludedFolderNames)
             {
-                return [.. sourceFolders];
+                Restarts++;
+
+                return FailRestart
+                    ? throw new IOException("the inotify watch limit is exhausted")
+                    : [.. sourceFolders];
             }
 
             public bool ConsumeResyncRequest()
@@ -324,7 +391,10 @@ namespace DlnaServer.IntegrationTests
 
             public bool ConsumeRestartRequest()
             {
-                return false;
+                var isRequested = IsRestartRequested;
+                IsRestartRequested = false;
+
+                return isRequested;
             }
 
             public void RequestResync()

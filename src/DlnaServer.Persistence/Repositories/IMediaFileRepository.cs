@@ -66,16 +66,12 @@ namespace DlnaServer.Persistence.Repositories
             bool descending,
             CancellationToken cancellationToken = default);
 
-        Task<IReadOnlyList<MediaFileDto>> GetByDirectoryAsync(
-            Guid directoryPublicId,
-            CancellationToken cancellationToken = default);
-
         /// <summary>
         /// Where a file sits among the playable files of its folder, and the identifiers either side.
         /// </summary>
         /// <remarks>
         /// The preview page's Previous and Next buttons. It read the whole folder through
-        /// <see cref="GetByDirectoryAsync"/> and kept two entries, which on a folder of 1,564 photographs
+        /// an unpaged <c>GetByDirectoryAsync</c> and kept two entries, which on a folder of 1,564 photographs
         /// materialised 1,564 full records to render two buttons; this projects three columns instead.
         /// <para>
         /// Ordering and the definition of "playable" are deliberately identical to what the page did for

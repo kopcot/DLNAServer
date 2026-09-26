@@ -191,8 +191,12 @@ namespace DlnaServer.IntegrationTests
 
             // Assert
             var root = (await Directories().GetSourceRootsAsync(CancellationToken.None)).Single();
-            var children = await Directories().GetChildrenAsync(
-                root.PublicId,
+            var children = await Directories().GetChildrenPageAsync(
+                parentPublicId: root.PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
                 cancellationToken: CancellationToken.None);
 
             children.Should().ContainSingle(d => d.Name == "a",
@@ -778,9 +782,13 @@ namespace DlnaServer.IntegrationTests
                 + "for free");
 
             // And the point of keeping them: neither is listed.
-            var visible = await directories.GetChildrenAsync(
-                (await directories.GetByPathAsync(_mediaRoot, CancellationToken.None))!.PublicId,
-                CancellationToken.None);
+            var visible = await directories.GetChildrenPageAsync(
+                parentPublicId: (await directories.GetByPathAsync(_mediaRoot, CancellationToken.None))!.PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
+                cancellationToken: CancellationToken.None);
             visible.Select(static d => d.Name).Should().Equal(["movies"],
                 "because Films now leads to nothing a renderer would be shown");
         }
@@ -1995,9 +2003,13 @@ namespace DlnaServer.IntegrationTests
 
             var directories = scope.ServiceProvider.GetRequiredService<IMediaDirectoryRepository>();
 
-            var listed = await directories.GetChildrenAsync(
-                (await directories.GetByPathAsync(_mediaRoot, CancellationToken.None))!.PublicId,
-                CancellationToken.None);
+            var listed = await directories.GetChildrenPageAsync(
+                parentPublicId: (await directories.GetByPathAsync(_mediaRoot, CancellationToken.None))!.PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
+                cancellationToken: CancellationToken.None);
             listed.Select(static d => d.Name).Should().NotContain("Private",
                 "because everything above happens while the folder is still absent from every listing");
         }
