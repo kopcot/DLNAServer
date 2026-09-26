@@ -18,6 +18,7 @@ namespace DlnaServer.UnitTests.Persistence
     {
         // Built with the platform's separator, the way the scanner reports folders.
         private static readonly string _films = Path.Combine(Path.GetTempPath(), "dlna-subtitle-test", "Films");
+        private static readonly IReadOnlyDictionary<string, DlnaMedia> _subtitleTypes = SubtitleFileExtensionDefaults.Create();
 
         private SqliteTestDatabase _database = null!;
 
@@ -45,6 +46,7 @@ namespace DlnaServer.UnitTests.Persistence
             var (added, _) = await subtitles.SyncAutomaticAsync(
                 fileNamesByDirectory: Seen(_films, "film.en.srt"),
                 excludedFolders: [],
+                subtitleTypes: _subtitleTypes,
                 isDefinitelyAbsent: static _ => false,
                 cancellationToken: CancellationToken.None);
 
@@ -75,6 +77,7 @@ namespace DlnaServer.UnitTests.Persistence
             _ = await subtitles.SyncAutomaticAsync(
                 fileNamesByDirectory: Seen(_films, "film.en.srt", "chosen.srt"),
                 excludedFolders: [],
+                subtitleTypes: _subtitleTypes,
                 isDefinitelyAbsent: static _ => false,
                 cancellationToken: CancellationToken.None);
 
@@ -102,6 +105,7 @@ namespace DlnaServer.UnitTests.Persistence
             _ = await subtitles.SyncAutomaticAsync(
                 fileNamesByDirectory: Seen(_films, "film.en.srt"),
                 excludedFolders: [],
+                subtitleTypes: _subtitleTypes,
                 isDefinitelyAbsent: static _ => false,
                 cancellationToken: CancellationToken.None);
 
@@ -120,6 +124,7 @@ namespace DlnaServer.UnitTests.Persistence
             _ = await subtitles.SyncAutomaticAsync(
                 fileNamesByDirectory: Seen(Path.Combine(_films, "Subs"), "film.de.srt"),
                 excludedFolders: [],
+                subtitleTypes: _subtitleTypes,
                 isDefinitelyAbsent: static _ => false,
                 cancellationToken: CancellationToken.None);
             var probes = 0;
@@ -128,6 +133,7 @@ namespace DlnaServer.UnitTests.Persistence
             _ = await subtitles.SyncAutomaticAsync(
                 fileNamesByDirectory: new Dictionary<string, HashSet<string>>(StringComparer.Ordinal),
                 excludedFolders: ["Subs"],
+                subtitleTypes: _subtitleTypes,
                 isDefinitelyAbsent: _ =>
                 {
                     probes++;
@@ -156,6 +162,7 @@ namespace DlnaServer.UnitTests.Persistence
             var (_, dropped) = await subtitles.SyncAutomaticAsync(
                 fileNamesByDirectory: new Dictionary<string, HashSet<string>>(StringComparer.Ordinal),
                 excludedFolders: [],
+                subtitleTypes: _subtitleTypes,
                 isDefinitelyAbsent: static _ => true,
                 cancellationToken: CancellationToken.None);
 
@@ -179,6 +186,7 @@ namespace DlnaServer.UnitTests.Persistence
             _ = await subtitles.SyncAutomaticAsync(
                 fileNamesByDirectory: new Dictionary<string, HashSet<string>>(StringComparer.Ordinal),
                 excludedFolders: [],
+                subtitleTypes: _subtitleTypes,
                 isDefinitelyAbsent: static _ => true,
                 cancellationToken: CancellationToken.None);
 
@@ -200,12 +208,47 @@ namespace DlnaServer.UnitTests.Persistence
             _ = await subtitles.SyncAutomaticAsync(
                 fileNamesByDirectory: new Dictionary<string, HashSet<string>>(StringComparer.Ordinal),
                 excludedFolders: ["Subs"],
+                subtitleTypes: _subtitleTypes,
                 isDefinitelyAbsent: static _ => false,
                 cancellationToken: CancellationToken.None);
 
             // Assert
             (await LinksOfAsync(subtitles, film)).Should().BeEmpty(
                 "because a hand-added link may not point into a folder the library skips, however it got there");
+        }
+
+        /// <summary>
+        /// A type taken off the list is refused wherever a link is served, and the scan stops reporting its
+        /// files - so without this the links would stay listed for televisions and never work.
+        /// </summary>
+        [Test]
+        public async Task SyncAutomaticAsync_ForLinksOfATypeNoLongerListed_DropsThemButKeepsARemovedMarker()
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var film = await AddFilmAsync(context);
+            await AddLinkAsync(context, film, relativePath: "film.en.srt", source: SubtitleSource.Automatic);
+            await AddLinkAsync(context, film, relativePath: "chosen.srt", source: SubtitleSource.Manual);
+            await AddLinkAsync(context, film, relativePath: "film.de.srt", source: SubtitleSource.Removed);
+            await AddLinkAsync(context, film, relativePath: "film.vtt", source: SubtitleSource.Automatic);
+            var subtitleTypes = SubtitleFileExtensionDefaults.Create();
+            _ = subtitleTypes.Remove(".srt");
+            var subtitles = new SubtitleRepository(context);
+
+            // Act - the scan no longer reports the .srt files, and they are all still on disc.
+            _ = await subtitles.SyncAutomaticAsync(
+                fileNamesByDirectory: Seen(_films, "film.vtt"),
+                excludedFolders: [],
+                subtitleTypes: subtitleTypes,
+                isDefinitelyAbsent: static _ => false,
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            (await LinksOfAsync(subtitles, film)).Select(static l => l.RelativePath).Should().Equal(["film.vtt"],
+                "because a link of an unlisted type, found by name or added by hand, can no longer be served, "
+                + "and the hand-added one going must not keep the still-listed automatic link away");
+            (await context.SubtitleFiles.CountAsync(s => s.Source == SubtitleSource.Removed, CancellationToken.None)).Should().Be(1,
+                "because a removed marker is harmless, and keeps the file out if the type is listed again");
         }
 
         [TestCase("  EN  ", "en")]
@@ -255,6 +298,46 @@ namespace DlnaServer.UnitTests.Persistence
                 "because a language the operator set on a linked file is one the search can match");
             found.Select(static f => f.PublicId).Should().Equal([film.PublicId],
                 "because a film whose only subtitle is a linked file is still found by its language");
+        }
+
+        /// <summary>
+        /// The admin page catches only <see cref="System.Data.Common.DbException"/>, and its circuit keeps
+        /// this context for its whole life - so a failed add must surface as one and leave nothing tracked.
+        /// </summary>
+        [Test]
+        public async Task AddManualAsync_WhenTheSaveFails_ThrowsTheProviderExceptionAndForgetsTheRow()
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var film = await AddFilmAsync(context);
+            var subtitles = new SubtitleRepository(context);
+            var mediaFileId = await context.Files
+                .Where(f => f.PublicId == film.PublicId)
+                .Select(static f => f.Id)
+                .SingleAsync(CancellationToken.None);
+
+            // Pending in the tracker but not in the table, so the repository's lookup misses it and the
+            // save inserts the same link twice against its unique index.
+            _ = context.SubtitleFiles.Add(new SubtitleFileEntity
+            {
+                MediaFileId = mediaFileId,
+                RelativePath = "film.en.srt",
+                Source = SubtitleSource.Automatic,
+            });
+
+            // Act
+            var act = () => subtitles.AddManualAsync(
+                mediaFilePublicId: film.PublicId,
+                relativePath: "film.en.srt",
+                language: null,
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            await act.Should().ThrowAsync<System.Data.Common.DbException>(
+                "because EF's DbUpdateException does not derive from DbException, and the page outside "
+                + "Persistence cannot name the EF type to catch it");
+            context.ChangeTracker.Entries().Should().BeEmpty(
+                "because a row left tracked by the failed save would be re-submitted by the circuit's next write");
         }
 
         private static Dictionary<string, HashSet<string>> Seen(string directory, params string[] fileNames)

@@ -42,6 +42,22 @@ namespace DlnaServer.UnitTests.Uploads
                 + "'..' name folders rather than files");
         }
 
+        [TestCase("film\r\nupload from=10.0.0.1.mp4")]
+        [TestCase("film\n.mp4")]
+        [TestCase("film\t.mp4")]
+        [TestCase("film\u001b[31m.mp4")]
+        public void Sanitise_WithAControlCharacter_ReturnsEmpty(string sent)
+        {
+            // Arrange
+            // Act
+            var name = UploadFileName.Sanitise(sent);
+
+            // Assert
+            name.Should().BeEmpty(
+                "because Linux accepts a line break in a file name, and one sent through filename*= would "
+                + "otherwise reach the disc, the report and the security log");
+        }
+
         [Test]
         public void IsAcceptedMedia_ForAnExtensionInTheCatalog_IsTrue()
         {

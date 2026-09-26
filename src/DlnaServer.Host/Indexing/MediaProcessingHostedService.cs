@@ -8,6 +8,7 @@ using DlnaServer.Core.Delivery;
 using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Hosting;
+using DlnaServer.Host.Delivery.Caching;
 using DlnaServer.Media.Processing;
 using DlnaServer.Persistence.Repositories;
 using Microsoft.Extensions.Options;
@@ -346,10 +347,15 @@ namespace DlnaServer.Host.Indexing
                 LogSettleFailed(exception);
             }
 
-            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
-            GC.WaitForPendingFinalizers();
-            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+            // An evicted film has already asked for the same compacting collection. Running a second one
+            // over it would pause the process twice for one heap's worth of garbage.
+            if (!ServedFileCache.IsCollectingEvictedMedia)
+            {
+                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+                GC.WaitForPendingFinalizers();
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+            }
 
             _ = NativeHeapTrimmer.TryTrim();
 
@@ -383,9 +389,15 @@ namespace DlnaServer.Host.Indexing
             // them but is an OR across the two concerns, so a metadata-suppressed file returned for its
             // thumbnail used to have its metadata re-extracted anyway - and SaveMetadataAsync left the
             // flag set, so "clear metadata" silently undid itself on the next pass.
-            var metadataNeeded = !file.IsMetadataSuppressed && file.MetadataStamp != file.ContentStamp;
+            // The failure cap too, per half, for the same reason: a half that MaxFailureCount has retired was
+            // re-attempted whenever the other half brought the file back into a claim.
+            var isThumbnailRetired = file.ThumbnailFailureCount >= MaxFailureCount;
+            var metadataNeeded = !file.IsMetadataSuppressed
+                && file.MetadataStamp != file.ContentStamp
+                && file.MetadataFailureCount < MaxFailureCount;
             var thumbnailNeeded = !file.IsThumbnailSuppressed
                 && file.ThumbnailStamp != file.ContentStamp
+                && !isThumbnailRetired
                 && IsThumbnailWanted(file, options);
 
             var metadataFailed = false;
@@ -498,10 +510,11 @@ namespace DlnaServer.Host.Indexing
                     thumbnailFailed = true;
                 }
             }
-            else if (!thumbnailNeeded && file.ThumbnailStamp != file.ContentStamp)
+            else if (!thumbnailNeeded && !isThumbnailRetired && file.ThumbnailStamp != file.ContentStamp)
             {
                 // No thumbnail is wanted for this kind of file. Record the attempt so the pending query
                 // stops returning it - the reference left audio files pending forever for this reason.
+                // Never for a retired thumbnail: that is a failure on record, not "nothing to make".
                 await files.MarkThumbnailNotApplicableAsync(file.PublicId, cancellationToken);
             }
 

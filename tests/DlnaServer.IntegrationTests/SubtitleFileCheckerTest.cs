@@ -104,9 +104,10 @@ namespace DlnaServer.IntegrationTests
 
         private static SubtitleFileChecker CreateChecker()
         {
-            var options = new StaticOptionsMonitor<DlnaOptions>(new DlnaOptions());
+            var options = new StaticOptionsMonitor<DlnaOptions>(
+                new DlnaOptions { Library = { SubtitleFileExtensions = SubtitleFileExtensionDefaults.Create() } });
 
-            return new SubtitleFileChecker(new TemporaryFolderVisibility(options, TimeProvider.System));
+            return new SubtitleFileChecker(new TemporaryFolderVisibility(options, TimeProvider.System), options);
         }
 
         private static void CreateSymbolicLinkOrIgnore(string path, string target, bool isDirectory = false)

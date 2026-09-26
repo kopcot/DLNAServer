@@ -1,4 +1,5 @@
 using DlnaServer.Core.Dlna;
+using DlnaServer.Core.Subtitles;
 
 namespace DlnaServer.Core.Contracts
 {
@@ -113,10 +114,9 @@ namespace DlnaServer.Core.Contracts
         public bool? IsKeptInMemory { get; init; }
 
         /// <summary>
-        /// Keeps only files with subtitles - a track inside the file or a linked subtitle file - or only
-        /// those with none. Unset means both.
+        /// Keeps only files carrying the chosen kind of subtitles, or only those with none. Unset means any.
         /// </summary>
-        public bool? HasSubtitles { get; init; }
+        public SubtitlePresence? HasSubtitles { get; init; }
 
         /// <summary>
         /// Most results to return.

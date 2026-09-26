@@ -116,21 +116,9 @@ namespace DlnaServer.Host.Controllers
         [HttpGet("/favicon.ico")]
         [HttpGet("/admin/favicon.ico")]
         [ResponseCache(Duration = 86_400, Location = ResponseCacheLocation.Client)]
-        public async Task<IActionResult> GetFavicon(CancellationToken cancellationToken)
+        public Task<IActionResult> GetFavicon(CancellationToken cancellationToken)
         {
-            var path = ResolveResourcePath(IconFolder, FaviconFileName);
-
-            if (path is null)
-            {
-                LogResourceNotFound(FaviconFileName);
-                return NotFound();
-            }
-
-            var contentType = _contentTypes.TryGetContentType(path, out var resolved)
-                ? resolved
-                : FallbackIconContentType;
-
-            return await ServeAsync(path, contentType, cancellationToken);
+            return GetIcon(FaviconFileName, cancellationToken);
         }
 
         /// <summary>

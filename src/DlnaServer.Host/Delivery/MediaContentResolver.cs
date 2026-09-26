@@ -1,11 +1,12 @@
 using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Delivery;
 using DlnaServer.Host.Delivery.Prefetch;
+using DlnaServer.Persistence.Repositories;
 
 namespace DlnaServer.Host.Delivery
 {
     /// <summary>
-    /// Decides where one media file's bytes come from, and keeps the byte cache filling.
+    /// Decides where one media file's or thumbnail's bytes come from, and keeps the byte cache filling.
     /// </summary>
     /// <remarks>
     /// Shared by the renderer-facing <c>/fileserver</c> and the admin UI's <c>/admin/media</c> so the two
@@ -59,6 +60,47 @@ namespace DlnaServer.Host.Delivery
             _ = _backlog.TryEnqueue(new MediaCacheRequest(file.PublicId, file.FullPath));
 
             return MediaContentSource.FromDisc();
+        }
+
+        public async ValueTask<(ThumbnailSource Source, ReadOnlyMemory<byte> Content)> ResolveThumbnailAsync(
+            ThumbnailDto thumbnail,
+            IMediaFileRepository files,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(thumbnail);
+            ArgumentNullException.ThrowIfNull(files);
+
+            if (_cache.TryGet(thumbnail.FilePath, out var cached))
+            {
+                return (ThumbnailSource.Cache, cached);
+            }
+
+            if (thumbnail.HasStoredContent)
+            {
+                var stored = await files.GetThumbnailContentAsync(thumbnail.PublicId, cancellationToken);
+
+                if (stored is not null)
+                {
+                    // Keyed by the file path, so a later request hits memory whichever source filled it.
+                    // AsMemory is a view over the array the repository already returned, not a copy.
+                    _cache.Store(thumbnail.FilePath, CachedContentClass.Thumbnail, stored.AsMemory());
+
+                    return (ThumbnailSource.Database, stored.AsMemory());
+                }
+            }
+
+            // LoadAsync rather than a plain read: it caches what it reads, which is the whole reason the
+            // second browse of a folder does not touch the disc.
+            var loaded = await _cache.LoadAsync(thumbnail.FilePath, CachedContentClass.Thumbnail, cancellationToken);
+
+            if (!loaded.IsEmpty)
+            {
+                return (ThumbnailSource.Cache, loaded);
+            }
+
+            return File.Exists(thumbnail.FilePath)
+                ? (ThumbnailSource.Disc, ReadOnlyMemory<byte>.Empty)
+                : (ThumbnailSource.None, ReadOnlyMemory<byte>.Empty);
         }
     }
 }

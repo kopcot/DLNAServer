@@ -23,6 +23,8 @@ namespace DlnaServer.Host.Hosting
     /// </remarks>
     internal sealed partial class DatabaseInitializerHostedService : BackgroundService
     {
+        private const int FailureExitCode = 1;
+
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IHostApplicationLifetime _lifetime;
         private readonly IDatabaseReadySignal _readySignal;
@@ -53,6 +55,10 @@ namespace DlnaServer.Host.Hosting
                 // erroring, and the reset path leaving the file deleted. A failure here is not something
                 // to survive; it is something to report and stop on.
                 LogInitialisationFailed(exception);
+
+                // Non-zero, so a supervisor and the operator can tell this from a clean /manage/stop -
+                // StopApplication alone ends Main normally and the process exits 0.
+                Environment.ExitCode = FailureExitCode;
                 _lifetime.StopApplication();
             }
         }

@@ -28,6 +28,8 @@ namespace DlnaServer.Host.Configuration
     /// </remarks>
     internal sealed partial class LastGoodDlnaOptionsMonitor : IOptionsMonitor<DlnaOptions>
     {
+        private static readonly string? _binderAssemblyName = typeof(ConfigurationBinder).Assembly.GetName().Name;
+
         private readonly IOptionsMonitor<DlnaOptions> _inner;
         private readonly ILogger<LastGoodDlnaOptionsMonitor> _logger;
 
@@ -84,11 +86,35 @@ namespace DlnaServer.Host.Configuration
 
                 return _lastGood;
             }
+            catch (InvalidOperationException exception) when (_lastGood is not null && IsBindingFailure(exception))
+            {
+                // A value of the wrong type - "DebugMode": "yes" - fails in the binder before validation
+                // runs, and OptionsCache caches that exception exactly as it caches a validation failure.
+                LogServingLastGoodAfterBindingFailure(exception.Message);
+                _isCurrentValid = false;
+
+                return _lastGood;
+            }
         }
 
         public IDisposable? OnChange(Action<DlnaOptions, string?> listener)
         {
             return _inner.OnChange(listener);
+        }
+
+        /// <summary>
+        /// Whether the exception was thrown by <see cref="ConfigurationBinder"/> itself.
+        /// </summary>
+        /// <remarks>
+        /// Only the binder's own failures are an edit to <c>config.json</c> - "failed to convert", "cannot
+        /// create an instance". An <see cref="InvalidOperationException"/> from anywhere else - a
+        /// <c>PostConfigure</c> step, the container - is a defect, and serving stale settings would hide it.
+        /// <see cref="Exception.Source"/> names the assembly of the method that threw, which survives the
+        /// rethrow that <c>OptionsCache</c>'s cached <see cref="Lazy{T}"/> performs.
+        /// </remarks>
+        private static bool IsBindingFailure(InvalidOperationException exception)
+        {
+            return string.Equals(exception.Source, _binderAssemblyName, StringComparison.Ordinal);
         }
     }
 }

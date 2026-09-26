@@ -39,8 +39,13 @@ services:
       # with loopback, this machine's name and its LAN addresses - a DNS-rebinding guard - so a request
       # arriving as dlna.example.com matches nothing and host filtering rejects it before any page runs.
       # Naming hosts explicitly is the documented escape hatch: Apply() returns early on a non-wildcard
-      # list. Semicolon-separated. Keep localhost so the container's own healthcheck still passes.
-      AllowedHosts: "${ADMIN_HOSTNAME:?set ADMIN_HOSTNAME in .env};localhost;127.0.0.1"
+      # list - and that is a trap of its own: naming ADMIN_HOSTNAME here means AllowedHostsDefaults never
+      # runs at all, so its own LAN-address detection is skipped and a television reaching this same
+      # process by the NAS's LAN IP or hostname (description.xml, SOAP, streaming - all one process, one
+      # AllowedHosts) gets the same 400. LAN_HOSTS is that address list, named explicitly instead of
+      # widening to "*", which would also defeat the DNS-rebinding guard this exists for. Semicolon-
+      # separated. Keep localhost so the container's own healthcheck still passes.
+      AllowedHosts: "${ADMIN_HOSTNAME:?set ADMIN_HOSTNAME in .env};localhost;127.0.0.1;${LAN_HOSTS:-}"
 
   caddy:
     image: caddy:2-alpine
@@ -60,8 +65,9 @@ services:
       # The name your certificate is issued for and the only name that will be answered.
       ADMIN_HOSTNAME: ${ADMIN_HOSTNAME:?set ADMIN_HOSTNAME in .env}
 
-      # bcrypt hash, NOT the password. Generate it with:
-      #     docker run --rm caddy:2-alpine caddy hash-password --plaintext 'your-password'
+      # bcrypt hash, NOT the password. Generate it with cost 10-12, not the tool's default 14 - see
+      # .env.example for why:
+      #     docker run --rm caddy:2-alpine caddy hash-password --cost 12 --plaintext 'your-password'
       # Escape every $ as $$ when you paste it into .env, or compose will treat it as a variable.
       ADMIN_USER: ${ADMIN_USER:?set ADMIN_USER in .env}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?set ADMIN_PASSWORD_HASH in .env}

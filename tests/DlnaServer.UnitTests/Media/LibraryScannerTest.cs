@@ -1,3 +1,4 @@
+using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Contracts.Scanning;
 using DlnaServer.Core.Dlna;
@@ -311,6 +312,26 @@ namespace DlnaServer.UnitTests.Media
                     $"because '{fileName}' is a subtitle, and the fallback infers only video, audio and images");
         }
 
+        [Test]
+        public void EnumerateFiles_ForSubtitleTypesTheOperatorChanged_ReportsOnlyTheListedOnes()
+        {
+            // Arrange
+            CreateFile("film.srt", sizeInBytes: 128);
+            CreateFile("film.txt", sizeInBytes: 128);
+
+            var options = CreateOptions() with
+            {
+                SubtitleTypes = new Dictionary<string, DlnaMedia>(StringComparer.OrdinalIgnoreCase) { [".txt"] = DlnaMedia.Video },
+            };
+
+            // Act
+            var found = _scanner.EnumerateFiles(options, CancellationToken.None).ToArray();
+
+            // Assert
+            found.Should().ContainSingle("because only one of the two files is of a listed subtitle type")
+                .Which.FileName.Should().Be("film.txt", "because .txt was added and .srt taken off the list");
+        }
+
         /// <summary>
         /// Configuration still wins outright, which is what keeps the device quirks working.
         /// </summary>
@@ -353,6 +374,7 @@ namespace DlnaServer.UnitTests.Media
                     [".mkv"] = new(DlnaMime.VideoXMatroska, "MATROSKA"),
                     [".jpg"] = new(DlnaMime.ImageJpeg, "JPEG"),
                 },
+                SubtitleTypes = SubtitleFileExtensionDefaults.Create(),
             };
         }
 

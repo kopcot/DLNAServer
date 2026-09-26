@@ -13,10 +13,16 @@
 **/backup/
 **/ffmpeg/
 
-# The deployment's own configuration, which names real folders on a real NAS. The image ships no
-# config.json at all; one is mounted at run time.
+# The deployment's own configuration, which names real folders on a real NAS. The image DOES ship the
+# repository's own src/DlnaServer.Host/config.json, baked in explicitly (Dockerfile:27,79) - what this
+# excludes is a root-level config.json a developer might keep for local testing, plus the saved-off
+# copies the admin UI leaves behind.
 config.json
 **/config.json.saved-*
+
+# Secrets for the admin-remote compose stack - an admin password hash and whatever else operators put
+# there. COPY . . (Dockerfile:40) would otherwise put it straight into the build context and image layers.
+.env
 
 # Tooling and editor state. graphify-out/ and .claude/ arrived at the context root when the
 # Current/ folder was flattened away; the graph alone is tens of megabytes of generated JSON.

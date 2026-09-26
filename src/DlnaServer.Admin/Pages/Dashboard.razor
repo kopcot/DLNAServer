@@ -20,6 +20,8 @@
     What the server is holding, and how much of this machine it is using.
 </PageHeader>
 
+<Notice IsBad="true" Message="@Message" />
+
 @if (_blocked is not null)
 {
     <Notice IsBad="true">
@@ -84,25 +86,25 @@
         <StatTile Label="Files" Source="database Files row count, folders the library hides left out">@_counts.Total</StatTile>
         <StatTile Label="Folders" Source="database Directories row count">@_directoryCount</StatTile>
     </StatGrid>
-    @* The totals on the first row, what Files is made of on the second. *@
+    @* The totals on the first row, the kinds on the second, and Other alone on the third, only when a file
+       of no kind exists. Subtitles sits with the kinds but is not one of them: a linked file is not a library
+       file, so it is outside the Files sum. *@
     <StatGrid>
         <StatTile Label="Video" Source="database Files grouped by MIME, the kinds that map to video">@_counts.Video</StatTile>
         <StatTile Label="Music" Source="database Files grouped by MIME, the kinds that map to audio">@_counts.Audio</StatTile>
         <StatTile Label="Photos" Source="database Files grouped by MIME, the kinds that map to image">@_counts.Image</StatTile>
-        @* Only when there is something in it, so the four kinds visibly add up to the total when there
-           is not. A file lands here when its type maps to no kind at all. *@
-        @if (_counts.Other > 0)
-        {
-            <StatTile Label="Other" Source="database Files grouped by MIME, types that map to no kind">@_counts.Other</StatTile>
-        }
-        else
-        {
-            <div/>
-        }
+        <StatTile Label="Subtitles" Source="database SubtitleFiles of visible files, removed links left out">@_counts.Subtitles</StatTile>
     </StatGrid>
+    @if (_counts.Other > 0)
+    {
+        <StatGrid>
+            <StatTile Label="Other" Source="database Files grouped by MIME, types that map to no kind">@_counts.Other</StatTile>
+        </StatGrid>
+    }
     <p class="muted">
-        Counted the way the Library page lists, so folders you have hidden are left out and the kinds add
-        up to <em>Files</em>. The kind comes from the file's type, not from where it sits.
+        Counted the way the Library page lists, so folders you have hidden are left out. Video, Music, Photos
+        and Other add up to <em>Files</em>; the kind comes from the file's type, not from where it sits.
+        <em>Subtitles</em> counts the subtitle and lyrics files linked to them, which are not counted as files.
     </p>
 </Panel>
 
@@ -117,7 +119,7 @@
     private static readonly TimeSpan _refreshInterval = TimeSpan.FromSeconds(5);
 
     private static readonly LibraryCountsDto _noCountsYet =
-        new() { Total = 0, Video = 0, Audio = 0, Image = 0, Other = 0 };
+        new() { Total = 0, Video = 0, Audio = 0, Image = 0, Other = 0, Subtitles = 0 };
 
     private PeriodicTimer? _timer;
     private ServedFileCacheReport _report = null!;
@@ -154,7 +156,19 @@
             {
                 ReadCheapFigures();
 
-                await RefreshCountsAsync();
+                // Caught here, not left to the loop: this task is discarded, so one "database is locked"
+                // while VACUUM holds the file would end the loop and freeze every figure without a word.
+                try
+                {
+                    await RefreshCountsAsync();
+
+                    Message = null;
+                }
+                catch (DbException)
+                {
+                    Message = "The library counts could not be refreshed because the server was busy. "
+                        + "They will catch up on their own.";
+                }
 
                 await InvokeAsync(StateHasChanged);
             }

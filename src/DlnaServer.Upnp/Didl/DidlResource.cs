@@ -58,6 +58,7 @@ namespace DlnaServer.Upnp.Didl
         public string? SampleFrequency { get; set; }
 
         /// <summary>
+        /// <b>res</b> (element text)<br />
         /// The element's text: the absolute URL to fetch.
         /// </summary>
         /// <remarks>

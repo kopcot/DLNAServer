@@ -38,6 +38,7 @@ flowchart TB
     subgraph AdminPort["Admin port"]
         AdminUi["Admin UI (Blazor)<br/>DlnaServer.Admin"]
         Upload["UploadController"]
+        AdminMedia["AdminMediaController<br/>media, thumbnails, subtitle downloads"]
     end
 
     subgraph Library["Library and processing"]
@@ -49,10 +50,12 @@ flowchart TB
     end
 
     subgraph State["Persistence and state"]
-        Repositories["Repositories<br/>files, directories, subtitles"]
+        Repositories["Repositories<br/>files, directories, subtitles, upload devices"]
         Db[("SQLite<br/>DlnaDbContext")]
         Initializer["DatabaseInitializerHostedService"]
         Ready["DatabaseReadySignal"]
+        ScanSignal["LibraryScanSignal"]
+        ResetSignal["DatabaseResetSignal"]
         Subscriptions["SubscriptionStore (in memory)"]
     end
 
@@ -69,6 +72,7 @@ flowchart TB
     Admin -- "uses" --> AdminUi
     Admin -- "uploads" --> Upload
     Admin -- "scripts" --> Manage
+    Admin -- "previews" --> AdminMedia
 
     ContentDirectory -- "reads the index" --> Repositories
     Events -- "keeps subscriptions" --> Subscriptions
@@ -80,9 +84,16 @@ flowchart TB
     FileServer -- "streams from disc" --> Disc
     Manage -- "reads" --> Repositories
     Manage -- "clears" --> Cache
+    Manage -- "refuses stop while pending" --> ResetSignal
 
     AdminUi -- "reads and edits" --> Repositories
     Upload -- "writes files" --> Disc
+    Upload -- "requests a scan" --> ScanSignal
+    Upload -- "records device destinations" --> Repositories
+
+    AdminMedia -- "looks up the file" --> Repositories
+    AdminMedia -- "resolves bytes" --> Resolver
+    AdminMedia -- "reads linked subtitles" --> Disc
 
     Watcher -- "reports changes" --> Indexer
     Indexer -- "walks" --> Scanner
@@ -95,6 +106,7 @@ flowchart TB
     Repositories --> Db
     Initializer -- "creates or migrates" --> Db
     Initializer -- "marks ready" --> Ready
+    Initializer -- "acts on a requested reset" --> ResetSignal
     Indexer -. "waits for" .-> Ready
     Processing -. "waits for" .-> Ready
     CacheFill -. "waits for" .-> Ready
@@ -108,9 +120,9 @@ flowchart TB
     classDef disc fill:#ffe8b3,stroke:#e08e00,color:#6b4200
     class Renderer,Admin actor
     class SsdpListener,SsdpNotifier,ContentDirectory,ConnectionManager,AvTransport,Events,FileServer,Manage,Resolver,Cache,CacheFill protocol
-    class AdminUi,Upload admin
+    class AdminUi,Upload,AdminMedia admin
     class Watcher,Indexer,Scanner,Processing,Processor library
-    class Repositories,Db,Initializer,Ready,Subscriptions state
+    class Repositories,Db,Initializer,Ready,ScanSignal,ResetSignal,Subscriptions state
     class Disc disc
 ```
 

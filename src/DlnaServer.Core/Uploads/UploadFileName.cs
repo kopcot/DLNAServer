@@ -40,9 +40,22 @@ namespace DlnaServer.Core.Uploads
             }
 
             // Everything the local filesystem refuses, plus the two the check above has already ruled out.
-            return name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-                ? string.Empty
-                : name;
+            if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+            {
+                return string.Empty;
+            }
+
+            // Control characters too: on Linux the filesystem refuses only '\0' and '/', so a line break
+            // sent through filename*= would otherwise reach the disc, the report and every log line.
+            foreach (var character in name)
+            {
+                if (char.IsControl(character))
+                {
+                    return string.Empty;
+                }
+            }
+
+            return name;
         }
 
         /// <summary>

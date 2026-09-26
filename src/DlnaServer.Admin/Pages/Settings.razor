@@ -374,6 +374,29 @@
     </p>
 </CollapsiblePanel>
 
+<CollapsiblePanel @key='AdvancedKey("Subtitle types")' StartCollapsed="@(!_failed)" Heading="Subtitle types">
+    <p class="muted">
+        Which files are linked to a video as its subtitles, or to a song as its lyrics, when their name
+        matches - <em>film.en.srt</em> goes with <em>film.mkv</em>. Subtitles only ever go with videos and
+        lyrics only with music. An extension here cannot also be one of the file types above.
+    </p>
+    <p class="muted">
+        A change is picked up by the next scan. Adding a type links its files then. Removing one stops those
+        files being sent straight away, and the next scan takes their links away - including any added by
+        hand on a file's page.
+    </p>
+
+    <SubtitleTypeEditor Rows="_subtitleTypes" />
+
+    <div class="checkrow">
+        <button type="button" @onclick="RestoreDefaultSubtitleTypes" disabled="@_saving">Restore the default subtitle types</button>
+    </div>
+    <p class="muted">
+        Replaces every line above with the list the server ships with. Nothing is saved until you press
+        <em>Save</em>, and <em>Discard changes</em> brings back what you had.
+    </p>
+</CollapsiblePanel>
+
 <CollapsiblePanel @key='AdvancedKey("Recently served files")' StartCollapsed="@(!_failed)" Heading="Recently served files">
     <CheckField Label="Enabled" @bind-Value="_edited.FileCache.Enabled">
         <Hint>
@@ -549,6 +572,7 @@
 @code {
     private DlnaOptions _edited = new();
     private List<ExtensionMapRow> _extensions = [];
+    private List<SubtitleTypeRow> _subtitleTypes = [];
     private string _sourceFolders = string.Empty;
     private string _excludeFolders = string.Empty;
     private string _temporarilyHiddenFolders = string.Empty;
@@ -605,6 +629,7 @@
         // reference, so editing it in place would rewrite the running server's settings keystroke by
         // keystroke - which is exactly what the copy above exists to prevent.
         _extensions = ExtensionMap.FromOptions(current.Library.MediaFileExtensions);
+        _subtitleTypes = SubtitleTypeMap.FromOptions(current.Library.SubtitleFileExtensions);
         _sourceFolderChecks = [];
         _uploadFolderChecks = [];
         _uploadFolderNote = null;
@@ -636,6 +661,19 @@
 
             // A fresh map, never the one that was read: see the note in Reload.
             _edited.Library.MediaFileExtensions = ExtensionMap.ToOptions(_extensions);
+
+            // Only the row-level half - the validator below checks each extension, and a clash with a file type.
+            var subtitleTypeProblems = SubtitleTypeMap.Validate(_subtitleTypes);
+
+            if (subtitleTypeProblems.Count > 0)
+            {
+                _failed = true;
+                _message = "Not saved, because of the subtitle types. " + string.Join(" ", subtitleTypeProblems);
+
+                return;
+            }
+
+            _edited.Library.SubtitleFileExtensions = SubtitleTypeMap.ToOptions(_subtitleTypes);
 
             // Validate BEFORE writing. The validator is an IValidateOptions, so on its own it runs only
             // when something next reads CurrentValue - and by then config.json already holds the bad
@@ -691,6 +729,14 @@
 
         // The message only: _failed keys the advanced panels, and clearing it would fold this one away
         // under the operator's cursor.
+        _message = null;
+    }
+
+    private void RestoreDefaultSubtitleTypes()
+    {
+        _subtitleTypes = SubtitleTypeMap.Defaults();
+
+        // The message only, for the reason RestoreDefaultFileTypes gives.
         _message = null;
     }
 

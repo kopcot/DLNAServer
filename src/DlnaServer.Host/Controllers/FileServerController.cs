@@ -108,16 +108,11 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
-            if (_options.CurrentValue.Compatibility.SendDlnaResponseHeaders)
-            {
-                DlnaResponseHeaders.Apply(
-                    Request,
-                    Response,
-                    file.Mime.ToMedia(),
-                    DlnaProtocolInfo.ContentFeaturesFor(file.Mime, file.DlnaProfileName, file.Extension));
-            }
+            ApplyDlnaHeaders(file);
 
             await AddCaptionInfoAsync(file, cancellationToken);
+
+            ScriptableContentHeaders.Apply(Response, file.Mime);
 
             var contentType = file.Mime.ToMimeString();
 
@@ -191,16 +186,11 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
-            if (_options.CurrentValue.Compatibility.SendDlnaResponseHeaders)
-            {
-                DlnaResponseHeaders.Apply(
-                    Request,
-                    Response,
-                    file.Mime.ToMedia(),
-                    DlnaProtocolInfo.ContentFeaturesFor(file.Mime, file.DlnaProfileName, file.Extension));
-            }
+            ApplyDlnaHeaders(file);
 
             await AddCaptionInfoAsync(file, cancellationToken);
+
+            ScriptableContentHeaders.Apply(Response, file.Mime);
 
             LogProbed(file.FullPath);
 
@@ -236,6 +226,7 @@ namespace DlnaServer.Host.Controllers
                     Path.GetDirectoryName(subtitle.MediaFileFullPath) ?? string.Empty,
                     subtitle.RelativePath,
                     [.. _visibility.HiddenFromDelivery],
+                    _options.CurrentValue.Library.SubtitleFileExtensions.AsReadOnly(),
                     out _,
                     out var fullPath,
                     out _))
@@ -278,60 +269,34 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
-            if (_options.CurrentValue.Compatibility.SendDlnaResponseHeaders)
-            {
-                DlnaResponseHeaders.Apply(
-                    Request,
-                    Response,
-                    DlnaMedia.Image,
-                    DlnaProtocolInfo.ContentFeaturesForThumbnail(
-                        thumbnail.Mime,
-                        DlnaProtocolInfo.ThumbnailProfileName));
-            }
+            ApplyDlnaHeaders(thumbnail);
 
             var contentType = thumbnail.Mime.ToMimeString();
 
-            if (_cache.TryGet(thumbnail.FilePath, out var cached))
+            // Shared with the admin UI's /admin/media, so the two ports cannot drift apart again.
+            var (source, content) = await _content.ResolveThumbnailAsync(thumbnail, _files, cancellationToken);
+
+            switch (source)
             {
-                LogServedThumbnail(thumbnail.FilePath, SourceCache);
-                return File(cached.AsStream(), contentType, enableRangeProcessing: true);
+                case ThumbnailSource.None:
+                    LogThumbnailMissing(thumbnail.FilePath);
+                    return NotFound();
+
+                case ThumbnailSource.Disc:
+                    LogServedThumbnail(thumbnail.FilePath, SourceDisc);
+                    return PhysicalFile(thumbnail.FilePath, contentType, enableRangeProcessing: true);
+
+                default:
+                    LogServedThumbnail(
+                        thumbnail.FilePath,
+                        source == ThumbnailSource.Database
+                            ? SourceDatabase
+                            : SourceCache);
+
+                    // A memory stream over the payload, whichever source filled it, so the serving shape
+                    // does not depend on that - and no copy of the bytes is made.
+                    return File(content.AsStream(), contentType, enableRangeProcessing: true);
             }
-
-            if (thumbnail.HasStoredContent)
-            {
-                var stored = await _files.GetThumbnailContentAsync(id, cancellationToken);
-
-                if (stored is not null)
-                {
-                    // Keyed by the file path, so a later request hits memory whichever source filled it.
-                    // AsMemory is a view over the array the repository already returned, not a copy.
-                    _cache.Store(thumbnail.FilePath, CachedContentClass.Thumbnail, stored.AsMemory());
-
-                    LogServedThumbnail(thumbnail.FilePath, SourceDatabase);
-
-                    // AsMemory().AsStream() rather than the byte[] overload: both avoid a copy, but this
-                    // keeps every cached-payload response on one path, so the serving shape does not
-                    // depend on which source happened to fill the cache.
-                    return File(stored.AsMemory().AsStream(), contentType, enableRangeProcessing: true);
-                }
-            }
-
-            var loaded = await _cache.LoadAsync(thumbnail.FilePath, CachedContentClass.Thumbnail, cancellationToken);
-
-            if (!loaded.IsEmpty)
-            {
-                LogServedThumbnail(thumbnail.FilePath, SourceCache);
-                return File(loaded.AsStream(), contentType, enableRangeProcessing: true);
-            }
-
-            if (!System.IO.File.Exists(thumbnail.FilePath))
-            {
-                LogThumbnailMissing(thumbnail.FilePath);
-                return NotFound();
-            }
-
-            LogServedThumbnail(thumbnail.FilePath, SourceDisc);
-            return PhysicalFile(thumbnail.FilePath, contentType, enableRangeProcessing: true);
         }
 
         /// <summary>
@@ -354,16 +319,7 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
-            if (_options.CurrentValue.Compatibility.SendDlnaResponseHeaders)
-            {
-                DlnaResponseHeaders.Apply(
-                    Request,
-                    Response,
-                    DlnaMedia.Image,
-                    DlnaProtocolInfo.ContentFeaturesForThumbnail(
-                        thumbnail.Mime,
-                        DlnaProtocolInfo.ThumbnailProfileName));
-            }
+            ApplyDlnaHeaders(thumbnail);
 
             Response.ContentType = thumbnail.Mime.ToMimeString();
             Response.ContentLength = thumbnail.SizeInBytes;
@@ -418,11 +374,40 @@ namespace DlnaServer.Host.Controllers
 
             var subtitles = await _subtitles.GetForFilesAsync([file.PublicId], cancellationToken);
 
-            if (subtitles.TryGetValue(file.PublicId, out var linked) && DidlMapper.PreferredCaption(linked) is { } chosen)
+            if (subtitles.TryGetValue(file.PublicId, out var linked)
+                && DidlMapper.PreferredCaption(DidlMapper.Offerable(linked, _options.CurrentValue.Library.SubtitleFileExtensions)) is { } chosen)
             {
                 var endpoint = DidlMapper.ResolveEndpoint(_devices, HttpContext.Connection, _options.CurrentValue.Server.Port);
 
                 Response.Headers[CaptionInfoResponseHeader] = DidlMapper.SubtitleUrl(endpoint, chosen);
+            }
+        }
+
+        // One method per resource kind, shared by its GET and HEAD: a probe and the transfer after it must
+        // advertise identical contentFeatures, which two hand-kept copies could not promise.
+        private void ApplyDlnaHeaders(MediaFileDto file)
+        {
+            if (_options.CurrentValue.Compatibility.SendDlnaResponseHeaders)
+            {
+                DlnaResponseHeaders.Apply(
+                    Request,
+                    Response,
+                    file.Mime.ToMedia(),
+                    DlnaProtocolInfo.ContentFeaturesFor(file.Mime, file.DlnaProfileName, file.Extension));
+            }
+        }
+
+        private void ApplyDlnaHeaders(ThumbnailDto thumbnail)
+        {
+            if (_options.CurrentValue.Compatibility.SendDlnaResponseHeaders)
+            {
+                DlnaResponseHeaders.Apply(
+                    Request,
+                    Response,
+                    DlnaMedia.Image,
+                    DlnaProtocolInfo.ContentFeaturesForThumbnail(
+                        thumbnail.Mime,
+                        DlnaProtocolInfo.ThumbnailProfileName));
             }
         }
     }

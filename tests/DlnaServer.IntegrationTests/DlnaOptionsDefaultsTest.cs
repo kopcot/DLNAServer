@@ -1,5 +1,7 @@
 using DlnaServer.Core.Configuration;
+using DlnaServer.Core.Dlna;
 using DlnaServer.Host.Configuration;
+using Microsoft.Extensions.Configuration;
 
 namespace DlnaServer.IntegrationTests
 {
@@ -343,6 +345,91 @@ namespace DlnaServer.IntegrationTests
             // Assert
             options.Library.ExcludeFolders.Should().Equal(["Personal", ".@__thumb"],
                 "because a named list is the operator's, and only the thumbnail sub-folder is forced");
+        }
+
+        [Test]
+        public void Apply_WithNoSubtitleTypes_SeedsTheShippedOnes()
+        {
+            // Arrange
+            var options = new DlnaOptions { Library = new LibraryOptions { SourceFolders = ["/share/Media"] } };
+
+            // Act
+            DlnaOptionsDefaults.Apply(options);
+
+            // Assert
+            options.Library.SubtitleFileExtensions.Should().BeEquivalentTo(SubtitleFileExtensionDefaults.Create(),
+                "because a configuration that names no subtitle types still links the usual ones");
+        }
+
+        /// <summary>
+        /// The append trap <c>ExcludeFolders</c> fell into: a default on the property would be merged into
+        /// whatever <c>config.json</c> named, so a type the operator removed would come straight back.
+        /// </summary>
+        [Test]
+        public void Apply_AfterBindingAConfigurationThatNamesItsOwnSubtitleTypes_KeepsOnlyThose()
+        {
+            // Arrange
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Dlna:Library:SourceFolders:0"] = "/share/Media",
+                    ["Dlna:Library:SubtitleFileExtensions:.txt"] = "Video",
+                    ["Dlna:Library:SubtitleFileExtensions:.lrc"] = "Audio",
+                })
+                .Build();
+            var options = new DlnaOptions();
+            configuration.GetSection(DlnaOptions.SectionName).Bind(options);
+
+            // Act
+            DlnaOptionsDefaults.Apply(options);
+
+            // Assert
+            options.Library.SubtitleFileExtensions.Should().BeEquivalentTo(
+                new Dictionary<string, DlnaMedia> { [".txt"] = DlnaMedia.Video, [".lrc"] = DlnaMedia.Audio },
+                "because a named list is the operator's, and none of the shipped types may be appended to it");
+        }
+
+        [Test]
+        public void Apply_WithSubtitleTypesInAnyForm_StoresThemLowerCaseWithALeadingDotAndLooksThemUpInAnyCase()
+        {
+            // Arrange
+            var options = new DlnaOptions
+            {
+                Library = new LibraryOptions
+                {
+                    SourceFolders = ["/share/Media"],
+                    SubtitleFileExtensions = new Dictionary<string, DlnaMedia>(StringComparer.Ordinal)
+                    {
+                        [" SRT "] = DlnaMedia.Video,
+                        [".Lrc"] = DlnaMedia.Audio,
+                    },
+                },
+            };
+
+            // Act
+            DlnaOptionsDefaults.Apply(options);
+
+            // Assert
+            options.Library.SubtitleFileExtensions.Keys.Should().BeEquivalentTo([".srt", ".lrc"],
+                "because the stored form matches the file types editor, which normalises the same way");
+            options.Library.SubtitleFileExtensions.ContainsKey(".SRT").Should().BeTrue(
+                "because a file's own extension is looked up in whatever case it has on disc");
+        }
+
+        [Test]
+        public void Apply_AppliedTwice_LeavesTheSubtitleTypesAsTheFirstPassLeftThem()
+        {
+            // Arrange
+            var options = new DlnaOptions { Library = new LibraryOptions { SourceFolders = ["/share/Media"] } };
+            DlnaOptionsDefaults.Apply(options);
+            var afterFirst = new Dictionary<string, DlnaMedia>(options.Library.SubtitleFileExtensions);
+
+            // Act
+            DlnaOptionsDefaults.Apply(options);
+
+            // Assert
+            options.Library.SubtitleFileExtensions.Should().BeEquivalentTo(afterFirst,
+                "because this runs again on every configuration reload and must not grow or change the list");
         }
     }
 }

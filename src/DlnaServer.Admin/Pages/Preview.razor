@@ -6,6 +6,8 @@
 @inject NavigationManager Navigation
 @inject IMediaFormatter Fmt
 @inject IAdminUrls Urls
+@inject ISubtitleRepository Subtitles
+@inject ISubtitleFileChecker SubtitleChecker
 
 @if (_details is null)
 {
@@ -85,7 +87,15 @@ else
         {
             <span class="muted">@(_index + 1) of @_siblingCount in this folder</span>
         }
-        <a class="button" href="@MediaUrl()" download>Download</a>
+        <span class="downloads">
+            @if (_subtitleCount > 0)
+            {
+                <a class="button" href="@Urls.Subtitles(FileId)" download>
+                    @(_subtitleCount == 1 ? "Download subtitle" : "Download subtitles (zip)")
+                </a>
+            }
+            <a class="button" href="@MediaUrl()" download>Download</a>
+        </span>
     </div>
 
     @* Acting on one file belongs here, where it can be seen: the library's tiles show a folder's worth of
@@ -269,6 +279,9 @@ else
     // and to pick the two neighbours, both of which are computed once during the load.
     private int _siblingCount;
 
+    // Linked subtitle files that can be served - one gets its own download, several a zip.
+    private int _subtitleCount;
+
     /// <summary>
     /// The level the viewer opens at and that <c>Fit to screen</c> returns to.
     /// </summary>
@@ -321,6 +334,7 @@ else
         // Its own read: these are wanted by this page and by nothing on the renderer path, so they are
         // deliberately not part of the details every Browse response goes through.
         _tags = await Files.GetTagsAsync(FileId, cancellationToken);
+        _subtitleCount = await CountUsableSubtitlesAsync(_details.File, cancellationToken);
 
         if (OpenedFromDirectoryId is not { } id)
         {
@@ -343,6 +357,35 @@ else
         _index = neighbours.Index;
         _previous = neighbours.PreviousPublicId;
         _next = neighbours.NextPublicId;
+    }
+
+    // The same rule AdminMediaController.GetSubtitles serves by, so the button's wording matches what arrives.
+    private async Task<int> CountUsableSubtitlesAsync(MediaFileDto file, CancellationToken cancellationToken)
+    {
+        if (!file.HasSubtitleFiles)
+        {
+            return 0;
+        }
+
+        var links = await Subtitles.GetForFilesAsync([file.PublicId], cancellationToken);
+
+        if (!links.TryGetValue(file.PublicId, out var found))
+        {
+            return 0;
+        }
+
+        var mediaDirectory = Path.GetDirectoryName(file.FullPath) ?? string.Empty;
+        var count = 0;
+
+        foreach (var link in found)
+        {
+            if (SubtitleChecker.TryCheck(mediaDirectory, link.RelativePath, out _, out _))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     // The folder this file was opened from: the route's, or the file's own when it was reached from

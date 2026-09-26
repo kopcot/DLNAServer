@@ -39,7 +39,7 @@
     </p>
 </Panel>
 
-<Panel Heading="@($"Files in memory ({_report.Paths.Count})")">
+<Panel Heading="@($"Files in memory ({_paths.Count})")">
     @*
         Virtualized: a full cache on the real library is hundreds of rows, and every one of them was being
         rendered into the DOM to show the twenty that fit on screen. SpacerElement is tr because the spacers
@@ -80,7 +80,7 @@
 
     private ServedFileCacheReport _report = null!;
 
-    // Virtualize binds Items to ICollection<T>, which the report's IReadOnlyList is not.
+    // Virtualize binds Items to ICollection<T>, which the cache's IReadOnlyList is not.
     private List<string> _paths = [];
 
     // The work below blocks for the length of two compacting gen2 collections, and the button stayed
@@ -176,7 +176,7 @@
     private void Reload()
     {
         _report = FileCacheStore.Describe();
-        _paths = [.. _report.Paths];
+        _paths = [.. FileCacheStore.ListPaths()];
     }
 
     /// <summary>

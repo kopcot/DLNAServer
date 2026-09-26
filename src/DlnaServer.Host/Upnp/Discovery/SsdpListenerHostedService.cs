@@ -47,6 +47,10 @@ namespace DlnaServer.Host.Upnp.Discovery
         private readonly TimeProvider _timeProvider;
         private readonly ILogger<SsdpListenerHostedService> _logger;
         private readonly string _serverSignature;
+
+        // Deliberately never disposed. Replies are not awaited, so one can still be releasing its slot
+        // after the host disposes this service, and a disposed semaphore throws there. It holds no
+        // kernel handle unless AvailableWaitHandle is read, which nothing here does.
         private readonly SemaphoreSlim _replySlots = new(MaxConcurrentReplies, MaxConcurrentReplies);
 
         public SsdpListenerHostedService(
@@ -116,6 +120,15 @@ namespace DlnaServer.Host.Upnp.Discovery
                         continue;
                     }
 
+                    // A unicast M-SEARCH reaches port 1900 from anywhere that can route to it, with a
+                    // source nobody verifies, so answering all of them made this a ~27x reflector aimed at
+                    // whoever the source named. Televisions search by multicast, which no router forwards.
+                    if (!LocalNetworkAddress.IsLocal(received.RemoteEndPoint.Address))
+                    {
+                        LogSearchFromOutsideIgnored(received.RemoteEndPoint);
+                        continue;
+                    }
+
                     // Deliberately NOT awaited. HandleAsync honours MX by sleeping up to five seconds
                     // before replying, and awaiting it here serialised that wait into the receive loop:
                     // the socket stopped being read while one search slept, so two televisions booting
@@ -158,6 +171,11 @@ namespace DlnaServer.Host.Upnp.Discovery
             {
                 // Shutdown while this reply was waiting out its MX delay.
             }
+            catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Shutdown between the delay and the send: the receive loop has exited and disposed the
+                // socket this reply was about to use. Nothing failed, so nothing is logged as failing.
+            }
             catch (Exception exception)
             {
                 // One malformed M-SEARCH must not end discovery for the process lifetime. The datagram
@@ -168,12 +186,6 @@ namespace DlnaServer.Host.Upnp.Discovery
             {
                 _ = _replySlots.Release();
             }
-        }
-
-        public override void Dispose()
-        {
-            _replySlots.Dispose();
-            base.Dispose();
         }
 
         private async Task HandleAsync(

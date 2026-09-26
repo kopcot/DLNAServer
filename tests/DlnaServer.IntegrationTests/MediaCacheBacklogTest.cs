@@ -1,3 +1,4 @@
+using DlnaServer.Core.Delivery;
 using DlnaServer.Host.Delivery;
 using DlnaServer.Host.Delivery.Caching;
 using DlnaServer.Host.Delivery.Prefetch;
@@ -120,6 +121,60 @@ namespace DlnaServer.IntegrationTests
             // Assert
             isAdded.Should().BeTrue(
                 "because a rejection must release the path, not blacklist the file permanently");
+        }
+
+        /// <summary>
+        /// Browse warms a whole page of previews at once, and a page used to fill the backlog so the film
+        /// asked for next was refused - the one read the cache exists for.
+        /// </summary>
+        [Test]
+        public void TryEnqueue_AfterAPageOfPreviewsWasWarmed_StillAcceptsAFilm()
+        {
+            // Arrange
+            var backlog = new MediaCacheBacklog();
+
+            for (var index = 0; index < Capacity; index++)
+            {
+                _ = backlog.TryEnqueue(new MediaCacheRequest(
+                    Guid.NewGuid(),
+                    $"/media/.@__thumb/film-{index}.mkv.jpg",
+                    CachedContentClass.Thumbnail));
+            }
+
+            // Act
+            var isAdded = backlog.TryEnqueue(new MediaCacheRequest(Guid.NewGuid(), "/media/film.mkv"));
+
+            // Assert
+            isAdded.Should().BeTrue("because previews may never take the slots a film needs");
+        }
+
+        [Test]
+        public void TryEnqueue_ForAPreviewOnceTheirShareIsFull_AcceptsOneAgainAfterARelease()
+        {
+            // Arrange
+            var backlog = new MediaCacheBacklog();
+            var accepted = new List<string>();
+
+            for (var index = 0; index < Capacity; index++)
+            {
+                var path = $"/media/.@__thumb/film-{index}.mkv.jpg";
+
+                if (backlog.TryEnqueue(new MediaCacheRequest(Guid.NewGuid(), path, CachedContentClass.Thumbnail)))
+                {
+                    accepted.Add(path);
+                }
+            }
+
+            var refused = new MediaCacheRequest(Guid.NewGuid(), "/media/.@__thumb/late.mkv.jpg", CachedContentClass.Thumbnail);
+            backlog.TryEnqueue(refused).Should().BeFalse("because the previews' share of the backlog is taken");
+
+            // Act
+            backlog.Release(accepted[0]);
+            var isAdded = backlog.TryEnqueue(refused);
+
+            // Assert
+            accepted.Count.Should().BeLessThan(Capacity, "because previews are capped below the whole backlog");
+            isAdded.Should().BeTrue("because a preview that has been dealt with gives its slot back");
         }
     }
 }

@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Data.Common;
+using System.Text;
 using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Hosting;
@@ -66,6 +67,33 @@ namespace DlnaServer.Host.Controllers
         /// </remarks>
         private const string PartialSuffix = ".uploading";
 
+        /// <summary>
+        /// The most a form field may hold. The real ones are a folder path and a radio button.
+        /// </summary>
+        /// <remarks>
+        /// The request body is uncapped for the files, so this is what stops one huge text field being
+        /// read into memory whole.
+        /// </remarks>
+        private const int MaxFieldLengthInBytes = 4 * 1024;
+
+        /// <summary>
+        /// The most parts one post may carry, fields and files together.
+        /// </summary>
+        /// <remarks>
+        /// Each part adds a line to the report, which is held in memory, so an unbounded count is an
+        /// unbounded allocation even when every part is empty.
+        /// </remarks>
+        private const int MaxSections = 1000;
+
+        /// <summary>
+        /// How long a partial file of the same name must have been untouched before an upload removes it.
+        /// </summary>
+        /// <remarks>
+        /// A copy in progress rewrites its partial continuously, so an hour of silence means the upload that
+        /// owned it died with the process - the one exit its own <c>finally</c> cannot cover.
+        /// </remarks>
+        private static readonly TimeSpan _stalePartialAge = TimeSpan.FromHours(1);
+
         private const string DestinationCookie = "dlna.upload.destination";
 
         private readonly IOptionsMonitor<DlnaOptions> _options;
@@ -73,6 +101,7 @@ namespace DlnaServer.Host.Controllers
         private readonly IUploadDeviceRepository _devices;
         private readonly ILibraryScanSignal _scanSignal;
         private readonly UploadSecurityLog _securityLog;
+        private readonly TimeProvider _timeProvider;
         private readonly ILogger<UploadController> _logger;
 
         public UploadController(
@@ -81,6 +110,7 @@ namespace DlnaServer.Host.Controllers
             IUploadDeviceRepository devices,
             ILibraryScanSignal scanSignal,
             UploadSecurityLog securityLog,
+            TimeProvider timeProvider,
             ILogger<UploadController> logger)
         {
             _options = options;
@@ -88,6 +118,7 @@ namespace DlnaServer.Host.Controllers
             _devices = devices;
             _scanSignal = scanSignal;
             _securityLog = securityLog;
+            _timeProvider = timeProvider;
             _logger = logger;
         }
 
@@ -128,12 +159,20 @@ namespace DlnaServer.Host.Controllers
             var overwrite = false;
             string? destination = null;
             var written = 0;
+            var sections = 0;
 
+            // No BodyLengthLimit: it applies to every part alike, so it would cap the files as well.
+            // Fields are bounded by ReadFieldAsync instead, and the part count by MaxSections.
             var reader = new MultipartReader(boundary, Request.Body);
             var section = await reader.ReadNextSectionAsync(cancellationToken);
 
             while (section is not null)
             {
+                if (++sections > MaxSections)
+                {
+                    return BadRequest($"An upload may carry at most {MaxSections} files and fields.");
+                }
+
                 if (!ContentDispositionHeaderValue.TryParse(section.ContentDisposition, out var disposition))
                 {
                     section = await reader.ReadNextSectionAsync(cancellationToken);
@@ -171,24 +210,35 @@ namespace DlnaServer.Host.Controllers
                 else if (disposition.Name.HasValue)
                 {
                     var name = HeaderUtilities.RemoveQuotes(disposition.Name).Value;
-                    var value = await ReadFieldAsync(section, cancellationToken);
 
-                    switch (name)
+                    // A field this form does not have is never read: the next ReadNextSectionAsync drains
+                    // it without buffering.
+                    if (name is "root" or "subFolder" or "existing")
                     {
-                        case "root":
-                            root = value;
-                            break;
+                        var value = await ReadFieldAsync(section, cancellationToken);
 
-                        case "subFolder":
-                            subFolder = value;
-                            break;
+                        if (value is null)
+                        {
+                            return BadRequest($"A form field may hold at most {MaxFieldLengthInBytes} bytes.");
+                        }
 
-                        case "existing":
-                            overwrite = string.Equals(value, "overwrite", StringComparison.Ordinal);
-                            break;
+                        switch (name)
+                        {
+                            case "root":
+                                root = value;
+                                break;
 
-                        default:
-                            break;
+                            case "subFolder":
+                                subFolder = value;
+                                break;
+
+                            case "existing":
+                                overwrite = string.Equals(value, "overwrite", StringComparison.Ordinal);
+                                break;
+
+                            default:
+                                break;
+                        }
                     }
                 }
 
@@ -213,11 +263,12 @@ namespace DlnaServer.Host.Controllers
 
             if (written > 0)
             {
-                await RememberAsync(sender, destination, written, cancellationToken);
-
                 // Asked for once for the batch, and never awaited: a pass over a large library takes
                 // minutes, and the request would time out holding the connection open for it.
+                // Asked for before remembering the device, so a failure there cannot cost the scan.
                 _scanSignal.RequestScan();
+
+                await RememberAsync(sender, destination, written, cancellationToken);
             }
 
             LogFinished(destination, files.Count, written);
@@ -273,23 +324,19 @@ namespace DlnaServer.Host.Controllers
                     "A file of that name was already there.");
             }
 
-            var partialPath = target + PartialSuffix;
+            // Unique to this part, so two uploads of the same name at once cannot delete each other's file
+            // mid-copy. The suffix stays last, which is what keeps a scan walking past it.
+            var partialPath = $"{target}.{Guid.NewGuid():N}{PartialSuffix}";
+            var isMoved = false;
 
             try
             {
                 _ = Directory.CreateDirectory(destination);
 
-                // Whatever is at the partial name goes first, so the CreateNew below starts from nothing:
-                // an upload that died mid-copy leaves one behind, and a link left there is the case that
-                // matters.
-                Delete(partialPath);
-
                 var size = await CopyAsync(section.Body, partialPath, maxFileSizeInBytes, cancellationToken);
 
                 if (size < 0)
                 {
-                    Delete(partialPath);
-
                     return Refuse(
                         sender,
                         destination,
@@ -299,7 +346,25 @@ namespace DlnaServer.Host.Controllers
 
                 // Moved into place only once every byte is down, so the watcher sees one arrival rather
                 // than a file that keeps growing.
-                System.IO.File.Move(partialPath, target, overwrite: true);
+                try
+                {
+                    System.IO.File.Move(partialPath, target, overwrite);
+                }
+                catch (IOException) when (!overwrite && System.IO.File.Exists(target))
+                {
+                    // Another upload of the same name finished while this one was copying, and the
+                    // operator asked for existing files to be kept.
+                    return Record(
+                        sender,
+                        destination,
+                        fileName,
+                        sizeInBytes: 0,
+                        UploadOutcome.Skipped,
+                        "A file of that name was already there.");
+                }
+
+                isMoved = true;
+                DeleteStalePartials(destination, fileName);
 
                 return Record(
                     sender,
@@ -311,10 +376,18 @@ namespace DlnaServer.Host.Controllers
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                Delete(partialPath);
                 LogWriteFailed(fileName, destination, exception);
 
                 return Refuse(sender, destination, fileName, exception.Message);
+            }
+            finally
+            {
+                // Every way out but the move - too large, a write error, a skip, and a client that went
+                // away mid-copy, which arrives as an exception no catch above takes.
+                if (!isMoved)
+                {
+                    Delete(partialPath);
+                }
             }
         }
 
@@ -335,8 +408,8 @@ namespace DlnaServer.Host.Controllers
                 // bufferSize 1 disables the stream's own buffer: the loop below already reads in
                 // 64 KB blocks, and a second buffer would only copy each block once more.
                 // CreateNew rather than Create: Create follows a symlink sitting at this name and writes
-                // through it, so a planted link would be the file that got overwritten. The caller clears
-                // any leftover of its own first, which removes the link rather than its target.
+                // through it, so a planted link would be the file that got overwritten. The caller makes the
+                // name unique to this part, so nothing of this server's own is ever there to clear first.
                 await using var file = new FileStream(
                     path,
                     FileMode.CreateNew,
@@ -372,17 +445,40 @@ namespace DlnaServer.Host.Controllers
             return total;
         }
 
-        private static async Task<string> ReadFieldAsync(
+        /// <summary>
+        /// Reads a form field, or returns null once it passes <see cref="MaxFieldLengthInBytes"/>.
+        /// </summary>
+        private static async Task<string?> ReadFieldAsync(
             MultipartSection section,
             CancellationToken cancellationToken)
         {
-            // Small by construction - these are a folder path and a radio button - and the reader refuses
-            // anything past the limit rather than buffering it.
-            using var reader = new StreamReader(section.Body, leaveOpen: true);
+            // Small by construction - these are a folder path and a radio button - so reading stops one
+            // byte past the limit rather than buffering whatever a doctored form sends.
+            var buffer = ArrayPool<byte>.Shared.Rent(MaxFieldLengthInBytes + 1);
+            var total = 0;
 
-            var value = await reader.ReadToEndAsync(cancellationToken);
+            try
+            {
+                while (total <= MaxFieldLengthInBytes)
+                {
+                    var read = await section.Body.ReadAsync(
+                        buffer.AsMemory(total, MaxFieldLengthInBytes + 1 - total),
+                        cancellationToken);
 
-            return value.Trim();
+                    if (read == 0)
+                    {
+                        return Encoding.UTF8.GetString(buffer, 0, total).Trim();
+                    }
+
+                    total += read;
+                }
+
+                return null;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
 
         private static void Delete(string path)
@@ -394,6 +490,32 @@ namespace DlnaServer.Host.Controllers
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
                 // Tidying up after a failure must not replace the failure being reported.
+            }
+        }
+
+        // Partials are uniquely named, so a crashed upload's leftover is no longer overwritten by the next
+        // upload of that name; this is where it goes instead. Only this name's, and only once long idle.
+        private void DeleteStalePartials(string destination, string fileName)
+        {
+            var staleBefore = _timeProvider.GetUtcNow().UtcDateTime - _stalePartialAge;
+            var prefix = fileName + ".";
+
+            try
+            {
+                // Filtered by prefix here rather than in the pattern: '*' and '?' are legal in a Linux file
+                // name, and inside a search pattern they would widen it to other files' partials.
+                foreach (var partial in Directory.EnumerateFiles(destination, $"*{PartialSuffix}"))
+                {
+                    if (Path.GetFileName(partial).StartsWith(prefix, StringComparison.Ordinal)
+                        && System.IO.File.GetLastWriteTimeUtc(partial) < staleBefore)
+                    {
+                        Delete(partial);
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Housekeeping only - the upload itself has already succeeded.
             }
         }
 

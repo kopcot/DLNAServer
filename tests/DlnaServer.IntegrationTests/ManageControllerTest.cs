@@ -20,6 +20,7 @@ namespace DlnaServer.IntegrationTests
     {
         private RecordingApplicationLifetime _lifetime = null!;
         private RestartSignal _restartSignal = null!;
+        private DatabaseResetSignal _databaseResetSignal = null!;
         private StaticOptionsMonitor<DlnaOptions> _options = null!;
         private ServedFileCache _fileCache = null!;
         private ApiBlocker _blocker = null!;
@@ -30,6 +31,7 @@ namespace DlnaServer.IntegrationTests
         {
             _lifetime = new RecordingApplicationLifetime();
             _restartSignal = new RestartSignal();
+            _databaseResetSignal = new DatabaseResetSignal();
 
             _options = new StaticOptionsMonitor<DlnaOptions>(new DlnaOptions());
             _fileCache = new ServedFileCache(_options, TimeProvider.System, NullLogger<ServedFileCache>.Instance);
@@ -38,6 +40,7 @@ namespace DlnaServer.IntegrationTests
             _controller = new ManageController(
                 _lifetime,
                 _restartSignal,
+                _databaseResetSignal,
                 _fileCache,
                 _blocker,
                 new SubscriptionStore(TimeProvider.System),
@@ -74,9 +77,10 @@ namespace DlnaServer.IntegrationTests
 
             // Act
             var report = _fileCache.Describe();
+            var paths = _fileCache.ListPaths();
 
             // Assert
-            report.Paths.Should().Contain(path,
+            paths.Should().Contain(path,
                 "because the endpoint must name what is held, not only how much");
             report.EntryCount.Should().Be(1, "because exactly one payload was stored");
             report.BudgetInBytes.Should().BeGreaterThan(0,
@@ -138,7 +142,8 @@ namespace DlnaServer.IntegrationTests
             var added = store.Add(
                 serviceId: "urn:upnp-org:serviceId:ContentDirectory",
                 callbackUrls: ["http://192.168.1.50:8080/notify"],
-                granted: TimeSpan.FromMinutes(30));
+                granted: TimeSpan.FromMinutes(30),
+                subscriber: System.Net.IPAddress.Parse("192.168.1.50"));
 
             // Act
             var listed = store.List();
@@ -193,6 +198,48 @@ namespace DlnaServer.IntegrationTests
             // Assert
             _restartSignal.IsRestartRequested.Should().BeFalse(
                 "because nothing asked for a restart and stopping must not introduce one");
+        }
+
+        /// <summary>
+        /// A pending <i>Recreate database</i> lives only in this process and is carried out by the restart
+        /// it requested, so a stop that cleared the restart signal dropped it without a word.
+        /// </summary>
+        [Test]
+        public void Stop_WhileADatabaseRecreateIsPending_IsRefusedAndKeepsTheRestart()
+        {
+            // Arrange
+            _databaseResetSignal.RequestReset();
+            _restartSignal.RequestRestart();
+
+            // Act
+            var result = _controller.Stop();
+
+            // Assert
+            result.Should().BeOfType<ConflictObjectResult>(
+                "because the caller has to be told the stop did not happen, and why");
+            _restartSignal.IsRestartRequested.Should().BeTrue(
+                "because clearing it would let the host exit and the recreate would never run");
+            _databaseResetSignal.IsResetRequested.Should().BeTrue(
+                "because the recreate the operator confirmed must still happen on the next start");
+            _lifetime.WasStopRequested.Should().BeFalse(
+                "because the host is already stopping to restart, and nothing here may change that into an exit");
+        }
+
+        [Test]
+        public void ListPaths_ReturnsEveryHeldPathInOrdinalOrder()
+        {
+            // Arrange
+            var later = Path.Combine(Path.GetTempPath(), "b.jpg");
+            var earlier = Path.Combine(Path.GetTempPath(), "a.jpg");
+            _fileCache.Store(later, CachedContentClass.Thumbnail, new byte[] { 1 });
+            _fileCache.Store(earlier, CachedContentClass.Thumbnail, new byte[] { 2 });
+
+            // Act
+            var paths = _fileCache.ListPaths();
+
+            // Assert
+            paths.Should().Equal([earlier, later],
+                "because the listing is ordered, so two reads of it are comparable rather than in hash order");
         }
     }
 }

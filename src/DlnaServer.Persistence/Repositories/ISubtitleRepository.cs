@@ -1,4 +1,5 @@
 using DlnaServer.Core.Contracts;
+using DlnaServer.Core.Dlna;
 
 namespace DlnaServer.Persistence.Repositories
 {
@@ -18,6 +19,10 @@ namespace DlnaServer.Persistence.Repositories
         /// <c>Library.ExcludeFolders</c>, as the scan applied it. An automatic link into one of them is dropped
         /// without looking at the disc: the scan never walks there, so it can never be seen again.
         /// </param>
+        /// <param name="subtitleTypes">
+        /// <c>Library.SubtitleFileExtensions</c>, keyed case-insensitively. A link of a type no longer listed is
+        /// dropped - automatic or added by hand - since it can no longer be served; a removed marker stays.
+        /// </param>
         /// <param name="isDefinitelyAbsent">
         /// Whether a file the scan did not see is really gone, rather than in a folder it could not read.
         /// An automatic link is only dropped for a file that is gone, or whose media no longer matches it.
@@ -27,6 +32,7 @@ namespace DlnaServer.Persistence.Repositories
         Task<(int Added, int Dropped)> SyncAutomaticAsync(
             IReadOnlyDictionary<string, HashSet<string>> fileNamesByDirectory,
             IReadOnlyList<string> excludedFolders,
+            IReadOnlyDictionary<string, DlnaMedia> subtitleTypes,
             Func<string, bool> isDefinitelyAbsent,
             CancellationToken cancellationToken = default);
 

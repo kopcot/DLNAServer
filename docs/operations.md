@@ -17,6 +17,12 @@ not coming up. See "Configuration" below for what the validator does refuse.
 
 Deployment to the NAS is `./NasBuild.sh`; see `NasBuild.usage.txt`.
 
+**A fatal database-initialisation failure exits non-zero**, deliberately distinct from the exit-0 a
+deliberate `/manage/stop` produces. That is what lets a supervisor (`restart: unless-stopped`, systemd,
+the NAS's own service manager) tell "this needs attention" from "an operator asked it to sit down" rather
+than treating both the same way. Check `logs/app.log` for the initialisation failure named there before
+assuming a restart loop is the supervisor's fault.
+
 ## Uploading
 
 **Off unless `Dlna.Upload.Enabled` is on, and turning it on needs a restart** - the endpoint is created
@@ -146,6 +152,15 @@ Every `/manage` endpoint is **unauthenticated**, on the media port, and that is 
 than an oversight: the server is for a trusted internal network. On anything else this controller needs a
 guard before anything else does — `stop`, `restart` and the `clearAll*` family are all reachable by
 anything that can browse the library.
+
+**`RejectRemoteManagementEndpointFilter` treats `100.64.0.0/10` as local, on purpose, and that has a
+sharp edge.** The range is reserved for carrier-grade NAT, and a Tailscale-style overlay hands addresses
+out of it for what is genuinely a private link — that is the case this exists for. Some ISPs use the same
+range for their own CGNAT deployment to ordinary internet customers, though, and on one of those the
+"local" test cannot tell a private overlay from a stranger sharing the same ISP-assigned block: both
+present an address in `100.64.0.0/10`. If the NAS is reachable at all from an address in that range and
+you did not set up the overlay yourself, confirm it is actually your own overlay before trusting the
+"local" classification for anything security-relevant.
 
 | Endpoint | Purpose |
 | --- | --- |

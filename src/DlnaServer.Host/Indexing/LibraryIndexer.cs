@@ -133,7 +133,10 @@ namespace DlnaServer.Host.Indexing
                 // Reconcile after adding, so a file that moved is re-added under its new path before the old
                 // row is removed - the alternative briefly drops it out of the library. Reconciliation then
                 // recognises the two halves as one file and carries the original row across.
-                var (updated, removed, movedOrRenamed) = await ReconcileFilesAsync(insertedPaths, cancellationToken);
+                var (updated, removed, movedOrRenamed, isFileReconcileHalted) = await ReconcileFilesAsync(
+                    scanOptions.SourceFolders,
+                    insertedPaths,
+                    cancellationToken);
 
                 // A move or a rename is one row that changed path, so it is reported as an update - and the
                 // insert it superseded is taken back off the added count, which would otherwise report a
@@ -141,26 +144,37 @@ namespace DlnaServer.Host.Indexing
                 updatedFiles = updated + movedOrRenamed;
                 removedFiles = removed;
                 addedFiles -= movedOrRenamed;
-                removedDirectories = await ReconcileDirectoriesAsync(
-                    scanOptions,
-                    DlnaOptionsDefaults.IsSourceFolderFallback(options.Library),
-                    cancellationToken);
-                removedDirectories += await PruneEmptyDirectoriesAsync(
-                    scanOptions,
-                    directoryKeys,
-                    cancellationToken);
 
-                // After reconciliation, which may carry a moved file's old row across and delete the new
-                // one, and under the same gate: an unmounted volume must not look like every subtitle gone.
-                var (linked, unlinked) = await _subtitles.SyncAutomaticAsync(
-                    subtitlesByDirectory,
-                    scanOptions.ExcludedFolderNames,
-                    IsDefinitelyAbsent,
-                    cancellationToken);
-
-                if (linked + unlinked > 0)
+                // A source folder that turned unusable part-way stops every later stage that deletes too.
+                if (!isFileReconcileHalted)
                 {
-                    LogSubtitlesLinked(linked, unlinked);
+                    (removedDirectories, var isDirectoryReconcileHalted) = await ReconcileDirectoriesAsync(
+                        scanOptions,
+                        DlnaOptionsDefaults.IsSourceFolderFallback(options.Library),
+                        cancellationToken);
+
+                    if (!isDirectoryReconcileHalted)
+                    {
+                        removedDirectories += await PruneEmptyDirectoriesAsync(
+                            scanOptions,
+                            directoryKeys,
+                            cancellationToken);
+
+                        // After reconciliation, which may carry a moved file's old row across and delete the
+                        // new one, and under the same gate: an unmounted volume must not look like every
+                        // subtitle gone.
+                        var (linked, unlinked) = await _subtitles.SyncAutomaticAsync(
+                            subtitlesByDirectory,
+                            scanOptions.ExcludedFolderNames,
+                            scanOptions.SubtitleTypes,
+                            IsDefinitelyAbsent,
+                            cancellationToken);
+
+                        if (linked + unlinked > 0)
+                        {
+                            LogSubtitlesLinked(linked, unlinked);
+                        }
+                    }
                 }
             }
             else
@@ -321,13 +335,42 @@ namespace DlnaServer.Host.Indexing
         }
 
         /// <summary>
+        /// Whether a source folder that passed the gate at the start of the pass has become unusable since.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="FindUnusableSourceFolders"/> runs once, before a reconcile that pages through the
+        /// whole index and can take minutes. A share that unmounts in the middle leaves an empty
+        /// mountpoint, where <see cref="IsDefinitelyAbsent"/> reads a missing folder as a definite
+        /// absence - so every later row would be deleted, and a directory delete cascades. Asked per page
+        /// that has something to delete: a handful of folder probes against up to 500 row checks.
+        /// </remarks>
+        private bool HasSourceFolderBecomeUnusable(IReadOnlyList<string> sourceFolders)
+        {
+            var unusable = FindUnusableSourceFolders(sourceFolders);
+
+            if (unusable.Count == 0)
+            {
+                return false;
+            }
+
+            LogReconcileHalted(string.Join(", ", unusable));
+
+            return true;
+        }
+
+        /// <summary>
         /// Walks the indexed files, dropping those whose file is gone and re-stamping those that changed.
         /// </summary>
         /// <remarks>
         /// Paged by path rather than by offset: rows are deleted as the pass runs, and an offset would
         /// skip records once earlier ones disappear.
+        /// <para>
+        /// The source folders are checked again before each page is applied, and the pass halts - that
+        /// page included - once one has turned unusable. See <see cref="HasSourceFolderBecomeUnusable"/>.
+        /// </para>
         /// </remarks>
-        private async Task<(int Updated, int Removed, int MovedOrRenamed)> ReconcileFilesAsync(
+        private async Task<(int Updated, int Removed, int MovedOrRenamed, bool IsHalted)> ReconcileFilesAsync(
+            IReadOnlyList<string> sourceFolders,
             IReadOnlySet<string> insertedPaths,
             CancellationToken cancellationToken)
         {
@@ -396,6 +439,13 @@ namespace DlnaServer.Host.Indexing
                     });
                 }
 
+                // After this page was read from disc, so a share that dropped while it was read is caught
+                // before any of its "missing" rows are acted on.
+                if (missing.Count > 0 && HasSourceFolderBecomeUnusable(sourceFolders))
+                {
+                    return (updated, removed, movedOrRenamed, true);
+                }
+
                 // Before anything is deleted: a row missing from its path is usually a deletion, but it
                 // is sometimes the same file seen at a new one. IndexFilesAsync has already inserted
                 // that new path in this pass, so the pair is both present right now, and this is the
@@ -440,7 +490,7 @@ namespace DlnaServer.Host.Indexing
                 }
             }
 
-            return (updated, removed, movedOrRenamed);
+            return (updated, removed, movedOrRenamed, false);
         }
 
         /// <summary>
@@ -697,7 +747,7 @@ namespace DlnaServer.Host.Indexing
         /// genuinely gone from disc is still removed.
         /// </para>
         /// </remarks>
-        private async Task<int> ReconcileDirectoriesAsync(
+        private async Task<(int Removed, bool IsHalted)> ReconcileDirectoriesAsync(
             LibraryScanRequest scanOptions,
             bool isSourceFolderFallback,
             CancellationToken cancellationToken)
@@ -743,6 +793,12 @@ namespace DlnaServer.Host.Indexing
                     missing.Add(indexed.PublicId);
                 }
 
+                // The same re-check as the file pass, and it matters more here: a directory delete cascades.
+                if (missing.Count > 0 && HasSourceFolderBecomeUnusable(scanOptions.SourceFolders))
+                {
+                    return (removed, true);
+                }
+
                 removed += await _directories.RemoveByPublicIdsAsync(missing, cancellationToken);
             }
 
@@ -751,7 +807,7 @@ namespace DlnaServer.Host.Indexing
                 LogFallbackKeptUncoveredFolders(string.Join(", ", scanOptions.SourceFolders), keptUncovered);
             }
 
-            return removed;
+            return (removed, false);
         }
 
         /// <summary>
@@ -1170,6 +1226,7 @@ namespace DlnaServer.Host.Indexing
                 UseFileCreationDateTime = options.Library.UseFileCreationDateTime,
                 ExcludedFolderNames = options.Library.ExcludeFolders.ToArray(),
                 ExtensionMappings = mappings,
+                SubtitleTypes = options.Library.SubtitleFileExtensions.AsReadOnly(),
             };
         }
 

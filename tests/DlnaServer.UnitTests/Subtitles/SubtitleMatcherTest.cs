@@ -1,3 +1,4 @@
+using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Subtitles;
 
@@ -9,6 +10,8 @@ namespace DlnaServer.UnitTests.Subtitles
     [TestFixture]
     internal sealed class SubtitleMatcherTest
     {
+        private static readonly IReadOnlyDictionary<string, DlnaMedia> _subtitleTypes = SubtitleFileExtensionDefaults.Create();
+
         [TestCase("video.srt")]
         [TestCase("video.en.srt")]
         [TestCase("video.en01.srt")]
@@ -21,7 +24,7 @@ namespace DlnaServer.UnitTests.Subtitles
             SubtitleMedia<string>[] media = [new("video", "video.mpg", DlnaMedia.Video)];
 
             // Act
-            var matches = SubtitleMatcher.Match(media, [subtitle]);
+            var matches = SubtitleMatcher.Match(media, [subtitle], subtitleTypes: _subtitleTypes);
 
             // Assert
             matches.Should().ContainSingle(
@@ -41,7 +44,7 @@ namespace DlnaServer.UnitTests.Subtitles
             ];
 
             // Act
-            var matches = SubtitleMatcher.Match(media, ["video.1.en.srt", "video.en.srt"]);
+            var matches = SubtitleMatcher.Match(media, ["video.1.en.srt", "video.en.srt"], subtitleTypes: _subtitleTypes);
 
             // Assert
             matches.Should().BeEquivalentTo(
@@ -63,7 +66,7 @@ namespace DlnaServer.UnitTests.Subtitles
             ];
 
             // Act
-            var matches = SubtitleMatcher.Match(media, ["video.1.en.srt"]);
+            var matches = SubtitleMatcher.Match(media, ["video.1.en.srt"], subtitleTypes: _subtitleTypes);
 
             // Assert
             matches.Should().ContainSingle("because a subtitle can only belong to a video")
@@ -82,7 +85,7 @@ namespace DlnaServer.UnitTests.Subtitles
             ];
 
             // Act
-            var matches = SubtitleMatcher.Match(media, ["film.srt"]);
+            var matches = SubtitleMatcher.Match(media, ["film.srt"], subtitleTypes: _subtitleTypes);
 
             // Assert
             matches.Select(static m => m.Key).Should().BeEquivalentTo(["mkv", "mp4"],
@@ -100,7 +103,7 @@ namespace DlnaServer.UnitTests.Subtitles
             ];
 
             // Act
-            var matches = SubtitleMatcher.Match(media, ["song.lrc", "song.srt"]);
+            var matches = SubtitleMatcher.Match(media, ["song.lrc", "song.srt"], subtitleTypes: _subtitleTypes);
 
             // Assert
             matches.Should().BeEquivalentTo(
@@ -112,13 +115,63 @@ namespace DlnaServer.UnitTests.Subtitles
         }
 
         [Test]
+        public void Match_ForATypeTheOperatorAdded_LinksIt()
+        {
+            // Arrange
+            SubtitleMedia<string>[] media = [new("film", "film.mkv", DlnaMedia.Video)];
+            var subtitleTypes = new Dictionary<string, DlnaMedia>(StringComparer.OrdinalIgnoreCase) { [".txt"] = DlnaMedia.Video };
+
+            // Act
+            var matches = SubtitleMatcher.Match(media: media, fileNames: ["film.en.txt"], subtitleTypes: subtitleTypes);
+
+            // Assert
+            matches.Should().ContainSingle("because .txt is listed as a subtitle type for video")
+                .Which.Should().Be(new SubtitleMatch<string>("film", "film.en.txt", "en"),
+                    "because an added type is matched and read for a language exactly like a built-in one");
+        }
+
+        [Test]
+        public void Match_ForATypeTheOperatorRemoved_LinksNothing()
+        {
+            // Arrange
+            SubtitleMedia<string>[] media = [new("film", "film.mkv", DlnaMedia.Video)];
+            var subtitleTypes = SubtitleFileExtensionDefaults.Create();
+            _ = subtitleTypes.Remove(".srt");
+
+            // Act
+            var matches = SubtitleMatcher.Match(media: media, fileNames: ["film.srt"], subtitleTypes: subtitleTypes);
+
+            // Assert
+            matches.Should().BeEmpty("because a type no longer listed is not a subtitle any more, however well it is named");
+        }
+
+        [Test]
+        public void Match_ForATypeListedForMusic_LinksItToTheSongAndNotTheVideo()
+        {
+            // Arrange
+            SubtitleMedia<string>[] media =
+            [
+                new("song", "song.mp3", DlnaMedia.Audio),
+                new("clip", "song.mp4", DlnaMedia.Video),
+            ];
+            var subtitleTypes = new Dictionary<string, DlnaMedia>(StringComparer.OrdinalIgnoreCase) { [".txt"] = DlnaMedia.Audio };
+
+            // Act
+            var matches = SubtitleMatcher.Match(media: media, fileNames: ["song.txt"], subtitleTypes: subtitleTypes);
+
+            // Assert
+            matches.Should().ContainSingle("because one file matched one kind of media")
+                .Which.Key.Should().Be("song", "because the configured kind decides what a type goes with, not its extension");
+        }
+
+        [Test]
         public void Match_ForASubWithAnIdxBesideIt_LinksNothing()
         {
             // Arrange
             SubtitleMedia<string>[] media = [new("film", "film.mkv", DlnaMedia.Video)];
 
             // Act
-            var matches = SubtitleMatcher.Match(media, ["film.sub", "film.idx"]);
+            var matches = SubtitleMatcher.Match(media, ["film.sub", "film.idx"], subtitleTypes: _subtitleTypes);
 
             // Assert
             matches.Should().BeEmpty("because a .sub beside an .idx is VobSub pictures, which no television reads as text");
@@ -131,7 +184,7 @@ namespace DlnaServer.UnitTests.Subtitles
             SubtitleMedia<string>[] media = [new("video", "video.mkv", DlnaMedia.Video)];
 
             // Act
-            var matches = SubtitleMatcher.Match(media, ["video2.srt", "videos.en.srt"]);
+            var matches = SubtitleMatcher.Match(media, ["video2.srt", "videos.en.srt"], subtitleTypes: _subtitleTypes);
 
             // Assert
             matches.Should().BeEmpty("because the video's name has to be followed by a dot or nothing at all");
@@ -183,7 +236,7 @@ namespace DlnaServer.UnitTests.Subtitles
             SubtitleMedia<string>[] media = [new("office", "The.Office.US.mkv", DlnaMedia.Video)];
 
             // Act
-            var matches = SubtitleMatcher.Match(media, ["The.Office.US.srt"]);
+            var matches = SubtitleMatcher.Match(media, ["The.Office.US.srt"], subtitleTypes: _subtitleTypes);
 
             // Assert
             matches.Should().ContainSingle("because the subtitle is named exactly like the video")

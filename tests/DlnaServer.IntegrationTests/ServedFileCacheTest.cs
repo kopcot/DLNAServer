@@ -459,7 +459,7 @@ namespace DlnaServer.IntegrationTests
             heldBeforeSweep.Should().Be(2,
                 "because nothing removes an expired entry while the cache is neither read nor written");
             isSwept.Should().BeTrue("because the sweep starts the cache's own scan for expired entries");
-            cache.Describe().Paths.Should().Equal([keptPath],
+            cache.ListPaths().Should().Equal([keptPath],
                 "because expired.jpg is a minute past its 10-minute sliding expiry and kept.jpg has 49 minutes left");
         }
 

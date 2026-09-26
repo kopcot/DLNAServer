@@ -47,6 +47,8 @@ else
     </ProcessingActions>
 }
 
+<Notice IsBad="true" Message="@Message" />
+
 @* Each listing folds away. Only the whole section folds, never an individual row: FolderList positions
    its rows by a fixed ItemSize and a row that changed height would misplace every row below it without
    erroring. The fold is the panel's own state, so a section shut here stays shut while you walk the
@@ -155,6 +157,9 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        // A refresh failure belongs to the listing it failed to refresh, not to the folder navigated to.
+        Message = null;
+
         // Gated: this runs on every navigation, including a folder click made while ProcessingActions is
         // still awaiting a recreate on the same circuit's DbContext.
         await RunGatedAsync(LoadAsync);
@@ -189,10 +194,15 @@ else
                     continue;
                 }
 
-                await RunGatedAsync(
+                // Guarded rather than gated: this task is discarded, so a DbException - "database is
+                // locked" while VACUUM holds the file - would end the loop and freeze the list silently.
+                Message = null;
+
+                await RunGuardedAsync(
                     async token => _recent = await Files.GetRecentlyAddedAsync(
                         Options.CurrentValue.Library.RecentlyAddedCount,
-                        token));
+                        token),
+                    "Recently added could not be refreshed.");
 
                 await InvokeAsync(StateHasChanged);
             }

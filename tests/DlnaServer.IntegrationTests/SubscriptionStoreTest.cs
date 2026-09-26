@@ -1,3 +1,5 @@
+using System.Net;
+using DlnaServer.Core.Gena;
 using DlnaServer.Host.Gena;
 
 namespace DlnaServer.IntegrationTests
@@ -11,6 +13,7 @@ namespace DlnaServer.IntegrationTests
     {
         private static readonly string[] _callback = ["http://192.168.1.5:9000/notify"];
         private static readonly TimeSpan _granted = TimeSpan.FromMinutes(30);
+        private static readonly IPAddress _television = IPAddress.Parse("192.168.1.5");
 
         private MutableTimeProvider _time = null!;
         private SubscriptionStore _store = null!;
@@ -27,7 +30,7 @@ namespace DlnaServer.IntegrationTests
         {
             // Arrange
             // Act
-            var subscription = _store.Add("ContentDirectory", _callback, _granted);
+            var subscription = AddFromTelevision(_granted);
 
             // Assert
             subscription.Should().NotBeNull("because an empty store accepts a subscriber");
@@ -42,7 +45,7 @@ namespace DlnaServer.IntegrationTests
         public void Renew_ExtendsTheExpiryFromNow()
         {
             // Arrange
-            var subscription = _store.Add("ContentDirectory", _callback, _granted)!;
+            var subscription = AddFromTelevision(_granted)!;
             _time.Advance(TimeSpan.FromMinutes(20));
 
             // Act
@@ -78,7 +81,7 @@ namespace DlnaServer.IntegrationTests
         public void Renew_AfterTheSubscriptionLapsed_Fails()
         {
             // Arrange
-            var subscription = _store.Add("ContentDirectory", _callback, _granted)!;
+            var subscription = AddFromTelevision(_granted)!;
             _time.Advance(_granted.Add(TimeSpan.FromSeconds(1)));
 
             // Act
@@ -97,7 +100,7 @@ namespace DlnaServer.IntegrationTests
         public void Remove_ForgetsTheSubscription()
         {
             // Arrange
-            var subscription = _store.Add("ContentDirectory", _callback, _granted)!;
+            var subscription = AddFromTelevision(_granted)!;
 
             // Act
             var isRemoved = _store.Remove(subscription.Sid);
@@ -125,8 +128,12 @@ namespace DlnaServer.IntegrationTests
         public void Count_ExcludesLapsedSubscriptions()
         {
             // Arrange
-            _ = _store.Add("ContentDirectory", _callback, TimeSpan.FromMinutes(1));
-            _ = _store.Add("ConnectionManager", _callback, TimeSpan.FromMinutes(30));
+            _ = AddFromTelevision(TimeSpan.FromMinutes(1));
+            _ = _store.Add(
+                serviceId: "ConnectionManager",
+                callbackUrls: _callback,
+                granted: TimeSpan.FromMinutes(30),
+                subscriber: _television);
 
             // Act
             _time.Advance(TimeSpan.FromMinutes(5));
@@ -146,12 +153,20 @@ namespace DlnaServer.IntegrationTests
             // Arrange
             for (var index = 0; index < 64; index++)
             {
-                _store.Add("ContentDirectory", _callback, _granted)
+                _store.Add(
+                        serviceId: "ContentDirectory",
+                        callbackUrls: _callback,
+                        granted: _granted,
+                        subscriber: DeviceNumber(index))
                     .Should().NotBeNull($"because subscription {index} is within the bound");
             }
 
             // Act
-            var overflow = _store.Add("ContentDirectory", _callback, _granted);
+            var overflow = _store.Add(
+                serviceId: "ContentDirectory",
+                callbackUrls: _callback,
+                granted: _granted,
+                subscriber: DeviceNumber(64));
 
             // Assert
             overflow.Should().BeNull(
@@ -167,16 +182,108 @@ namespace DlnaServer.IntegrationTests
             // Arrange
             for (var index = 0; index < 64; index++)
             {
-                _ = _store.Add("ContentDirectory", _callback, _granted);
+                _ = _store.Add(
+                    serviceId: "ContentDirectory",
+                    callbackUrls: _callback,
+                    granted: _granted,
+                    subscriber: DeviceNumber(index));
             }
 
             // Act
             _time.Advance(_granted.Add(TimeSpan.FromSeconds(1)));
-            var afterExpiry = _store.Add("ContentDirectory", _callback, _granted);
+            var afterExpiry = _store.Add(
+                serviceId: "ContentDirectory",
+                callbackUrls: _callback,
+                granted: _granted,
+                subscriber: DeviceNumber(64));
 
             // Assert
             afterExpiry.Should().NotBeNull(
                 "because pruning lapsed subscriptions is what keeps the bound from becoming permanent");
+        }
+
+        /// <summary>
+        /// One device subscribing in a loop must not take every slot and refuse each television after it.
+        /// </summary>
+        [Test]
+        public void Add_BeyondOneDevicesShare_IsRefusedWhileOtherDevicesAreStillAccepted()
+        {
+            // Arrange
+            for (var index = 0; index < 8; index++)
+            {
+                AddFromTelevision(_granted)
+                    .Should().NotBeNull($"because subscription {index} is within one device's share");
+            }
+
+            // Act
+            var overflow = AddFromTelevision(_granted);
+            var otherDevice = _store.Add(
+                serviceId: "ContentDirectory",
+                callbackUrls: _callback,
+                granted: _granted,
+                subscriber: IPAddress.Parse("192.168.1.6"));
+
+            // Assert
+            overflow.Should().BeNull(
+                "because a ninth subscription from one device takes the 503 path rather than another slot");
+            otherDevice.Should().NotBeNull(
+                "because the store still has room, and another device's share is untouched");
+        }
+
+        /// <summary>
+        /// A dual-stack socket reports an IPv4 peer as <c>::ffff:a.b.c.d</c>; that is the same device.
+        /// </summary>
+        [Test]
+        public void Add_FromAnIPv4MappedAddress_CountsAgainstTheSameDevice()
+        {
+            // Arrange
+            for (var index = 0; index < 8; index++)
+            {
+                _ = AddFromTelevision(_granted);
+            }
+
+            // Act
+            var mapped = _store.Add(
+                serviceId: "ContentDirectory",
+                callbackUrls: _callback,
+                granted: _granted,
+                subscriber: _television.MapToIPv6());
+
+            // Assert
+            mapped.Should().BeNull(
+                "because the mapped form is the same television, not a ninth device with a fresh share");
+        }
+
+        [Test]
+        public void Add_AfterADevicesSubscriptionsLapse_AcceptsThatDeviceAgain()
+        {
+            // Arrange
+            for (var index = 0; index < 8; index++)
+            {
+                _ = AddFromTelevision(_granted);
+            }
+
+            // Act
+            _time.Advance(_granted.Add(TimeSpan.FromSeconds(1)));
+            var afterExpiry = AddFromTelevision(_granted);
+
+            // Assert
+            afterExpiry.Should().NotBeNull(
+                "because lapsed subscriptions free a device's share just as they free the store's");
+        }
+
+        private EventSubscription? AddFromTelevision(TimeSpan granted)
+        {
+            return _store.Add(
+                serviceId: "ContentDirectory",
+                callbackUrls: _callback,
+                granted: granted,
+                subscriber: _television);
+        }
+
+        private static IPAddress DeviceNumber(int index)
+        {
+            return new IPAddress([192, 168, 2, (byte)(index + 1)]);
         }
     }
 }

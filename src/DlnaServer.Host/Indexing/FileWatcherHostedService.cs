@@ -76,6 +76,27 @@ namespace DlnaServer.Host.Indexing
         /// </remarks>
         private static readonly TimeSpan _unwatchedRetryInterval = TimeSpan.FromMinutes(1);
 
+        /// <summary>
+        /// Wait before rebuilding a watch that faulted again, doubling per consecutive fault up to
+        /// <see cref="_maxFaultRestartDelay"/>.
+        /// </summary>
+        /// <remarks>
+        /// An exhausted inotify limit faults every rebuilt watch at once, and each fault also asks for a
+        /// resync - so rebuilding on every tick meant a full pass every two seconds, back to back.
+        /// </remarks>
+        private static readonly TimeSpan _firstFaultRestartDelay = TimeSpan.FromMinutes(1);
+
+        private static readonly TimeSpan _maxFaultRestartDelay = TimeSpan.FromMinutes(30);
+
+        /// <summary>
+        /// How long a rebuilt watch has to stay fault-free before its next fault counts as a fresh one.
+        /// </summary>
+        /// <remarks>
+        /// Longer than <see cref="_maxFaultRestartDelay"/>, so a fault that persists at the cap is never
+        /// mistaken for a healthy watch and restarted at once.
+        /// </remarks>
+        private static readonly TimeSpan _faultHealthyPeriod = TimeSpan.FromHours(1);
+
         private readonly IFileSystemChangeWatcher _watcher;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IOptionsMonitor<DlnaOptions> _options;
@@ -117,6 +138,12 @@ namespace DlnaServer.Host.Indexing
         /// </remarks>
         private long? _awaitingSinceTimestamp;
         private long _lastSettledTimestamp;
+
+        // The fault-restart backoff: a fault consumed from the watcher but not yet acted on, how many
+        // fault restarts have happened back to back, and when the last one did.
+        private bool _isFaultRestartPending;
+        private int _consecutiveFaultRestarts;
+        private long _lastFaultRestartTimestamp;
 
         public FileWatcherHostedService(
             IFileSystemChangeWatcher watcher,
@@ -172,7 +199,7 @@ namespace DlnaServer.Host.Indexing
                         // move the watch with it - it used to be indexed by the next scan and never
                         // watched, while a removed one kept its inotify handle.
                         var current = ReadWatchTargets();
-                        var faulted = _watcher.ConsumeRestartRequest();
+                        var faulted = TryTakeFaultRestart(_watcher.ConsumeRestartRequest());
 
                         // Comparing what ATTACHED against what was asked for. Comparing the request
                         // against the previous request - which is what this did - always matched, so a
@@ -206,7 +233,10 @@ namespace DlnaServer.Host.Indexing
                         // ConsumeResyncRequest is evaluated first and always clears the flag. A pass that
                         // has just succeeded already satisfies the resync, so running a second full pass
                         // in the same tick bought nothing and cost another two recursive volume walks.
-                        if (_watcher.ConsumeResyncRequest()
+                        // Left unconsumed while a fault restart is backing off: the dead watch keeps
+                        // asking, and the rebuild that ends the wait is followed by a pass anyway.
+                        if (!_isFaultRestartPending
+                            && _watcher.ConsumeResyncRequest()
                             && !scanned
                             && !await RunFullScanAsync(stoppingToken))
                         {
@@ -251,6 +281,56 @@ namespace DlnaServer.Host.Indexing
             return new WatchTargets(
                 [.. LibraryIndexer.NormaliseSourceFolders(library.SourceFolders)],
                 [.. library.ExcludeFolders]);
+        }
+
+        /// <summary>
+        /// Whether a faulted watch should be rebuilt on this tick.
+        /// </summary>
+        /// <remarks>
+        /// The first fault rebuilds at once; one that follows within <see cref="_faultHealthyPeriod"/>
+        /// waits <see cref="ResolveFaultRestartDelay"/> after the previous rebuild. A fault consumed while
+        /// waiting is remembered here, because consuming it cleared the watcher's own flag.
+        /// </remarks>
+        internal bool TryTakeFaultRestart(bool isFaultRaised)
+        {
+            _isFaultRestartPending |= isFaultRaised;
+
+            if (!_isFaultRestartPending)
+            {
+                return false;
+            }
+
+            var sinceLast = _timeProvider.GetElapsedTime(_lastFaultRestartTimestamp);
+            var isStreak = _consecutiveFaultRestarts > 0 && sinceLast < _faultHealthyPeriod;
+
+            if (isStreak && sinceLast < ResolveFaultRestartDelay(_consecutiveFaultRestarts))
+            {
+                return false;
+            }
+
+            _consecutiveFaultRestarts = isStreak ? _consecutiveFaultRestarts + 1 : 1;
+            _lastFaultRestartTimestamp = _timeProvider.GetTimestamp();
+            _isFaultRestartPending = false;
+
+            // Once per streak: the second fault in a row is the one that says the watch cannot stay up.
+            if (_consecutiveFaultRestarts == 2)
+            {
+                LogWatchKeepsFaulting((int)_firstFaultRestartDelay.TotalMinutes, (int)_maxFaultRestartDelay.TotalMinutes);
+            }
+
+            return true;
+        }
+
+        /// <remarks>
+        /// <c>internal</c> so the schedule is asserted directly, as with
+        /// <c>MediaProcessingHostedService.ResolveIdleDelay</c>.
+        /// </remarks>
+        internal static TimeSpan ResolveFaultRestartDelay(int consecutiveFaultRestarts)
+        {
+            var doublings = Math.Clamp(consecutiveFaultRestarts - 1, 0, 16);
+            var delay = _firstFaultRestartDelay * (1 << doublings);
+
+            return delay > _maxFaultRestartDelay ? _maxFaultRestartDelay : delay;
         }
 
         /// <summary>

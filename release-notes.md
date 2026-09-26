@@ -14,7 +14,31 @@ worth telling you about is added to the version it belongs to.
 
 **Choose them yourself on a file's page.** The file's page lists what is linked to it, with the language each one appears to be. You can add one by hand - it must be in the file's folder or one folder below, and not reached through a shortcut (a link) - which then replaces the automatic ones, remove one (it stays removed, whether it was found by name or added by you), or correct its language. A subtitle in a folder you later add to *Excluded folders* is let go of the next time the server looks over your folders, and so is one you added whose file has gone. Until then the page says why it cannot be used. Subtitles you add by hand are forgotten if you use *Rebuild index*; the ones found by name come back by themselves.
 
-**Find them.** *Search files* has a *Subtitles* filter, its subtitle-language filter now includes the languages of linked files, and the Library tiles carry a small badge under the video or music one when a file has subtitles - a track inside it or a linked file.
+**Find them.** *Search files* has a *Subtitles* filter, its subtitle-language filter now includes the languages of linked files, and the Library tiles carry a small badge under the video or music one when a file has subtitles - a track inside it or a linked file. The filter can ask for either kind or for one of them: *yes (embedded in file)* lists files with a subtitle track inside them, *yes (linked file)* files with a subtitle file linked to them, and a film carrying both appears under either.
+
+**Download them.** A file's page has a *Download subtitle* button beside *Download* when one subtitle file is linked to it, and *Download subtitles (zip)* when several are - all of them in one zip, each under its own name.
+
+**Choose which files count as subtitles.** *Settings* has a *Subtitle types* list beside *File types*: which extensions are linked to videos as subtitles and which to music as lyrics. *Restore the default subtitle types* puts the usual list back.
+
+**The Dashboard counts them.** The Library panel shows *Video*, *Music*, *Photos* and *Subtitles* in one row, and *Other* below them when your library holds files of no media kind. Subtitles are the files linked to your media, so they are not part of the *Files* total; Video, Music, Photos and Other still add up to it.
+
+**The admin pages only answer your own network.** On a NAS with an internet-reachable IPv6 address, the admin port - settings, *Recreate database*, uploads - could be reached from outside if the router let it through. It now answers only devices on the local network, a Tailscale address, or the optional admin proxy. The server also answers discovery requests only from the local network now, and one device can no longer take every event subscription.
+
+**A mistyped setting no longer stops the server.** A value of the wrong kind in the settings file - `"yes"` where a true/false belongs - made every page fail until the file was fixed. The server now keeps running on the last settings that worked, as it already did for a value that was merely out of range, and says so.
+
+**A share that drops out mid-scan no longer empties the library.** The server checked once, at the start of a scan, that your media folders were really there. If a share disappeared partway through, the rest of the scan took every file under it for deleted. It now checks again as it goes and stops removing anything the moment a folder goes missing.
+
+**A slow file no longer loses its details.** When reading a file's details timed out - a disc spinning up is enough - the server stored the empty result as though it were the answer, wiping the duration, resolution and codecs it already had, and never tried again. A timeout is now a failed attempt that is retried like any other.
+
+**Uploads are sturdier.** Two uploads of the same name at once no longer spoil each other, *keep existing files* is honoured even when a file of that name arrives mid-upload, an upload cut off halfway leaves nothing behind, and one oversized request can no longer run the server out of memory. *Settings* now refuses an upload folder inside one of your *Excluded folders*, instead of accepting it and refusing every upload later.
+
+**Stop waits for Recreate database.** Pressing *Stop server* while *Recreate database* was restarting the server quietly cancelled the recreate. Stop is now refused until the restart has happened.
+
+**Behind the admin proxy, televisions keep working.** The optional admin proxy's settings restricted which addresses the whole server answered to, so a television reaching it by its local address could be turned away. `LAN_HOSTS` in `.env` now lists the local names and addresses to keep answering; see `Docker.usage.md`.
+
+**A very large library no longer keeps the discs spinning when the system runs out of file watches.** Watching folders for changes failed over and over on such a library, and every failure started a full scan. The server now waits longer after each failure and writes one log line saying what to raise (`fs.inotify.max_user_watches`).
+
+**A server that cannot open its database now says so to whatever runs it.** It exits with an error code instead of the code a deliberate stop uses, so a supervisor can tell the two apart.
 
 **Memory is handed back when nobody is watching.** Films and previews kept in memory are meant to be let go after a while, but the server only noticed they had expired the next time something asked it for a file - so a server left alone overnight kept everything it had served the evening before, over a gigabyte on one real library. It now checks every minute. A film let go of is also really freed now, rather than lingering until you pressed *Empty the memory*.
 

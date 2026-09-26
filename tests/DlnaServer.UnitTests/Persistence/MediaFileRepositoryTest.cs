@@ -907,13 +907,18 @@ namespace DlnaServer.UnitTests.Persistence
                 "1024:638000000000000000",
                 CancellationToken.None);
 
+            // Looked up by the thumbnail's own id: passing the file's id matches nothing, so the assertion
+            // below used to pass whether or not the row was deleted.
+            var thumbnailId = (await repository.GetByPublicIdAsync(stored[0].PublicId, CancellationToken.None))?.ThumbnailPublicId;
+            thumbnailId.Should().NotBeNull("because the thumbnail has to exist before clearing can be shown to remove it");
+
             // Act
             var affected = await repository.ClearAllThumbnailsAsync(CancellationToken.None);
 
             // Assert
             affected.Should().BeGreaterThan(0, "because the file had a thumbnail stamp");
 
-            (await repository.GetThumbnailByPublicIdAsync(stored[0].PublicId, CancellationToken.None))
+            (await repository.GetThumbnailByPublicIdAsync(thumbnailId!.Value, CancellationToken.None))
                 .Should().BeNull(
                     "because the row goes with the stamp - a thumbnail kept beside a null stamp would be "
                     + "served while its replacement was being generated");
@@ -1269,13 +1274,8 @@ namespace DlnaServer.UnitTests.Persistence
                 "because a file is kept in memory unless reading it has already failed");
         }
 
-        /// <summary>
-        /// NOTES items 7i and 7j: "has subtitles" is a linked subtitle file or a track inside the file, and
-        /// an automatic link the operator removed does not count.
-        /// </summary>
-        [TestCase(true, "linked.mkv", TestName = "SearchAsync_WithSubtitles_ReturnsOnlyTheLinkedFile")]
-        [TestCase(false, "plain.mkv,removed.mkv", TestName = "SearchAsync_WithoutSubtitles_ReturnsTheRest")]
-        public async Task SearchAsync_BySubtitles_ReturnsOnlyThatSide(bool hasSubtitles, string expectedFileNames)
+        [Test]
+        public async Task CountByKindAsync_CountsLiveSubtitleLinksOutsideTheFileTotal()
         {
             // Arrange
             await using var context = _database.CreateContext();
@@ -1283,14 +1283,85 @@ namespace DlnaServer.UnitTests.Persistence
             var subtitles = new SubtitleRepository(context);
 
             var stored = await repository.AddRangeAsync(
-                files: [CreateFile("/media/linked.mkv"), CreateFile("/media/removed.mkv"), CreateFile("/media/plain.mkv")],
+                files: [CreateFile("/media/linked.mkv"), CreateFile("/media/removed.mkv")],
+                cancellationToken: CancellationToken.None);
+            var linkedId = stored.Single(static f => f.FileName == "linked.mkv").PublicId;
+
+            foreach (var relativePath in new[] { "linked.en.srt", "linked.cs.srt" })
+            {
+                _ = await subtitles.AddManualAsync(
+                    mediaFilePublicId: linkedId,
+                    relativePath: relativePath,
+                    language: null,
+                    cancellationToken: CancellationToken.None);
+            }
+
+            var removedId = await context.Files
+                .Where(static f => f.FileName == "removed.mkv")
+                .Select(static f => f.Id)
+                .SingleAsync(CancellationToken.None);
+            _ = context.SubtitleFiles.Add(new SubtitleFileEntity
+            {
+                MediaFileId = removedId,
+                RelativePath = "removed.srt",
+                Source = SubtitleSource.Removed,
+            });
+            _ = await context.SaveChangesAsync(CancellationToken.None);
+
+            // Act
+            var counts = await repository.CountByKindAsync(CancellationToken.None);
+
+            // Assert
+            counts.Subtitles.Should().Be(2,
+                "because both live links count, and a link the operator removed does not");
+            counts.Total.Should().Be(2,
+                "because a linked subtitle is not a library file, so the file total is untouched");
+        }
+
+        /// <summary>
+        /// NOTES items 7i and 7j: "has subtitles" is a linked subtitle file or a track inside the file, and
+        /// an automatic link the operator removed does not count. The embedded and linked choices ask for
+        /// that kind, so a file carrying both matches either - but never a file with only the other kind.
+        /// </summary>
+        [TestCase(SubtitlePresence.Yes, "both.mkv,embedded.mkv,linked.mkv", TestName = "SearchAsync_WithSubtitles_ReturnsEitherKind")]
+        [TestCase(SubtitlePresence.Embedded, "both.mkv,embedded.mkv", TestName = "SearchAsync_WithEmbeddedSubtitles_SkipsLinkedOnly")]
+        [TestCase(SubtitlePresence.Linked, "both.mkv,linked.mkv", TestName = "SearchAsync_WithLinkedSubtitles_SkipsEmbeddedOnly")]
+        [TestCase(SubtitlePresence.No, "plain.mkv,removed.mkv", TestName = "SearchAsync_WithoutSubtitles_ReturnsTheRest")]
+        public async Task SearchAsync_BySubtitles_ReturnsOnlyThatSide(SubtitlePresence hasSubtitles, string expectedFileNames)
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var repository = CreateRepository(context);
+            var subtitles = new SubtitleRepository(context);
+
+            var stored = await repository.AddRangeAsync(
+                files:
+                [
+                    CreateFile("/media/linked.mkv"),
+                    CreateFile("/media/removed.mkv"),
+                    CreateFile("/media/plain.mkv"),
+                    CreateFile("/media/embedded.mkv"),
+                    CreateFile("/media/both.mkv"),
+                ],
                 cancellationToken: CancellationToken.None);
 
-            _ = await subtitles.AddManualAsync(
-                mediaFilePublicId: stored.Single(static f => f.FileName == "linked.mkv").PublicId,
-                relativePath: "linked.srt",
-                language: null,
-                cancellationToken: CancellationToken.None);
+            foreach (var fileName in new[] { "linked.mkv", "both.mkv" })
+            {
+                _ = await subtitles.AddManualAsync(
+                    mediaFilePublicId: stored.Single(f => f.FileName == fileName).PublicId,
+                    relativePath: Path.ChangeExtension(fileName, ".srt"),
+                    language: null,
+                    cancellationToken: CancellationToken.None);
+            }
+
+            var withTracks = await context.Files
+                .Where(static f => f.FileName == "embedded.mkv" || f.FileName == "both.mkv")
+                .ToListAsync(CancellationToken.None);
+
+            foreach (var entity in withTracks)
+            {
+                entity.Subtitles.Add(new SubtitleStreamEntity { StreamIndex = 0, Language = "eng" });
+            }
 
             var removedId = await context.Files
                 .Where(static f => f.FileName == "removed.mkv")
@@ -1311,8 +1382,8 @@ namespace DlnaServer.UnitTests.Persistence
 
             // Assert
             found.Select(static f => f.FileName).Should().BeEquivalentTo(expectedFileNames.Split(','),
-                "because only a live link counts, and a link the operator removed does not");
-            found.Should().OnlyContain(f => f.HasSubtitles == hasSubtitles,
+                "because each choice keeps only the files carrying that kind, and a removed link counts as none");
+            found.Should().OnlyContain(f => hasSubtitles == SubtitlePresence.No ? !f.HasSubtitles : f.HasSubtitles,
                 "because the listing's own flag has to agree with the filter that selected it");
         }
 
@@ -2770,33 +2841,12 @@ namespace DlnaServer.UnitTests.Persistence
             bool isSourceRoot,
             Guid? parent = null)
         {
-            return new MediaDirectoryCreateDto
-            {
-                FullPath = fullPath,
-                Name = name,
-                Depth = depth,
-                IsSourceRoot = isSourceRoot,
-                ParentDirectoryPublicId = parent,
-            };
+            return PersistenceTestData.CreateDirectory(fullPath, name, depth, isSourceRoot, parent);
         }
 
         private static MediaFileCreateDto CreateFile(string fullPath)
         {
-            var fileName = Path.GetFileName(fullPath);
-
-            return new MediaFileCreateDto
-            {
-                FullPath = fullPath,
-                FileName = fileName,
-                Title = Path.GetFileNameWithoutExtension(fileName),
-                Extension = Path.GetExtension(fileName).ToLowerInvariant(),
-                Mime = DlnaMime.VideoXMatroska,
-                UpnpClass = DlnaItemClass.VideoItem,
-                SizeInBytes = 1024,
-                FileCreatedUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                FileModifiedUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                ContentStamp = "1024:638000000000000000",
-            };
+            return PersistenceTestData.CreateFile(fullPath);
         }
 
         /// <remarks>
@@ -3088,6 +3138,167 @@ namespace DlnaServer.UnitTests.Persistence
 
             var otherTags = await repository.GetTagsAsync(stored[1].PublicId, CancellationToken.None);
             otherTags.Should().ContainSingle("because a scoped rebuild must not delete anyone else's tags");
+        }
+
+        /// <summary>
+        /// A scan runs every batch through one context, so a row left tracked is re-walked by every later save.
+        /// </summary>
+        [Test]
+        public async Task UpdateContentAsync_LeavesNothingTracked()
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var repository = CreateRepository(context);
+
+            var stored = await repository.AddRangeAsync(
+                files: [CreateFile("/media/movies/Changed.mkv")],
+                cancellationToken: CancellationToken.None);
+
+            // Act
+            _ = await repository.UpdateContentAsync(
+                updates:
+                [
+                    new MediaFileContentUpdateDto
+                    {
+                        PublicId = stored[0].PublicId,
+                        SizeInBytes = 2048,
+                        FileModifiedUtc = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc),
+                        ContentStamp = "2048:638100000000000000",
+                    },
+                ],
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            context.ChangeTracker.Entries().Should().BeEmpty(
+                "because the scan's context outlives the call, and every later save would walk what stayed tracked");
+        }
+
+        [Test]
+        public async Task MoveOrRenameAsync_LeavesNothingTracked()
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var repository = CreateRepository(context);
+
+            var stored = await repository.AddRangeAsync(
+                files: [CreateFile("/media/movies/Old.mkv"), CreateFile("/media/movies/New.mkv")],
+                cancellationToken: CancellationToken.None);
+
+            // Act
+            var (moved, _) = await repository.MoveOrRenameAsync(
+                publicId: stored[0].PublicId,
+                supersededPublicId: stored[1].PublicId,
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            moved.Should().BeTrue(
+                "because both rows exist and are distinct");
+            context.ChangeTracker.Entries().Should().BeEmpty(
+                "because the scan's context outlives the call, and every later save would walk what stayed tracked");
+        }
+
+        /// <summary>
+        /// A failure between deleting the rows and clearing the stamp must undo the delete, or the file is
+        /// marked current with nothing behind it and is never queued again.
+        /// </summary>
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task ClearingThumbnails_WhenTheStampClearFails_KeepsTheThumbnail(bool isWholeLibrary)
+        {
+            // Arrange
+            Guid publicId;
+
+            await using (var seeding = _database.CreateContext())
+            {
+                var seeder = CreateRepository(seeding);
+                var stored = await seeder.AddRangeAsync(
+                    files: [CreateFile("/media/movies/Previewed.mkv")],
+                    cancellationToken: CancellationToken.None);
+                publicId = stored[0].PublicId;
+
+                await seeder.SaveThumbnailAsync(
+                    publicId: publicId,
+                    thumbnail: new GeneratedThumbnail(
+                        "/media/movies/.@__thumb/Previewed.mkv.jpg",
+                        DlnaMime.ImageJpeg,
+                        Width: 480,
+                        Height: 270,
+                        SizeInBytes: 3,
+                        Content: [1, 2, 3],
+                        WasAdopted: false),
+                    extractedFromContentStamp: "1024:638000000000000000",
+                    cancellationToken: CancellationToken.None);
+            }
+
+            await using var failing = _database.CreateContext(new FailingUpdateInterceptor());
+            var repository = CreateRepository(failing);
+
+            // Act
+            Func<Task<int>> act = isWholeLibrary
+                ? () => repository.ClearAllThumbnailsAsync(cancellationToken: CancellationToken.None)
+                : () => repository.ClearThumbnailsAsync(
+                    scope: MediaFileScope.ForFile(publicId),
+                    cancellationToken: CancellationToken.None);
+
+            // Assert
+            await act.Should().ThrowAsync<InvalidOperationException>(
+                "because the interceptor fails the stamp clear");
+
+            await using var reading = _database.CreateContext();
+            (await CreateRepository(reading).GetThumbnailPageAsync(
+                    afterFullPath: null,
+                    take: 10,
+                    cancellationToken: CancellationToken.None))
+                .Should().ContainSingle(
+                    "because the delete and the stamp clear are one transaction, so a failed clear keeps the row");
+        }
+
+        /// <summary>
+        /// The tag counterpart: tags gone with the stamp still current would never be read again.
+        /// </summary>
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task RecreatingTags_WhenTheRequeueFails_KeepsTheTags(bool isWholeLibrary)
+        {
+            // Arrange
+            Guid publicId;
+
+            await using (var seeding = _database.CreateContext())
+            {
+                var seeder = CreateRepository(seeding);
+                var stored = await seeder.AddRangeAsync(
+                    files: [CreateFile("/media/music/Tagged.mp3")],
+                    cancellationToken: CancellationToken.None);
+                publicId = stored[0].PublicId;
+
+                await seeder.SaveMetadataAsync(
+                    publicId: publicId,
+                    metadata: new MediaMetadataResult([], null, [])
+                    {
+                        Tags = [new MediaFileTagDto { Name = "artist", Value = "Some Artist" }],
+                    },
+                    extractedFromContentStamp: "1024:638000000000000000",
+                    cancellationToken: CancellationToken.None);
+            }
+
+            await using var failing = _database.CreateContext(new FailingUpdateInterceptor());
+            var repository = CreateRepository(failing);
+
+            // Act
+            Func<Task<int>> act = isWholeLibrary
+                ? () => repository.RecreateAllTagsAsync(cancellationToken: CancellationToken.None)
+                : () => repository.RecreateTagsAsync(
+                    scope: MediaFileScope.ForFile(publicId),
+                    cancellationToken: CancellationToken.None);
+
+            // Assert
+            await act.Should().ThrowAsync<InvalidOperationException>(
+                "because the interceptor fails the re-queue");
+
+            await using var reading = _database.CreateContext();
+            (await CreateRepository(reading).GetTagsAsync(publicId, CancellationToken.None))
+                .Should().ContainSingle(
+                    "because the delete and the re-queue are one transaction, so a failed re-queue keeps the tags");
         }
 
     }

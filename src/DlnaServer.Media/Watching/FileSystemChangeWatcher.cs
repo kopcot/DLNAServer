@@ -119,7 +119,18 @@ namespace DlnaServer.Media.Watching
                 watcher.Renamed += (_, args) => Publish(args.FullPath, args.OldFullPath, FileChangeKind.Renamed, excludedFolderNames);
                 watcher.Error += (_, args) => OnWatcherError(folder, args.GetException());
 
-                watcher.EnableRaisingEvents = true;
+                try
+                {
+                    watcher.EnableRaisingEvents = true;
+                }
+                catch
+                {
+                    // An exhausted inotify limit throws here, and the watcher was not yet in the bag, so
+                    // nothing would ever have disposed it - one leaked handle per failed restart.
+                    watcher.Dispose();
+                    throw;
+                }
+
                 _watchers.Add(watcher);
                 attached.Add(folder);
 

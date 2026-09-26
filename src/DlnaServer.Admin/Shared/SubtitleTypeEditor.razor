@@ -1,0 +1,54 @@
+@* The subtitle types, one editable line per extension: which files are linked to a video as its subtitles
+   or to a song as its lyrics. Built like ExtensionMapEditor - the rows are mutated in place and read back
+   on save, and Settings.razor hands them over as a copy, never the running server's own map. *@
+
+<DataTable>
+    <Columns>
+        <th>Extension</th>
+        <th>Goes with</th>
+        <th></th>
+    </Columns>
+    <ChildContent>
+        @foreach (var row in Rows)
+        {
+            @* Keyed on the row itself, so removing one redraws that line rather than shifting every value up. *@
+            <tr @key="row">
+                <td>
+                    <input type="text" placeholder=".srt" aria-label="Extension" @bind="row.Extension" />
+                </td>
+                <td>
+                    <select aria-label="Goes with" @bind="row.Kind">
+                        <option value="@DlnaMedia.Video">Video - subtitles</option>
+                        <option value="@DlnaMedia.Audio">Music - lyrics</option>
+                    </select>
+                </td>
+                <td>
+                    <button type="button" class="stop" @onclick="() => Remove(row)">Remove</button>
+                </td>
+            </tr>
+        }
+    </ChildContent>
+</DataTable>
+
+<div class="checkrow">
+    <button type="button" @onclick="Add">Add a subtitle type</button>
+</div>
+
+@code {
+    /// <summary>
+    /// The rows being edited, mutated in place so the page reads them back when it saves.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public List<SubtitleTypeRow> Rows { get; set; } = null!;
+
+    private void Add()
+    {
+        Rows.Add(new SubtitleTypeRow());
+    }
+
+    private void Remove(SubtitleTypeRow row)
+    {
+        _ = Rows.Remove(row);
+    }
+}

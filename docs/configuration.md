@@ -32,8 +32,9 @@ the folder it fell back to.
 
 `DlnaOptionsValidator` then refuses to start the server on: a source folder that does not exist, equal media
 and admin ports, a per-file cache limit above the total cache budget, a blank `Thumbnails.SubFolderName`, a
-thumbnail cache directory inside a source folder that no `ExcludeFolders` entry covers, or an
-`Upload.DestinationFolder` that is not inside one of the source folders.
+thumbnail cache directory inside a source folder that no `ExcludeFolders` entry covers, an
+`Upload.DestinationFolder` that is not inside one of the source folders, or a `Library.SubtitleFileExtensions`
+entry that is not a usable extension, goes with neither `Video` nor `Audio`, or is also a media type.
 
 `Library.ExcludeFolders` carries no default on the property itself. `ConfigurationBinder` **adds to** a
 non-empty `IList<string>` rather than replacing it, so a default declared there appended itself to whatever
@@ -41,6 +42,18 @@ non-empty `IList<string>` rather than replacing it, so a default declared there 
 every save. `DlnaOptionsDefaults` seeds `.@__thumb` and `@Recycle` after binding, only when configuration
 names none of its own, and de-duplicates case-insensitively either way, so an already-doubled file heals on
 its next load.
+
+`Library.SubtitleFileExtensions` decides which files are linked to their media by name, and what each goes
+with: `".srt": "Video"` for a subtitle, `".lrc": "Audio"` for lyrics, which only ever match music. It carries
+no default on the property either, for the same reason: `DlnaOptionsDefaults` seeds the shipped seven (`.srt`,
+`.vtt`, `.ass`, `.ssa`, `.sub`, `.smi` for video, `.lrc` for music) only when configuration names none, and
+normalises every key to lower case with a leading dot. An empty list therefore means "not configured", not
+"link nothing" - `Compatibility.SendSubtitles` is the switch for that. An extension that is also a media type -
+in `MediaFileExtensions` or known to the catalog as video, audio or an image - is refused, because the scanner
+would index those files as items of their own. A change applies to the next scan. A type taken off the list
+stops being served and offered for download at once, though a television may still be told about it until
+that scan drops its links - **including ones added by hand**. The one exception is a link the operator
+removed, whose marker stays so the file is not re-linked if the type returns.
 
 Thumbnails are written beside the media they describe, into `Thumbnails.SubFolderName` (`.@__thumb`) - so
 `Films/Film.mkv` is previewed by `Films/.@__thumb/Film.mkv.jpg`, which is where the reference puts them and
@@ -60,6 +73,7 @@ not obvious from the schema, which is why they are listed rather than left to be
 | `Library.SourceFolders` | yes | yes | no | empty after defaults, and a relative path |
 | `Library.ExcludeFolders` | yes | yes | no | - |
 | `Library.UseFileCreationDateTime` | yes | yes | no | - |
+| `Library.SubtitleFileExtensions` | yes | yes - from the next scan | no | not an extension, neither `Video` nor `Audio`, or also a media type |
 | `Thumbnails.SubFolderName` | yes | yes | no | blank, and a cache inside a source folder no exclusion covers |
 | `Thumbnails.DownloadFFmpeg` | yes | yes | no | - |
 | `FileCache.*` | yes | yes | no | a per-file limit above the total |

@@ -1,3 +1,5 @@
+using System.Data.Common;
+using System.Runtime.ExceptionServices;
 using DlnaServer.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -29,6 +31,29 @@ namespace DlnaServer.Persistence
         public void ForgetTrackedEntities()
         {
             ChangeTracker.Clear();
+        }
+
+        /// <summary>
+        /// Saves, and lets a provider failure surface as the <see cref="DbException"/> it is.
+        /// </summary>
+        /// <remarks>
+        /// EF wraps a failed command in <see cref="DbUpdateException"/>, which does not derive from
+        /// <see cref="DbException"/>. Callers outside this assembly cannot name an EF type - an architecture
+        /// test forbids it - so they catch <see cref="DbException"/>, and a wrapped <c>database is locked</c>
+        /// slipped past them. The inner exception is rethrown with its original stack.
+        /// </remarks>
+        public async Task<int> SaveChangesSurfacingDbExceptionAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException exception) when (exception.InnerException is DbException inner)
+            {
+                ExceptionDispatchInfo.Capture(inner).Throw();
+
+                throw;
+            }
         }
 
         private readonly TimeProvider _timeProvider;

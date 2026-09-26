@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using DlnaServer.Core.Dlna;
 
 namespace DlnaServer.Core.Configuration
 {
@@ -97,6 +98,24 @@ namespace DlnaServer.Core.Configuration
         /// </summary>
         public IDictionary<string, MediaExtensionOptions> MediaFileExtensions { get; set; } =
             new Dictionary<string, MediaExtensionOptions>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Maps a subtitle or lyrics file extension (leading dot, lower case) to the kind of media it is
+        /// linked to: <see cref="DlnaMedia.Video"/> for a subtitle, <see cref="DlnaMedia.Audio"/> for lyrics.
+        /// </summary>
+        /// <remarks>
+        /// A file whose extension is listed here is linked, by name, to the media file of that kind it
+        /// belongs to - <c>film.en.srt</c> to <c>film.mkv</c>, <c>song.lrc</c> to <c>song.mp3</c> - and
+        /// served beside it. A file of any other type is neither found by name nor accepted by hand.
+        /// <para>
+        /// Empty by default, for the reason <see cref="ExcludeFolders"/> is: <c>ConfigurationBinder</c> adds
+        /// to a non-empty collection. <c>DlnaOptionsDefaults</c> seeds
+        /// <see cref="SubtitleFileExtensionDefaults"/> after binding when configuration names none, and
+        /// normalises every key to the stored form either way.
+        /// </para>
+        /// </remarks>
+        public IDictionary<string, DlnaMedia> SubtitleFileExtensions { get; set; } =
+            new Dictionary<string, DlnaMedia>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// How many recently added files the root container surfaces alongside the source folders.

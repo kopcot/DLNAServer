@@ -72,7 +72,11 @@ namespace DlnaServer.Upnp.Ssdp
 
         public UpnpDeviceIdentity Resolve(IPAddress? localAddress)
         {
-            if (Identities.Count == 0)
+            // Read once. Refresh can swap in an empty list between a Count check and an indexer read, and
+            // the ArgumentOutOfRangeException that makes is not the InvalidOperationException callers catch.
+            var identities = Identities;
+
+            if (identities.Count == 0)
             {
                 throw new InvalidOperationException(
                     "No usable network interface was found, so the server cannot advertise itself.");
@@ -80,14 +84,14 @@ namespace DlnaServer.Upnp.Ssdp
 
             if (localAddress is null)
             {
-                return Identities[0];
+                return identities[0];
             }
 
             var mapped = localAddress.IsIPv4MappedToIPv6
                 ? localAddress.MapToIPv4()
                 : localAddress;
 
-            foreach (var identity in Identities)
+            foreach (var identity in identities)
             {
                 if (identity.Address.Equals(mapped))
                 {
@@ -95,7 +99,7 @@ namespace DlnaServer.Upnp.Ssdp
                 }
             }
 
-            return Identities[0];
+            return identities[0];
         }
     }
 }

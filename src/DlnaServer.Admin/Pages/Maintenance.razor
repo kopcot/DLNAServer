@@ -382,6 +382,16 @@
 
     private void Stop()
     {
+        // Refused exactly as /manage/stop refuses it: a pending recreate lives only in this process and runs
+        // on the restart it asked for, so clearing the signal below would drop it without a word.
+        if (DatabaseResetSignal.IsResetRequested)
+        {
+            Message = "The database is being recreated, and the server is restarting to finish that. "
+                + "Stop it once it is back.";
+
+            return;
+        }
+
         Message = "Stopping.";
 
         // Cleared first, exactly as /manage/stop does: the host loop rebuilds whenever the signal is set,

@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.ComponentModel.DataAnnotations;
 using DlnaServer.Core.Configuration;
+using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Files;
 using DlnaServer.Upnp.Ssdp;
 using Microsoft.Extensions.Options;
@@ -17,6 +19,9 @@ namespace DlnaServer.Host.Configuration
         // folder. It used to carry real weight, when matching was a substring and two characters could
         // hide half the library - segment alignment took that away rather than this rule.
         private const int MinimumExcludeFolderLength = 3;
+
+        // What an extension may not contain past its leading dot - the set the file types editor refuses.
+        private static readonly SearchValues<char> _rejectedExtensionCharacters = SearchValues.Create(" \t\r\n/\\:*?\"<>|");
 
         /// <remarks>
         /// Every failure this class produces is rendered verbatim by the admin Settings page, which is for
@@ -45,6 +50,7 @@ namespace DlnaServer.Host.Configuration
             [nameof(LibraryOptions.RecentlyAddedCount)] = "recently added count",
             [nameof(LibraryOptions.FileSettleSeconds)] = "wait before adding a file",
             [nameof(LibraryOptions.RescanIntervalMinutes)] = "how often to look for changes",
+            [nameof(LibraryOptions.SubtitleFileExtensions)] = "subtitle types",
 
             [nameof(ThumbnailOptions.SubFolderName)] = "preview folder name",
             [nameof(ThumbnailOptions.CacheDirectory)] = "preview cache folder",
@@ -120,6 +126,7 @@ namespace DlnaServer.Host.Configuration
             failures.AddRange(ValidateThumbnailSubFolderName(options));
             failures.AddRange(ValidateExcludeFolders(options));
             failures.AddRange(ValidateTemporarilyHiddenFolders(options));
+            failures.AddRange(ValidateSubtitleFileExtensions(options));
             failures.AddRange(ValidateThumbnailCacheOutsideLibrary(options));
             failures.AddRange(ValidateUploadFolder(options));
 
@@ -234,8 +241,10 @@ namespace DlnaServer.Host.Configuration
         /// <remarks>
         /// Like every rule here it never touches the filesystem - whether the folder exists is
         /// <c>ISourceFolderChecker</c>'s question, asked where a throw cannot poison the options monitor.
-        /// This checks only that the path is spelled sanely and sits under a source folder, because a
-        /// destination outside the library would take files and then never show them.
+        /// This checks only that the path is spelled sanely, sits under a source folder and is not inside a
+        /// folder the scan skips, because a destination outside the library would take files and then never
+        /// show them. The skip test is the one <c>UploadDestination.TryResolve</c> applies to every upload,
+        /// so a folder this accepts is not one each upload then refuses.
         /// </remarks>
         private static IEnumerable<string> ValidateUploadFolder(DlnaOptions options)
         {
@@ -248,7 +257,7 @@ namespace DlnaServer.Host.Configuration
 
             var label = Label(nameof(UploadOptions.DestinationFolder));
 
-            if (HasDotSegment(folder))
+            if (PathSegments.HasDotSegment(folder))
             {
                 yield return
                     $"The {label} must not contain '.' or '..'. Those are shorthand for \"this folder\" "
@@ -260,6 +269,18 @@ namespace DlnaServer.Host.Configuration
             if (!TryResolveFullPath(folder, out var resolved))
             {
                 yield return $"The {label} '{folder}' is not a usable path.";
+
+                yield break;
+            }
+
+            // The preview folder is named as well as the list: DlnaOptionsDefaults adds it to the list
+            // before validation, but a caller that skips the defaults must not get a different answer.
+            if (PathExclusion.IsExcluded(resolved, [.. options.Library.ExcludeFolders, options.Thumbnails.SubFolderName]))
+            {
+                yield return
+                    $"The {label} '{folder}' is inside one of your {Label(nameof(LibraryOptions.ExcludeFolders))} "
+                    + $"or the {Label(nameof(ThumbnailOptions.SubFolderName))}, which the library skips, so "
+                    + "every upload there would be refused.";
 
                 yield break;
             }
@@ -316,7 +337,7 @@ namespace DlnaServer.Host.Configuration
                         + "than a folder anyone meant to hide.";
                 }
 
-                if (HasDotSegment(trimmed))
+                if (PathSegments.HasDotSegment(trimmed))
                 {
                     yield return
                         $"The excluded folder '{name}' must not contain '.' or '..'. Those are shorthand "
@@ -353,12 +374,52 @@ namespace DlnaServer.Host.Configuration
                         + "than a folder anyone meant to hide.";
                 }
 
-                if (HasDotSegment(trimmed))
+                if (PathSegments.HasDotSegment(trimmed))
                 {
                     yield return
                         $"The temporarily hidden folder '{name}' must not contain '.' or '..'. Those are "
                         + "shorthand for \"this folder\" and \"the folder above\", so they never match a "
                         + "real folder.";
+                }
+            }
+        }
+
+        /// <summary>
+        /// Checks each subtitle type as <c>DlnaOptionsDefaults</c> left it - lower case, with a leading dot.
+        /// </summary>
+        /// <remarks>
+        /// A type that is also media is the one mistake here that fails quietly: the scanner resolves media
+        /// first, so those files would be indexed as items of their own and never linked. The catalog counts
+        /// as well as <c>MediaFileExtensions</c>, because the scanner falls back to it.
+        /// </remarks>
+        private static IEnumerable<string> ValidateSubtitleFileExtensions(DlnaOptions options)
+        {
+            var label = Label(nameof(LibraryOptions.SubtitleFileExtensions));
+            var mediaExtensions = new HashSet<string>(options.Library.MediaFileExtensions.Keys, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (extension, kind) in options.Library.SubtitleFileExtensions)
+            {
+                if (extension.Length <= 1 || extension.AsSpan(1).ContainsAny(_rejectedExtensionCharacters))
+                {
+                    yield return
+                        $"'{extension}' in the {label} cannot be used as an extension - give one such as .srt, "
+                        + "without spaces or slashes.";
+
+                    continue;
+                }
+
+                if (kind is not (DlnaMedia.Video or DlnaMedia.Audio))
+                {
+                    yield return
+                        $"'{extension}' in the {label} has to go with Video, for subtitles, or Audio, for lyrics.";
+                }
+
+                if (mediaExtensions.Contains(extension)
+                    || (DlnaMimeCatalog.TryGetByFileExtension(extension, out var mime) && mime.IsPresentableMedia()))
+                {
+                    yield return
+                        $"'{extension}' is in the {label} but is also a media file type, so those files would be "
+                        + "added to the library on their own instead of being linked as subtitles.";
                 }
             }
         }
@@ -389,38 +450,6 @@ namespace DlnaServer.Host.Configuration
 
                 return false;
             }
-        }
-
-        /// <summary>
-        /// Whether any segment of the entry is <c>.</c> or <c>..</c>.
-        /// </summary>
-        /// <remarks>
-        /// Walked by hand rather than with <c>Split</c>, matching
-        /// <see cref="Core.Files.PathExclusion"/>: the enumerable span split is a .NET 9 API and
-        /// <c>global.json</c> pins the 8.0 SDK, so it would not compile here.
-        /// </remarks>
-        private static bool HasDotSegment(ReadOnlySpan<char> entry)
-        {
-            var start = 0;
-
-            for (var index = 0; index <= entry.Length; index++)
-            {
-                if (index != entry.Length && entry[index] is not ('/' or '\\'))
-                {
-                    continue;
-                }
-
-                var segment = entry[start..index];
-
-                if (segment is "." or "..")
-                {
-                    return true;
-                }
-
-                start = index + 1;
-            }
-
-            return false;
         }
 
         /// <summary>

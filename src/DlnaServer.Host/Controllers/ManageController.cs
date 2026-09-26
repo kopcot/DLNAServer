@@ -59,6 +59,7 @@ namespace DlnaServer.Host.Controllers
 
         private readonly IHostApplicationLifetime _lifetime;
         private readonly IRestartSignal _restartSignal;
+        private readonly IDatabaseResetSignal _databaseResetSignal;
         private readonly IServedFileCache _fileCache;
         private readonly IApiBlocker _blocker;
         private readonly ISubscriptionStore _subscriptions;
@@ -68,6 +69,7 @@ namespace DlnaServer.Host.Controllers
         public ManageController(
             IHostApplicationLifetime lifetime,
             IRestartSignal restartSignal,
+            IDatabaseResetSignal databaseResetSignal,
             IServedFileCache fileCache,
             IApiBlocker blocker,
             ISubscriptionStore subscriptions,
@@ -76,6 +78,7 @@ namespace DlnaServer.Host.Controllers
         {
             _lifetime = lifetime;
             _restartSignal = restartSignal;
+            _databaseResetSignal = databaseResetSignal;
             _fileCache = fileCache;
             _blocker = blocker;
             _subscriptions = subscriptions;
@@ -176,7 +179,7 @@ namespace DlnaServer.Host.Controllers
                 // The Recently-served page is what turns the pair into a disc figure.
                 report.DatabaseHits,
                 report.ReadsInFlight,
-                report.Paths,
+                Paths = _fileCache.ListPaths(),
             });
         }
 
@@ -369,14 +372,22 @@ namespace DlnaServer.Host.Controllers
         }
 
         /// <summary>
-        /// One directory with its child directories and its files.
+        /// One directory with a page of its child directories and a page of its files.
         /// </summary>
+        /// <remarks>
+        /// Paged because a single folder can hold thousands of files, and the unpaged reads materialised
+        /// every one of them into one response. <c>take</c> defaults to the cap rather than to
+        /// <see cref="DefaultPageSize"/>, so a call without parameters still gets a whole ordinary folder,
+        /// and the two totals say when there is more to fetch with <c>skip</c>.
+        /// </remarks>
         [HttpGet("directory/{id:guid}")]
         public async Task<IActionResult> GetDirectoryAsync(
             [FromRoute] Guid id,
             [FromServices] IMediaDirectoryRepository directories,
             [FromServices] IMediaFileRepository files,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            [FromQuery] int skip = 0,
+            [FromQuery] int take = MaxPageSize)
         {
             var directory = await directories.GetByPublicIdAsync(id, cancellationToken);
 
@@ -385,11 +396,28 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
+            var offset = Math.Max(skip, 0);
+            var pageSize = ClampPageSize(take);
+
             return Ok(new
             {
                 Directory = directory,
-                Children = await directories.GetChildrenAsync(id, cancellationToken),
-                Files = await files.GetByDirectoryAsync(id, cancellationToken),
+                ChildCount = await directories.CountChildrenAsync(id, cancellationToken),
+                FileCount = await files.CountByDirectoryAsync(id, cancellationToken),
+                Children = await directories.GetChildrenPageAsync(
+                    id,
+                    offset,
+                    pageSize,
+                    sortByDate: false,
+                    descending: false,
+                    cancellationToken),
+                Files = await files.GetByDirectoryPageAsync(
+                    id,
+                    offset,
+                    pageSize,
+                    sortByDate: false,
+                    descending: false,
+                    cancellationToken),
             });
         }
 
@@ -681,10 +709,24 @@ namespace DlnaServer.Host.Controllers
         /// whenever a restart was requested, so without this a stop arriving after a restart request
         /// would silently restart instead.
         /// </para>
+        /// <para>
+        /// Refused with 409 while <i>Recreate database</i> is pending. That request lives only in this
+        /// process and is carried out by the restart it asked for, so clearing the restart signal would
+        /// drop it without a word - and keeping the signal set would turn this stop into a restart. The
+        /// caller is told instead, and can stop the server once it is back.
+        /// </para>
         /// </remarks>
         [HttpPost("stop")]
         public IActionResult Stop()
         {
+            if (_databaseResetSignal.IsResetRequested)
+            {
+                LogStopRefusedDuringReset(HttpContext.Connection.RemoteIpAddress?.ToString());
+
+                return Conflict("A database recreate is in progress and restarting the server to finish it. "
+                    + "Stop it once it is back.");
+            }
+
             LogStopRequested(HttpContext.Connection.RemoteIpAddress?.ToString());
 
             _restartSignal.Reset();

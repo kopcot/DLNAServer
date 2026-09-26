@@ -14,5 +14,17 @@ namespace DlnaServer.Host.Configuration
             Message = "config.json did not pass validation, so the server is still using the last "
                 + "settings that did. Fix it and save again: {Failures}")]
         private partial void LogServingLastGood(string failures);
+
+        /// <remarks>
+        /// Error for the same reason as <see cref="LogServingLastGood"/>. The binder's own message is
+        /// included because it names the setting and the type it expected, which is what the operator
+        /// has to correct.
+        /// </remarks>
+        [LoggerMessage(
+            EventId = 2,
+            Level = LogLevel.Error,
+            Message = "config.json holds a value of the wrong type, so the server is still using the last "
+                + "settings that were valid. Fix it and save again: {Reason}")]
+        private partial void LogServingLastGoodAfterBindingFailure(string reason);
     }
 }

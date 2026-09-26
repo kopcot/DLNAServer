@@ -53,5 +53,11 @@ namespace DlnaServer.Host.Controllers
             string operation,
             int thumbnailsCleared,
             Exception exception);
+
+        [LoggerMessage(
+            EventId = 8,
+            Level = LogLevel.Warning,
+            Message = "Shutdown requested by {RemoteAddress} and refused: a database recreate is restarting the server")]
+        private partial void LogStopRefusedDuringReset(string? remoteAddress);
     }
 }

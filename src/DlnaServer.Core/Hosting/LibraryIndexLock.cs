@@ -12,8 +12,16 @@ namespace DlnaServer.Core.Hosting
     /// token would make a shutdown wait out a pass over 25,000 files. The index is derived data and the
     /// next pass resumes, so a half-finished one costs time, not correctness.
     /// </para>
+    /// <para>
+    /// <b>The same class also serves <see cref="IAdminOperationGate"/>.</b> The two contracts are one
+    /// mechanism - one permit, held for the operation - and differ only in what they serialise, which is
+    /// decided by the lifetime each is registered with rather than by any code here: a singleton for the
+    /// index, a scoped instance per circuit for the gate. Registered under each interface separately, so
+    /// the container builds independent instances and neither ever waits on the other's permit. The two
+    /// hand-kept copies this replaced were byte-identical.
+    /// </para>
     /// </remarks>
-    public sealed class LibraryIndexLock : ILibraryIndexLock, IDisposable
+    public sealed class LibraryIndexLock : ILibraryIndexLock, IAdminOperationGate, IDisposable
     {
         private readonly SemaphoreSlim _gate = new(1, 1);
 

@@ -205,7 +205,7 @@ namespace DlnaServer.Media.Scanning
             // it to its media, and a second walk just to find sidecars would wake the discs again.
             if (!TryResolveMime(extension, options, out var mapping))
             {
-                return SubtitleMatcher.IsScanned(extension)
+                return SubtitleMatcher.IsScanned(extension, options.SubtitleTypes)
                     ? DescribeSubtitle(path, extension)
                     : null;
             }

@@ -79,6 +79,11 @@ on a 25,000-file library. If your media is on a real local filesystem and the wa
 `false`. If you keep it, raise `RescanIntervalMinutes` rather than lowering it. The Maintenance page has
 a *Look for new, changed and removed files* button for the times you just want one pass now.
 
+A real local filesystem with a very large directory tree can hit a different limit instead: one inotify
+watch per directory, capped host-wide by `fs.inotify.max_user_watches`. See
+[Troubleshooting](docs/troubleshooting.md) for the symptom and the fix - it is a host `sysctl`, not a
+container setting.
+
 ---
 
 ## ARM64
@@ -174,14 +179,27 @@ publishing the admin port does not publish the management API.
 > `RejectRemoteManagementEndpointFilter` now refuses `/manage` from any non-private remote address, which
 > is the real control. **Keep the firewall anyway** — that filter protects `/manage`, not the media
 > streaming endpoints, and this server has no authentication by design.
+>
+> **The same process-wide reach cuts the other way too, and it costs LAN traffic rather than security.**
+> Naming `ADMIN_HOSTNAME` in `AllowedHosts` is `AllowedHostsDefaults`'s own documented escape hatch —
+> `Apply()` returns early the moment the list is non-wildcard — so its LAN-address auto-detection never
+> runs at all once the overlay is up. A television that reaches this box by its LAN IP or mDNS name
+> (`description.xml`, SOAP, streaming — one process, one `AllowedHosts`) gets the identical 400 the
+> hostname guard was built to give a stranger. `LAN_HOSTS` in `.env` is the fix: name the LAN address(es)
+> explicitly rather than falling back to `*`, which would silently drop the DNS-rebinding guard back to
+> nothing.
 
 ### Setup
 
 1. Point a DNS name at your address and forward **443** (and **80**, for the certificate challenge) to
    the host. Forward nothing else.
-2. Generate a password hash:
+2. Generate a password hash, at cost 10-12 rather than the tool's default 14 — `basic_auth` has no
+   brute-force limiting of its own, and cost 14 is roughly a second of NAS CPU per guess, which is an
+   unauthenticated lever an attacker can pull from the internet. Cost 10-12 still costs real time per
+   guess without making a real login sluggish. Run `fail2ban` against `admin-access.log` (below) if this
+   proxy faces the open internet and that residual guess rate still worries you:
    ```bash
-   docker run --rm caddy:2-alpine caddy hash-password --plaintext 'your-password'
+   docker run --rm caddy:2-alpine caddy hash-password --cost 12 --plaintext 'your-password'
    ```
 3. Put it in `.env`, doubling every `$` so compose does not read it as a variable:
    ```
@@ -189,6 +207,8 @@ publishing the admin port does not publish the management API.
    ADMIN_USER=admin
    ADMIN_PASSWORD_HASH=$$2a$$14$$....
    ```
+4. Also set `LAN_HOSTS` to this box's LAN IP and/or hostname, semicolon-separated, unless nothing on the
+   LAN ever reaches it by address — see the callout above for why `ADMIN_HOSTNAME` alone breaks that.
 
 ### The two failures you will hit if you improvise this
 
@@ -214,6 +234,7 @@ publishing the admin port does not publish the management API.
 | New files never appear | The watcher gets no inotify events. Set `UsePeriodicRescan=true` |
 | Settings revert after a rebuild | `config.json` is not mounted |
 | Admin page returns 400 remotely | `AllowedHosts` does not include the external name |
+| A renderer on the LAN gets 400 with `docker-compose.admin-remote.yml` up | `LAN_HOSTS` is unset - `ADMIN_HOSTNAME` alone disables the automatic LAN-address detection for the whole process |
 | Working set climbs and stays | Press *Empty the memory* on `/admin/cache`; check `CacheSizeInMegabytes` is 2, not 32 |
 
 Useful:
@@ -251,6 +272,11 @@ Built and run on 2026-09-06, Docker 28.3.3. Image is 1.25 GB.
    before serving anything**. They are `chmod 0777` now, because the operator picks the uid.
 2. Data-protection keys went to `$HOME/.aspnet` inside the container and were lost on every recreate.
    `HOME=/data` now persists them on the volume.
+
+**`/data` is worth treating as sensitive, not just as "the database".** The Blazor data-protection key
+ring lives there too, unencrypted on disc, and it is what lets a stored antiforgery token or cookie stay
+valid across a container recreate — copy or expose the volume and whoever holds it can forge either
+against a running instance. Back it up like the database, but do not hand it out like the media mount.
 
 **Not verified, and the reason:**
 

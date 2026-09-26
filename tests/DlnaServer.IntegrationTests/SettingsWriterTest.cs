@@ -1,4 +1,5 @@
 using DlnaServer.Core.Configuration;
+using DlnaServer.Core.Dlna;
 using DlnaServer.Host.Configuration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -104,6 +105,38 @@ namespace DlnaServer.IntegrationTests
                 + "that rewrites the file has to accept them too rather than start from an empty object");
             written["Dlna:Server:Port"].Should().Be("26852",
                 "because the save still has to happen");
+        }
+
+        /// <summary>
+        /// The whole round trip a Settings save makes: written by the page, read back by the binder, put in
+        /// shape by the defaults - with a type removed staying removed and none of the shipped ones returning.
+        /// </summary>
+        [Test]
+        public async Task SaveAsync_SubtitleTypes_ReadBackAsSavedWithTheirKindsByName()
+        {
+            // Arrange
+            var writer = CreateWriter();
+            var options = new DlnaOptions();
+            options.Library.SubtitleFileExtensions = new Dictionary<string, DlnaMedia>(StringComparer.OrdinalIgnoreCase)
+            {
+                [".txt"] = DlnaMedia.Video,
+                [".lrc"] = DlnaMedia.Audio,
+            };
+
+            // Act
+            await writer.SaveAsync(options, cancellationToken: CancellationToken.None);
+
+            // Assert
+            var written = new ConfigurationBuilder().AddJsonFile(_configurationPath).Build();
+            var reread = new DlnaOptions();
+            written.GetSection(DlnaOptions.SectionName).Bind(reread);
+            DlnaOptionsDefaults.Apply(reread);
+
+            written["Dlna:Library:SubtitleFileExtensions:.lrc"].Should().Be("Audio",
+                "because the file is edited by hand, so a kind is written as its name rather than a number");
+            reread.Library.SubtitleFileExtensions.Should().BeEquivalentTo(
+                new Dictionary<string, DlnaMedia> { [".txt"] = DlnaMedia.Video, [".lrc"] = DlnaMedia.Audio },
+                "because what the Settings page saved is exactly what the server reads back, .srt and the rest not returning");
         }
 
         [Test]

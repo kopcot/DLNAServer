@@ -76,14 +76,25 @@ namespace DlnaServer.Core.Delivery
             CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Reports what is held, including every cached path.
+        /// Reports how much is held and how it is being used, as counters only.
+        /// </summary>
+        /// <remarks>
+        /// Cheap enough for a page that refreshes itself every few seconds: it allocates one small record
+        /// and nothing proportional to the number of entries. The paths are <see cref="ListPaths"/>, which
+        /// is not - at 24,000 entries a sorted copy of the keys is half a megabyte on the large object heap.
+        /// </remarks>
+        ServedFileCacheReport Describe();
+
+        /// <summary>
+        /// Every cached path, in ordinal order.
         /// </summary>
         /// <remarks>
         /// Mirrors the reference's <c>/Manage/memoryCache</c>, which lists its keys for the same reason:
         /// a byte total says how much is held, the paths say <b>what</b>, and only the second tells an
         /// operator whether the cache is holding the films they are watching or a folder of thumbnails.
+        /// Ordered, so two calls are comparable rather than arriving in hash order.
         /// </remarks>
-        ServedFileCacheReport Describe();
+        IReadOnlyList<string> ListPaths();
 
         /// <summary>
         /// Drops every cached payload and returns how many entries went.

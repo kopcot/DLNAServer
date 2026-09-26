@@ -1,4 +1,5 @@
 using DlnaServer.Core.Configuration;
+using DlnaServer.Core.Dlna;
 using DlnaServer.Host.Configuration;
 using Microsoft.Extensions.Options;
 
@@ -349,6 +350,27 @@ namespace DlnaServer.IntegrationTests
                 + "them, which reads to the operator as the upload having silently failed");
         }
 
+        [TestCase("Private")]
+        [TestCase("Films/Private/Incoming")]
+        [TestCase(".@__thumb")]
+        public void Validate_WithAnUploadFolderTheLibrarySkips_Fails(string suffix)
+        {
+            // Arrange
+            var options = CreateValidOptions();
+            options.Library.ExcludeFolders.Add("Private");
+            options.Upload.DestinationFolder = Path.Combine(_sourceFolder, suffix);
+
+            // Act
+            var result = _validator.Validate(name: null, options: options);
+
+            // Assert
+            result.Failed.Should().BeTrue(
+                "because every upload into a skipped folder is refused at request time, so the Settings page "
+                + "must not accept it as the destination");
+            result.FailureMessage.Should().Contain("upload folder",
+                "because the message must name the setting that has to change, as the Settings page labels it");
+        }
+
         [TestCase("..")]
         [TestCase("Incoming/../../elsewhere")]
         public void Validate_WithARelativeSegmentInTheUploadFolder_Fails(string suffix)
@@ -380,6 +402,75 @@ namespace DlnaServer.IntegrationTests
             result.Failed.Should().BeTrue(
                 "because a limit of zero would refuse every file while looking like a configured value - "
                 + "the annotation on the new group has to be validated like every other one");
+        }
+
+        [Test]
+        public void Validate_WithTheShippedSubtitleTypes_Succeeds()
+        {
+            // Arrange
+            var options = CreateValidOptions();
+            options.Library.SubtitleFileExtensions = SubtitleFileExtensionDefaults.Create();
+            options.Library.MediaFileExtensions = MediaFileExtensionDefaults.Create();
+
+            // Act
+            var result = _validator.Validate(name: null, options: options);
+
+            // Assert
+            result.Succeeded.Should().BeTrue(
+                "because the shipped subtitle types and the shipped file types never overlap; failures: {0}",
+                result.FailureMessage);
+        }
+
+        [TestCase(".")]
+        [TestCase(".s rt")]
+        [TestCase(".sub/x")]
+        public void Validate_ForASubtitleTypeThatIsNotAnExtension_Fails(string extension)
+        {
+            // Arrange
+            var options = CreateValidOptions();
+            options.Library.SubtitleFileExtensions = new Dictionary<string, DlnaMedia> { [extension] = DlnaMedia.Video };
+
+            // Act
+            var result = _validator.Validate(name: null, options: options);
+
+            // Assert
+            result.Failed.Should().BeTrue($"because '{extension}' can never be the ending of a file name");
+            result.FailureMessage.Should().Contain("subtitle types",
+                "because the message names the setting as the Settings page labels it");
+        }
+
+        [TestCase(DlnaMedia.Image)]
+        [TestCase(DlnaMedia.Unknown)]
+        public void Validate_ForASubtitleTypeGoingWithNeitherVideoNorMusic_Fails(DlnaMedia kind)
+        {
+            // Arrange
+            var options = CreateValidOptions();
+            options.Library.SubtitleFileExtensions = new Dictionary<string, DlnaMedia> { [".srt"] = kind };
+
+            // Act
+            var result = _validator.Validate(name: null, options: options);
+
+            // Assert
+            result.Failed.Should().BeTrue($"because a subtitle linked to {kind} would never match anything");
+        }
+
+        [TestCase(".mkv")]
+        [TestCase(".flac")]
+        public void Validate_ForASubtitleTypeThatIsAlsoMedia_Fails(string extension)
+        {
+            // Arrange
+            var options = CreateValidOptions();
+            options.Library.MediaFileExtensions = MediaFileExtensionDefaults.Create();
+            options.Library.SubtitleFileExtensions = new Dictionary<string, DlnaMedia> { [extension] = DlnaMedia.Video };
+
+            // Act
+            var result = _validator.Validate(name: null, options: options);
+
+            // Assert
+            result.Failed.Should().BeTrue(
+                $"because the scanner resolves '{extension}' as media first - from the file types or its own catalog - "
+                + "so those files would be indexed on their own and never linked");
+            result.FailureMessage.Should().Contain(extension, "because the operator has to know which line to change");
         }
 
         private DlnaOptions CreateValidOptions()

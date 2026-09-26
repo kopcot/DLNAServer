@@ -347,13 +347,13 @@ namespace DlnaServer.Persistence.Repositories
             }
             catch (DbUpdateException)
             {
-                // See MediaFileRepository.AddRangeAsync: without this a failed save stays tracked and
+                // See MediaFileRepository.InsertAsync: without this a failed save stays tracked and
                 // every later batch in the same pass re-submits it.
                 _dbContext.ForgetTrackedEntities();
                 throw;
             }
 
-            // See MediaFileRepository.AddRangeAsync: one scope per scan means the tracker would otherwise
+            // See MediaFileRepository.InsertAsync: one scope per scan means the tracker would otherwise
             // accumulate every directory inserted so far and re-walk them on each save.
             _dbContext.ForgetTrackedEntities();
 
@@ -400,16 +400,6 @@ namespace DlnaServer.Persistence.Repositories
                 .ToDictionaryAsync(static d => d.PublicId, static d => d.Id, cancellationToken);
         }
 
-        // Mirrors MediaFileRepository.ExcludeHidden - see its remarks for the matching rule. A
-        // directory's own name is part of its path, so the same predicate hides both an excluded folder
-        // and everything beneath it.
-        private static IQueryable<MediaDirectoryEntity> ExcludeHidden(
-            IQueryable<MediaDirectoryEntity> query,
-            IList<string> hiddenFolders)
-        {
-            return HiddenPathQuery.ExcludeHiddenDirectories(query, hiddenFolders);
-        }
-
         /// <summary>
         /// Drops folders whose subtree holds no file a renderer would be shown.
         /// </summary>
@@ -430,23 +420,13 @@ namespace DlnaServer.Persistence.Repositories
             IQueryable<MediaDirectoryEntity> query,
             IList<string> hiddenFolders)
         {
-            var visibleFiles = ExcludeHiddenFiles(_dbContext.Files.AsNoTracking(), hiddenFolders);
+            var visibleFiles = HiddenPathQuery.ExcludeHiddenFiles(_dbContext.Files.AsNoTracking(), hiddenFolders);
 
             return query.Where(d => visibleFiles.Any(f =>
                 (string.Compare(f.FullPath, d.FullPath + PosixSeparator) > 0
                     && string.Compare(f.FullPath, d.FullPath + PosixSeparatorSuccessor) < 0)
                 || (string.Compare(f.FullPath, d.FullPath + WindowsSeparator) > 0
                     && string.Compare(f.FullPath, d.FullPath + WindowsSeparatorSuccessor) < 0)));
-        }
-
-        // Was a byte-identical copy of MediaFileRepository.ExcludeHidden, justified by a claim that an
-        // expression tree cannot be handed across. Both repositories are in this assembly, so it can -
-        // and the two copies had already diverged from the in-memory rule together. One home now.
-        private static IQueryable<MediaFileEntity> ExcludeHiddenFiles(
-            IQueryable<MediaFileEntity> query,
-            IList<string> hiddenFolders)
-        {
-            return HiddenPathQuery.ExcludeHiddenFiles(query, hiddenFolders);
         }
 
         private IQueryable<MediaDirectoryDto> ProjectDirectories(
@@ -466,12 +446,12 @@ namespace DlnaServer.Persistence.Repositories
                 var hiddenFromListings = _visibility.HiddenFromListings;
 
                 query = ExcludeWithoutVisibleMedia(
-                    ExcludeHidden(query, hiddenFromListings),
+                    HiddenPathQuery.ExcludeHiddenDirectories(query, hiddenFromListings),
                     hiddenFromListings);
             }
             else if (hiddenFolders is { Count: > 0 })
             {
-                query = ExcludeHidden(query, hiddenFolders);
+                query = HiddenPathQuery.ExcludeHiddenDirectories(query, hiddenFolders);
             }
 
             return query.Select(static d => new MediaDirectoryDto

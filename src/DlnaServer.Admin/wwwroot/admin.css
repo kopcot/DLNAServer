@@ -260,6 +260,8 @@ button.primary:hover, button.go:hover, button.stop:hover { opacity: .9; color: #
 button:disabled { opacity: .5; cursor: default; }
 
 .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+/* The preview page's downloads sit at the row's far end, apart from Previous/Next. */
+.actions .downloads { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
 
 /* A row of buttons standing on its own between panels, rather than inside one, needs a panel's own gap
    below it - without this the preview page's Previous/Next row sat flush against the panel underneath

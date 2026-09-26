@@ -308,13 +308,16 @@ namespace DlnaServer.Host.Delivery.Caching
                 Misses = statistics?.TotalMisses ?? 0,
                 DatabaseHits = Interlocked.Read(ref _databaseFills),
                 ReadsInFlight = _readsInFlight.Count,
-
-                // Ordered, so two calls are comparable rather than arriving in hash order.
-                Paths = _cache.Keys
-                    .OfType<string>()
-                    .Order(StringComparer.Ordinal)
-                    .ToArray(),
             };
+        }
+
+        public IReadOnlyList<string> ListPaths()
+        {
+            // Ordered, so two calls are comparable rather than arriving in hash order.
+            return _cache.Keys
+                .OfType<string>()
+                .Order(StringComparer.Ordinal)
+                .ToArray();
         }
 
         public int Clear()

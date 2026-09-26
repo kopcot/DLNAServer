@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using DlnaServer.Core.Uploads;
 
 namespace DlnaServer.Host.Uploads
@@ -42,16 +44,67 @@ namespace DlnaServer.Host.Uploads
             UploadOutcome outcome,
             string reason)
         {
+            // Every text value is escaped, not only the file name: the agent and the language are headers
+            // the sender wrote, and the reason can quote an exception that repeats the name.
             LogUpload(
-                remoteAddress,
-                userAgent,
-                acceptLanguage,
-                fingerprint,
-                destination,
-                fileName,
+                Escape(remoteAddress),
+                Escape(userAgent),
+                Escape(acceptLanguage),
+                Escape(fingerprint),
+                Escape(destination),
+                Escape(fileName),
                 sizeInBytes,
                 outcome,
-                reason);
+                Escape(reason));
+        }
+
+        /// <summary>
+        /// Rewrites line breaks, other control characters and double quotes as <c>\uXXXX</c>, so one
+        /// upload stays one line.
+        /// </summary>
+        /// <remarks>
+        /// A refused file is logged under the name the browser sent, and <c>filename*=</c> can carry a
+        /// percent-encoded line break. Written raw, that name would end the line and start a forged one,
+        /// and a stray quote would end the quoted value early - in the one log that exists to be trusted.
+        /// </remarks>
+        internal static string Escape(string value)
+        {
+            var index = 0;
+
+            while (index < value.Length && !NeedsEscaping(value[index]))
+            {
+                index++;
+            }
+
+            if (index == value.Length)
+            {
+                return value;
+            }
+
+            var builder = new StringBuilder(value.Length + 16);
+            builder.Append(value, 0, index);
+
+            for (; index < value.Length; index++)
+            {
+                var character = value[index];
+
+                if (NeedsEscaping(character))
+                {
+                    builder.Append(CultureInfo.InvariantCulture, $"\\u{(int)character:X4}");
+                }
+                else
+                {
+                    builder.Append(character);
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        // U+2028 and U+2029 are not control characters, but an editor breaks the line on them all the same.
+        private static bool NeedsEscaping(char character)
+        {
+            return char.IsControl(character) || character is '"' or '\u2028' or '\u2029';
         }
     }
 }

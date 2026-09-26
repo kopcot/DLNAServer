@@ -1,5 +1,7 @@
+using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Diagnostics;
 using DlnaServer.Core.Subtitles;
+using Microsoft.Extensions.Options;
 
 namespace DlnaServer.Host.Configuration
 {
@@ -7,10 +9,12 @@ namespace DlnaServer.Host.Configuration
     internal sealed class SubtitleFileChecker : ISubtitleFileChecker
     {
         private readonly ITemporaryFolderVisibility _visibility;
+        private readonly IOptionsMonitor<DlnaOptions> _options;
 
-        public SubtitleFileChecker(ITemporaryFolderVisibility visibility)
+        public SubtitleFileChecker(ITemporaryFolderVisibility visibility, IOptionsMonitor<DlnaOptions> options)
         {
             _visibility = visibility;
+            _options = options;
         }
 
         /// <remarks>
@@ -25,6 +29,7 @@ namespace DlnaServer.Host.Configuration
                     mediaDirectory,
                     input,
                     [.. _visibility.HiddenFromListings],
+                    _options.CurrentValue.Library.SubtitleFileExtensions.AsReadOnly(),
                     out relativePath,
                     out _,
                     out problem);

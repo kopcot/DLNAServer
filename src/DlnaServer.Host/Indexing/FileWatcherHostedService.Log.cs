@@ -34,5 +34,14 @@ namespace DlnaServer.Host.Indexing
             Level = LogLevel.Error,
             Message = "A watcher tick failed; the watch continues")]
         private partial void LogTickFailed(Exception exception);
+
+        [LoggerMessage(
+            EventId = 6,
+            Level = LogLevel.Warning,
+            Message = "The file system watch faulted again straight after being rebuilt, so rebuilds now back "
+                + "off from {FirstDelayMinutes} to {MaxDelayMinutes} minute(s). On Linux this is almost always "
+                + "an exhausted inotify limit - raise fs.inotify.max_user_watches (and "
+                + "fs.inotify.max_user_instances) on the host.")]
+        private partial void LogWatchKeepsFaulting(int firstDelayMinutes, int maxDelayMinutes);
     }
 }

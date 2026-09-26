@@ -160,7 +160,7 @@ namespace DlnaServer.Core.Uploads
                 return false;
             }
 
-            if (HasDotSegment(relative))
+            if (PathSegments.HasDotSegment(relative))
             {
                 problem = "The folder inside it cannot contain '.' or '..'.";
 
@@ -202,37 +202,6 @@ namespace DlnaServer.Core.Uploads
             problem = string.Empty;
 
             return true;
-        }
-
-        /// <summary>
-        /// Whether any segment of the entry is <c>.</c> or <c>..</c>.
-        /// </summary>
-        /// <remarks>
-        /// Walked by hand rather than with <c>Split</c>, matching <see cref="PathExclusion"/>: the
-        /// enumerable span split is a .NET 9 API and <c>global.json</c> pins the 8.0 SDK.
-        /// </remarks>
-        private static bool HasDotSegment(ReadOnlySpan<char> entry)
-        {
-            var start = 0;
-
-            for (var index = 0; index <= entry.Length; index++)
-            {
-                if (index != entry.Length && entry[index] is not ('/' or '\\'))
-                {
-                    continue;
-                }
-
-                var segment = entry[start..index];
-
-                if (segment is "." or "..")
-                {
-                    return true;
-                }
-
-                start = index + 1;
-            }
-
-            return false;
         }
 
         /// <summary>

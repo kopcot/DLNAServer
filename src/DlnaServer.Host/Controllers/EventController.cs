@@ -118,11 +118,12 @@ namespace DlnaServer.Host.Controllers
                 return StatusCode(StatusCodes.Status412PreconditionFailed);
             }
 
-            var subscription = _subscriptions.Add(serviceId, callbackUrls, granted);
+            var subscriber = HttpContext.Connection.RemoteIpAddress;
+            var subscription = _subscriptions.Add(serviceId, callbackUrls, granted, subscriber);
 
             if (subscription is null)
             {
-                LogStoreFull(serviceId);
+                LogStoreFull(serviceId, subscriber);
                 return StatusCode(StatusCodes.Status503ServiceUnavailable);
             }
 

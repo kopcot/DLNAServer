@@ -1,3 +1,5 @@
+using DlnaServer.Core.Dlna;
+
 namespace DlnaServer.Core.Contracts.Scanning
 {
     /// <summary>
@@ -31,5 +33,11 @@ namespace DlnaServer.Core.Contracts.Scanning
         /// is where device quirks are expressed - notably .mp3 served as audio/mp4 for LG TVs.
         /// </summary>
         public required IReadOnlyDictionary<string, MediaExtensionMapping> ExtensionMappings { get; init; }
+
+        /// <summary>
+        /// The subtitle and lyrics types from configuration, keyed case-insensitively, each with the kind of
+        /// media it is linked to. A file of one of these types is reported as a subtitle rather than skipped.
+        /// </summary>
+        public required IReadOnlyDictionary<string, DlnaMedia> SubtitleTypes { get; init; }
     }
 }

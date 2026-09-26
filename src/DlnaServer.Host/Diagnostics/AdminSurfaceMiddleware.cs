@@ -1,3 +1,4 @@
+using System.Net;
 using DlnaServer.Upnp.Constants;
 
 namespace DlnaServer.Host.Diagnostics
@@ -24,11 +25,26 @@ namespace DlnaServer.Host.Diagnostics
     /// media port's <c>/</c> is untouched: it serves <c>description.xml</c>, which some renderers fetch
     /// instead of the LOCATION that SSDP advertises.
     /// </para>
+    /// <para>
+    /// The admin port also answers only the local network, with the same 404 as the <c>/manage</c>
+    /// filter. Kestrel binds it with <c>ListenAnyIP</c>, which includes IPv6, and a NAS with a global IPv6
+    /// address is reachable from the internet wherever the router lets IPv6 in - no NAT stands in the
+    /// way. This is not authentication, which standing decision 1 rules out; it keeps the LAN the whole
+    /// audience that decision assumes. The source checked is the SOCKET's peer, recorded by
+    /// <see cref="RecordConnectionPeer"/> before <c>UseForwardedHeaders</c> rewrites
+    /// <see cref="ConnectionInfo.RemoteIpAddress"/>. Behind the remote-admin proxy that rewrite names the
+    /// internet client the proxy has already put through its password, while the socket is the proxy on
+    /// loopback - so the proxy keeps working and a direct caller cannot pass as one. The
+    /// <c>X-Original-For</c> header would not do: a caller the forwarder does not trust keeps whatever
+    /// value it sent.
+    /// </para>
     /// </remarks>
     internal sealed class AdminSurfaceMiddleware
     {
         private const string AdminRoot = "/admin";
         private const string RootPath = "/";
+
+        private static readonly object _connectionPeerKey = new();
 
         /// <summary>
         /// Path prefixes that belong to the admin port alone.
@@ -84,6 +100,14 @@ namespace DlnaServer.Host.Diagnostics
             var path = context.Request.Path;
             var isAdminPort = context.Connection.LocalPort == _adminPort;
 
+            if (isAdminPort && !IsFromLocalNetwork(context))
+            {
+                // The same answer the /manage filter gives: from off the LAN this surface does not exist.
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+
+                return Task.CompletedTask;
+            }
+
             if (isAdminPort && path.Equals(RootPath, StringComparison.Ordinal))
             {
                 // Found rather than Moved Permanently: a browser keeps a permanent redirect until its
@@ -110,6 +134,37 @@ namespace DlnaServer.Host.Diagnostics
             context.Response.StatusCode = StatusCodes.Status404NotFound;
 
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Keeps the socket's own peer for an admin-port request, before anything rewrites it.
+        /// </summary>
+        /// <remarks>
+        /// Must run ahead of <c>UseForwardedHeaders</c>, which replaces
+        /// <see cref="ConnectionInfo.RemoteIpAddress"/> with the client a trusted proxy names. Without a
+        /// record the check falls back to that rewritten address, which behind the proxy is an internet
+        /// client - so a missing call refuses the proxy's requests rather than admitting a direct caller.
+        /// Only admin-port requests are recorded, so the media port's requests do not each pay for an
+        /// items dictionary.
+        /// </remarks>
+        internal static void RecordConnectionPeer(HttpContext context, int adminPort)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
+            if (context.Connection.LocalPort == adminPort)
+            {
+                context.Items[_connectionPeerKey] = context.Connection.RemoteIpAddress;
+            }
+        }
+
+        private static bool IsFromLocalNetwork(HttpContext context)
+        {
+            var peer = context.Items.TryGetValue(_connectionPeerKey, out var recorded)
+                ? recorded as IPAddress
+                : context.Connection.RemoteIpAddress;
+
+            return LocalNetworkAddress.IsLocal(peer)
+                || LocalNetworkAddress.IsSameIPv6Link(peer, context.Connection.LocalIpAddress);
         }
 
         private static bool IsMediaOnly(PathString path)

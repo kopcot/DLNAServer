@@ -9,19 +9,14 @@ namespace DlnaServer.Core.Subtitles
     /// A subtitle belongs to a media file when its name without the extension is the media file's name
     /// without the extension, or that name followed by a dot and anything - <c>film.srt</c>,
     /// <c>film.en.srt</c>, <c>film.1.en.srt</c> for <c>film.mkv</c>. When several media names fit, the
-    /// longest wins, so <c>film.1.en.srt</c> goes to <c>film.1.mkv</c> when that file exists. Lyrics
-    /// (<c>.lrc</c>) only ever match music, and every other subtitle only video.
+    /// longest wins, so <c>film.1.en.srt</c> goes to <c>film.1.mkv</c> when that file exists. Which
+    /// extensions count, and what each goes with, is <c>Library.SubtitleFileExtensions</c>, handed in by the
+    /// caller: a type listed for video only ever matches video, and one listed for music only music.
     /// </remarks>
     public static class SubtitleMatcher
     {
         private const string VobSubIndexExtension = ".idx";
-        private const string LyricsExtension = ".lrc";
         private const string MicroDvdExtension = ".sub";
-
-        // Not .ttml, which the catalog knows: it is served as application/ttml+xml, and an XML document is
-        // one a browser opening the media port's URL would render rather than download.
-        private static readonly HashSet<string> _videoSubtitleExtensions =
-            new([".srt", ".vtt", ".ass", ".ssa", MicroDvdExtension, ".smi"], StringComparer.OrdinalIgnoreCase);
 
         // Words that describe a subtitle or a release rather than name its language - film.en.forced.srt is
         // English, and film.Extended.Cut.srt has none. ponytail: a deny-list, so an unlisted release tag
@@ -32,19 +27,24 @@ namespace DlnaServer.Core.Subtitles
         /// Whether a scan should report a file with this extension: every linkable extension, plus the
         /// VobSub index that tells a picture-based <c>.sub</c> apart from a text one.
         /// </summary>
-        public static bool IsScanned(string extension)
+        /// <param name="extension">The file's extension, with its leading dot.</param>
+        /// <param name="subtitleTypes">The configured subtitle types, keyed case-insensitively.</param>
+        public static bool IsScanned(string extension, IReadOnlyDictionary<string, DlnaMedia> subtitleTypes)
         {
-            return IsLinkable(extension)
+            return IsLinkable(extension, subtitleTypes)
                 || extension.Equals(VobSubIndexExtension, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
         /// Whether a file with this extension can be linked to a media file as its subtitle or lyrics.
         /// </summary>
-        public static bool IsLinkable(string extension)
+        /// <param name="extension">The file's extension, with its leading dot.</param>
+        /// <param name="subtitleTypes">The configured subtitle types, keyed case-insensitively.</param>
+        public static bool IsLinkable(string extension, IReadOnlyDictionary<string, DlnaMedia> subtitleTypes)
         {
-            return _videoSubtitleExtensions.Contains(extension)
-                || extension.Equals(LyricsExtension, StringComparison.OrdinalIgnoreCase);
+            ArgumentNullException.ThrowIfNull(subtitleTypes);
+
+            return subtitleTypes.ContainsKey(extension);
         }
 
         /// <summary>
@@ -52,12 +52,17 @@ namespace DlnaServer.Core.Subtitles
         /// </summary>
         /// <param name="media">The media files of one folder.</param>
         /// <param name="fileNames">The subtitle-like file names of the same folder, without folders.</param>
+        /// <param name="subtitleTypes">
+        /// The configured subtitle types, keyed case-insensitively, each with the kind of media it goes with.
+        /// </param>
         public static IReadOnlyList<SubtitleMatch<TKey>> Match<TKey>(
             IReadOnlyList<SubtitleMedia<TKey>> media,
-            IReadOnlyCollection<string> fileNames)
+            IReadOnlyCollection<string> fileNames,
+            IReadOnlyDictionary<string, DlnaMedia> subtitleTypes)
         {
             ArgumentNullException.ThrowIfNull(media);
             ArgumentNullException.ThrowIfNull(fileNames);
+            ArgumentNullException.ThrowIfNull(subtitleTypes);
 
             var vobSubStems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -86,16 +91,13 @@ namespace DlnaServer.Core.Subtitles
                 var stem = Path.GetFileNameWithoutExtension(fileName);
 
                 // A .sub beside an .idx of the same name is VobSub: pictures, not text.
-                if (!IsLinkable(extension)
+                if (!subtitleTypes.TryGetValue(extension, out var kind)
                     || (extension.Equals(MicroDvdExtension, StringComparison.OrdinalIgnoreCase)
                         && vobSubStems.Contains(stem)))
                 {
                     continue;
                 }
 
-                var kind = extension.Equals(LyricsExtension, StringComparison.OrdinalIgnoreCase)
-                    ? DlnaMedia.Audio
-                    : DlnaMedia.Video;
                 var bestLength = -1;
 
                 winners.Clear();

@@ -9,16 +9,24 @@ on:
   push:
     tags: [ "v*" ]
 
+# Least privilege at the workflow level. Only the publish job below elevates to contents: write, and
+# only for the one step that needs it (gh release create) - restore, build and test run with no more
+# access than a pull request gets.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  publish:
-    name: Publish linux-x64
+  build:
+    name: Build, test and publish the artifact
     runs-on: ubuntu-latest
 
     steps:
+      # persist-credentials: false - checkout otherwise leaves the token in .git/config for the rest of
+      # the job, reachable by anything that runs afterwards (a compromised build step, a malicious
+      # package's install script). Nothing after this step needs git access.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -49,6 +57,34 @@ jobs:
         run: |
           cd publish
           zip -r "../DlnaServer-${GITHUB_REF_NAME}-linux-x64.zip" .
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-archive
+          path: DlnaServer-${{ github.ref_name }}-linux-x64.zip
+          retention-days: 1
+
+  publish:
+    name: Attach to the release
+    needs: build
+    runs-on: ubuntu-latest
+
+    # The only job with write access, and only for as long as gh release create needs it.
+    permissions:
+      contents: write
+
+    steps:
+      # release-notes.md comes from the repository, so this job still needs a checkout - but never a
+      # writable token: gh release create authenticates with GH_TOKEN below, not with git credentials.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download the archive
+        uses: actions/download-artifact@v7
+        with:
+          name: release-archive
 
       - name: Attach to the release
         env:

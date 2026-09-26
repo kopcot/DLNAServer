@@ -1,6 +1,8 @@
+using System.IO.Compression;
 using CommunityToolkit.HighPerformance;
 using DlnaServer.Core.Delivery;
 using DlnaServer.Core.Dlna;
+using DlnaServer.Core.Subtitles;
 using DlnaServer.Host.Delivery;
 using DlnaServer.Persistence.Repositories;
 using Microsoft.AspNetCore.Mvc;
@@ -38,17 +40,23 @@ namespace DlnaServer.Host.Controllers
     public sealed partial class AdminMediaController : ControllerBase
     {
         private readonly IMediaFileRepository _files;
+        private readonly ISubtitleRepository _subtitles;
+        private readonly ISubtitleFileChecker _subtitleChecker;
         private readonly IServedFileCache _cache;
         private readonly IMediaContentResolver _content;
         private readonly ILogger<AdminMediaController> _logger;
 
         public AdminMediaController(
             IMediaFileRepository files,
+            ISubtitleRepository subtitles,
+            ISubtitleFileChecker subtitleChecker,
             IServedFileCache cache,
             IMediaContentResolver content,
             ILogger<AdminMediaController> logger)
         {
             _files = files;
+            _subtitles = subtitles;
+            _subtitleChecker = subtitleChecker;
             _cache = cache;
             _content = content;
             _logger = logger;
@@ -73,6 +81,8 @@ namespace DlnaServer.Host.Controllers
 
             var contentType = file.Mime.ToMimeString();
             var source = _content.Resolve(file);
+
+            ScriptableContentHeaders.Apply(Response, file.Mime);
 
             if (source.IsCached)
             {
@@ -110,15 +120,28 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
-            if (!System.IO.File.Exists(file.FullPath))
+            var cached = ReadOnlyMemory<byte>.Empty;
+            var isOnDisc = System.IO.File.Exists(file.FullPath);
+
+            // A file deleted from disc but still held in memory is one GetFile still serves, so the probe
+            // must agree - FileServerController.HeadFile answers the same way. TryGet is a read: it
+            // queues nothing, which is the cost this action exists to avoid.
+            if (!isOnDisc && !_cache.TryGet(file.FullPath, out cached))
             {
                 LogMissing(file.FullPath);
                 return NotFound();
             }
 
+            ScriptableContentHeaders.Apply(Response, file.Mime);
+
+            var contentType = file.Mime.ToMimeString();
+
             // MVC writes Content-Length, Content-Type and Accept-Ranges for a HEAD and suppresses the
             // body, so the length comes from the directory entry rather than from reading anything.
-            return PhysicalFile(file.FullPath, file.Mime.ToMimeString(), enableRangeProcessing: true);
+            // A deleted file has no directory entry, so the cached payload answers for its own length.
+            return isOnDisc
+                ? PhysicalFile(file.FullPath, contentType, enableRangeProcessing: true)
+                : File(cached.AsStream(), contentType, enableRangeProcessing: true);
         }
 
         /// <summary>
@@ -162,46 +185,84 @@ namespace DlnaServer.Host.Controllers
                 return NotFound();
             }
 
-            // This ladder is a copy of FileServerController's, and the two had already drifted: every
-            // return there passes enableRangeProcessing and none here did, against a class remark
-            // claiming the two ports behave identically. Kept in step by hand for now - collapsing both
-            // into IMediaContentResolver is the real fix and is a design change, not a repair.
+            // The same ladder as the media port's, through the resolver both share - the two used to be
+            // hand-kept copies and had already drifted once.
             var contentType = thumbnail.Mime.ToMimeString();
+            var (source, content) = await _content.ResolveThumbnailAsync(thumbnail, _files, cancellationToken);
 
-            if (_cache.TryGet(thumbnail.FilePath, out var cached))
+            return source switch
             {
-                return File(cached.AsStream(), contentType, enableRangeProcessing: true);
-            }
+                ThumbnailSource.None => NotFound(),
+                ThumbnailSource.Disc => PhysicalFile(thumbnail.FilePath, contentType, enableRangeProcessing: true),
+                _ => File(content.AsStream(), contentType, enableRangeProcessing: true),
+            };
+        }
 
-            if (thumbnail.HasStoredContent)
-            {
-                var stored = await _files.GetThumbnailContentAsync(id, cancellationToken);
+        /// <summary>
+        /// Downloads the subtitle and lyrics files linked to one media file - the file itself when there is
+        /// one, a zip of all of them when there are several.
+        /// </summary>
+        /// <remarks>
+        /// Only links that pass <see cref="ISubtitleFileChecker"/> are offered, the same rule the file's page
+        /// uses to decide which button to show, so the page and this answer agree on the count. Zip entries
+        /// keep their path from the media file's folder, which keeps <c>film.en.srt</c> and
+        /// <c>Subs/film.en.srt</c> apart.
+        /// </remarks>
+        [HttpGet("subtitles/{id:guid}")]
+        public async Task<IActionResult> GetSubtitles([FromRoute] Guid id, CancellationToken cancellationToken)
+        {
+            var file = await _files.GetByPublicIdAsync(id, cancellationToken);
 
-                if (stored is not null)
-                {
-                    // Stored under the file path, as the media port does, so a later request from either
-                    // port hits memory whichever source filled it.
-                    _cache.Store(thumbnail.FilePath, CachedContentClass.Thumbnail, stored.AsMemory());
-
-                    return File(stored.AsMemory().AsStream(), contentType, enableRangeProcessing: true);
-                }
-            }
-
-            // LoadAsync rather than a plain read: it caches what it reads, which is the whole reason the
-            // second browse of a folder does not touch the disc.
-            var loaded = await _cache.LoadAsync(thumbnail.FilePath, CachedContentClass.Thumbnail, cancellationToken);
-
-            if (!loaded.IsEmpty)
-            {
-                return File(loaded.AsStream(), contentType, enableRangeProcessing: true);
-            }
-
-            if (!System.IO.File.Exists(thumbnail.FilePath))
+            if (file is null)
             {
                 return NotFound();
             }
 
-            return PhysicalFile(thumbnail.FilePath, contentType, enableRangeProcessing: true);
+            var mediaDirectory = Path.GetDirectoryName(file.FullPath) ?? string.Empty;
+            var links = await _subtitles.GetForFilesAsync([id], cancellationToken);
+            var usable = new List<string>();
+
+            if (links.TryGetValue(id, out var found))
+            {
+                foreach (var link in found)
+                {
+                    if (_subtitleChecker.TryCheck(mediaDirectory, link.RelativePath, out var relativePath, out _))
+                    {
+                        usable.Add(relativePath);
+                    }
+                }
+            }
+
+            if (usable.Count == 0)
+            {
+                return NotFound();
+            }
+
+            if (usable.Count == 1)
+            {
+                var fullPath = Path.Combine(mediaDirectory, usable[0]);
+                var contentType = DlnaMimeCatalog.TryGetByFileExtension(Path.GetExtension(fullPath), out var mime)
+                    ? mime.ToMimeString()
+                    : "text/plain";
+
+                return PhysicalFile(fullPath, contentType, Path.GetFileName(fullPath));
+            }
+
+            // ponytail: zipped in memory - subtitle files are a few tens of KB each; stream to a temp file if a
+            // library ever links dozens of large ones to one file.
+            using var buffer = new MemoryStream();
+
+            using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                foreach (var relativePath in usable)
+                {
+                    zip.CreateEntryFromFile(Path.Combine(mediaDirectory, relativePath), relativePath, CompressionLevel.Optimal);
+                }
+            }
+
+            var zipName = $"{Path.GetFileNameWithoutExtension(file.FileName)}.subtitles.zip";
+
+            return File(buffer.ToArray(), "application/zip", zipName);
         }
     }
 }

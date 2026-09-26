@@ -8,10 +8,12 @@ namespace DlnaServer.Persistence.Repositories
     internal sealed class UploadDeviceRepository : IUploadDeviceRepository
     {
         private readonly DlnaDbContext _dbContext;
+        private readonly TimeProvider _timeProvider;
 
-        public UploadDeviceRepository(DlnaDbContext dbContext)
+        public UploadDeviceRepository(DlnaDbContext dbContext, TimeProvider timeProvider)
         {
             _dbContext = dbContext;
+            _timeProvider = timeProvider;
         }
 
         public Task<string?> GetLastDestinationAsync(
@@ -38,6 +40,7 @@ namespace DlnaServer.Persistence.Repositories
 
             var existing = await _dbContext.UploadDevices
                 .FirstOrDefaultAsync(d => d.Fingerprint == device.Fingerprint, cancellationToken);
+            var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
 
             if (existing is null)
             {
@@ -48,7 +51,7 @@ namespace DlnaServer.Persistence.Repositories
                     UserAgent = device.UserAgent,
                     AcceptLanguage = device.AcceptLanguage,
                     LastDestination = device.Destination,
-                    LastUploadUtc = DateTime.UtcNow,
+                    LastUploadUtc = nowUtc,
                     UploadCount = device.FileCount,
                 });
             }
@@ -60,11 +63,11 @@ namespace DlnaServer.Persistence.Repositories
                 existing.UserAgent = device.UserAgent;
                 existing.AcceptLanguage = device.AcceptLanguage;
                 existing.LastDestination = device.Destination;
-                existing.LastUploadUtc = DateTime.UtcNow;
+                existing.LastUploadUtc = nowUtc;
                 existing.UploadCount += device.FileCount;
             }
 
-            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            _ = await _dbContext.SaveChangesSurfacingDbExceptionAsync(cancellationToken);
         }
     }
 }

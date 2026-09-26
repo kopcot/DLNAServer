@@ -6,7 +6,9 @@ using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Subtitles;
 using DlnaServer.Host.Controllers;
 using DlnaServer.Host.Delivery;
+using DlnaServer.Host.Delivery.Prefetch;
 using DlnaServer.Host.Diagnostics;
+using DlnaServer.Persistence.Repositories;
 using DlnaServer.Upnp.Ssdp;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -127,7 +129,7 @@ namespace DlnaServer.IntegrationTests
                     Thumbnail = CreateThumbnail(thumbnailPath, hasStoredContent: true),
                     ThumbnailContent = [1, 2],
                 },
-                new FakeContentResolver(),
+                new MediaContentResolver(cache, new MediaCacheBacklog()),
                 cache);
 
             // Act
@@ -151,7 +153,7 @@ namespace DlnaServer.IntegrationTests
                 {
                     Thumbnail = CreateThumbnail(Path.Combine(_root, "gone.jpg"), hasStoredContent: false),
                 },
-                new FakeContentResolver(),
+                new MediaContentResolver(new FakeCache(), new MediaCacheBacklog()),
                 new FakeCache());
 
             // Act
@@ -270,6 +272,75 @@ namespace DlnaServer.IntegrationTests
                 + "advertised address the request arrived on and never from the Host header it sent");
         }
 
+        /// <summary>
+        /// An SVG can carry script, and the site-wide policy was the only thing between one dropped on the
+        /// media share and script running when it is opened directly.
+        /// </summary>
+        [Test]
+        public async Task GetFile_ForAnSvg_SandboxesTheResponse()
+        {
+            // Arrange
+            var path = Path.Combine(_root, "drawing.svg");
+            await File.WriteAllTextAsync(path, "<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
+
+            var controller = CreateController(
+                new RecordingMediaFileRepository { File = CreateFile(path) with { Mime = DlnaMime.ImageSvgXml } },
+                new FakeContentResolver(),
+                new FakeCache());
+
+            // Act
+            _ = await controller.GetFile(_fileId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            controller.HttpContext.Response.Headers.ContentSecurityPolicy.ToString().Should().Be("sandbox",
+                "because a scriptable image must not run anything even when opened on its own");
+        }
+
+        [Test]
+        public async Task GetFile_ForAVideo_AddsNoSandbox()
+        {
+            // Arrange
+            var path = Path.Combine(_root, "film.mkv");
+            await File.WriteAllBytesAsync(path, [1, 2, 3]);
+
+            var controller = CreateController(
+                new RecordingMediaFileRepository { File = CreateFile(path) },
+                new FakeContentResolver(),
+                new FakeCache());
+
+            // Act
+            _ = await controller.GetFile(_fileId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            controller.HttpContext.Response.Headers.ContentSecurityPolicy.Count.Should().Be(0,
+                "because only a type that can carry script needs the extra policy");
+        }
+
+        /// <summary>
+        /// A probe and the transfer after it must advertise identical contentFeatures (standing decision 15).
+        /// </summary>
+        [Test]
+        public async Task HeadFile_AdvertisesTheSameDlnaHeadersAsGetFile()
+        {
+            // Arrange
+            var path = Path.Combine(_root, "film.mkv");
+            await File.WriteAllBytesAsync(path, [1, 2, 3]);
+            var repository = new RecordingMediaFileRepository { File = CreateFile(path) };
+            var getController = CreateController(repository, new FakeContentResolver(), new FakeCache());
+            var headController = CreateController(repository, new FakeContentResolver(), new FakeCache());
+
+            // Act
+            _ = await getController.GetFile(_fileId, cancellationToken: CancellationToken.None);
+            _ = await headController.HeadFile(_fileId, cancellationToken: CancellationToken.None);
+
+            // Assert
+            var features = getController.HttpContext.Response.Headers[DlnaResponseHeaders.ContentFeatures].ToString();
+            features.Should().NotBeEmpty("because DLNA response headers are sent by default");
+            headController.HttpContext.Response.Headers[DlnaResponseHeaders.ContentFeatures].ToString().Should().Be(
+                features,
+                "because a renderer that probes first must be promised what the transfer then delivers");
+        }
+
         private static SubtitleFileDto CreateSubtitle(MediaFileDto film, string relativePath)
         {
             return new SubtitleFileDto
@@ -284,11 +355,12 @@ namespace DlnaServer.IntegrationTests
 
         private static FileServerController CreateController(
             RecordingMediaFileRepository repository,
-            FakeContentResolver content,
+            IMediaContentResolver content,
             FakeCache cache,
             FakeSubtitleRepository? subtitles = null)
         {
-            var options = new StaticOptionsMonitor<DlnaOptions>(new DlnaOptions());
+            var options = new StaticOptionsMonitor<DlnaOptions>(
+                new DlnaOptions { Library = { SubtitleFileExtensions = SubtitleFileExtensionDefaults.Create() } });
 
             return new FileServerController(
                 repository,
@@ -349,6 +421,14 @@ namespace DlnaServer.IntegrationTests
             {
                 return Source;
             }
+
+            public ValueTask<(ThumbnailSource Source, ReadOnlyMemory<byte> Content)> ResolveThumbnailAsync(
+                ThumbnailDto thumbnail,
+                IMediaFileRepository files,
+                CancellationToken cancellationToken = default)
+            {
+                throw new NotSupportedException("Thumbnail tests use the real resolver.");
+            }
         }
 
         private sealed class FakeCache : IServedFileCache
@@ -389,6 +469,11 @@ namespace DlnaServer.IntegrationTests
             }
 
             public ServedFileCacheReport Describe()
+            {
+                throw new NotSupportedException("Not part of the delivery path under test.");
+            }
+
+            public IReadOnlyList<string> ListPaths()
             {
                 throw new NotSupportedException("Not part of the delivery path under test.");
             }

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 using DlnaServer.Core.Gena;
 
 namespace DlnaServer.Host.Gena
@@ -13,11 +14,20 @@ namespace DlnaServer.Host.Gena
         /// </summary>
         private const int MaxSubscriptions = 64;
 
+        /// <summary>
+        /// Most subscriptions one device may hold, so a device subscribing in a loop cannot take every
+        /// slot above and leave each television after it with a 503.
+        /// </summary>
+        /// <remarks>
+        /// A renderer subscribes to at most four services, so this is one full set plus a second from a
+        /// reboot that never unsubscribed the first - which lapses within the granted lifetime anyway.
+        /// </remarks>
+        private const int MaxSubscriptionsPerSubscriber = 8;
+
         // Serialises prune + count + add. Only Add contends, and only to keep the cap honest.
         private readonly object _addGate = new();
 
-        private readonly ConcurrentDictionary<string, EventSubscription> _subscriptions =
-            new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, Entry> _subscriptions = new(StringComparer.Ordinal);
 
         private readonly TimeProvider _timeProvider;
 
@@ -36,7 +46,11 @@ namespace DlnaServer.Host.Gena
             }
         }
 
-        public EventSubscription? Add(string serviceId, IReadOnlyList<string> callbackUrls, TimeSpan granted)
+        public EventSubscription? Add(
+            string serviceId,
+            IReadOnlyList<string> callbackUrls,
+            TimeSpan granted,
+            IPAddress? subscriber)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(serviceId);
             ArgumentNullException.ThrowIfNull(callbackUrls);
@@ -47,18 +61,20 @@ namespace DlnaServer.Host.Gena
             // sequential callers. The store is tiny and off every hot path, so a lock costs nothing here.
             lock (_addGate)
             {
-                return AddUnderLock(serviceId, callbackUrls, granted);
+                return AddUnderLock(serviceId, callbackUrls, granted, Normalise(subscriber));
             }
         }
 
         private EventSubscription? AddUnderLock(
             string serviceId,
             IReadOnlyList<string> callbackUrls,
-            TimeSpan granted)
+            TimeSpan granted,
+            IPAddress? subscriber)
         {
             PruneExpired();
 
-            if (_subscriptions.Count >= MaxSubscriptions)
+            if (_subscriptions.Count >= MaxSubscriptions
+                || CountHeldBy(subscriber) >= MaxSubscriptionsPerSubscriber)
             {
                 return null;
             }
@@ -70,7 +86,7 @@ namespace DlnaServer.Host.Gena
                 granted,
                 _timeProvider.GetUtcNow().Add(granted));
 
-            return _subscriptions.TryAdd(subscription.Sid, subscription)
+            return _subscriptions.TryAdd(subscription.Sid, new Entry(subscription, subscriber))
                 ? subscription
                 : null;
         }
@@ -84,7 +100,7 @@ namespace DlnaServer.Host.Gena
                 return null;
             }
 
-            if (existing.ExpiresUtc <= _timeProvider.GetUtcNow())
+            if (existing.Subscription.ExpiresUtc <= _timeProvider.GetUtcNow())
             {
                 // Lapsed. Removed rather than revived: the specification has the renderer subscribe
                 // afresh, and reviving it would hand back an identifier the renderer believes is dead.
@@ -92,13 +108,13 @@ namespace DlnaServer.Host.Gena
                 return null;
             }
 
-            var renewed = existing with
+            var renewed = existing.Subscription with
             {
                 Granted = granted,
                 ExpiresUtc = _timeProvider.GetUtcNow().Add(granted),
             };
 
-            return _subscriptions.TryUpdate(sid, renewed, existing)
+            return _subscriptions.TryUpdate(sid, existing with { Subscription = renewed }, existing)
                 ? renewed
                 : null;
         }
@@ -121,13 +137,37 @@ namespace DlnaServer.Host.Gena
         {
             var now = _timeProvider.GetUtcNow();
 
-            foreach (var (sid, subscription) in _subscriptions)
+            foreach (var (sid, entry) in _subscriptions)
             {
-                if (subscription.ExpiresUtc <= now)
+                if (entry.Subscription.ExpiresUtc <= now)
                 {
                     _ = _subscriptions.TryRemove(sid, out _);
                 }
             }
+        }
+
+        // A dual-stack socket reports an IPv4 peer as ::ffff:a.b.c.d, which would otherwise count as a
+        // second device next to the same peer arriving over IPv4.
+        private static IPAddress? Normalise(IPAddress? subscriber)
+        {
+            return subscriber is { IsIPv4MappedToIPv6: true }
+                ? subscriber.MapToIPv4()
+                : subscriber;
+        }
+
+        private int CountHeldBy(IPAddress? subscriber)
+        {
+            var held = 0;
+
+            foreach (var (_, entry) in _subscriptions)
+            {
+                if (Equals(entry.Subscriber, subscriber))
+                {
+                    held++;
+                }
+            }
+
+            return held;
         }
 
         public IReadOnlyList<EventSubscription> List()
@@ -137,10 +177,14 @@ namespace DlnaServer.Host.Gena
             // Expired-but-not-yet-removed entries are filtered the same way Count does, so the listing
             // and the count can never disagree.
             return _subscriptions.Values
+                .Select(static entry => entry.Subscription)
                 .Where(subscription => subscription.ExpiresUtc > nowUtc)
                 .OrderBy(static subscription => subscription.ServiceId, StringComparer.Ordinal)
                 .ThenBy(static subscription => subscription.Sid, StringComparer.Ordinal)
                 .ToArray();
         }
+
+        // A subscription and the address that made it, which the renderer-facing record does not carry.
+        private sealed record Entry(EventSubscription Subscription, IPAddress? Subscriber);
     }
 }

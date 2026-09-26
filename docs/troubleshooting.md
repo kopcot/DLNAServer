@@ -73,6 +73,24 @@ If **no** setting is taking effect, read `logs/app.log` from the top. The server
 or parsed but carrying no `Dlna` section - that last one is what a file in the reference server's flat
 layout produces, and it means every setting in the file is being ignored.
 
+## The watcher keeps faulting on a large library
+
+Linux caps how many directories one user can watch with inotify at once (`fs.inotify.max_user_watches`,
+often 8192 by default), and `FileSystemWatcher` needs one watch per directory it is told to cover. A
+library with more directories than that budget makes the watcher fault repeatedly instead of quietly
+missing events - look in `logs/app.log` for it naming the limit before assuming the library itself is the
+problem. Raise the limit on the host (not inside the container, unless the container has its own PID/user
+namespace for this):
+
+```bash
+sudo sysctl fs.inotify.max_user_watches=524288
+# and to survive a reboot:
+echo 'fs.inotify.max_user_watches=524288' | sudo tee /etc/sysctl.d/99-dlna-inotify.conf
+```
+
+If raising the limit is not an option, `Library.UsePeriodicRescan` is the fallback - see the Docker
+notes on why a bind mount already needs it for a different reason.
+
 ## The index is empty or missing files
 
 A folder is hidden by `Library.ExcludeFolders` matching on whole path segments, or the scan has not run

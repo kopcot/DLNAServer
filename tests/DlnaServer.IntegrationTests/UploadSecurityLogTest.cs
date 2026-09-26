@@ -26,5 +26,34 @@ namespace DlnaServer.IntegrationTests
                 "because the host filters the upload sink on this exact source context, and a mismatch "
                 + "disables that log file without any error");
         }
+
+        [TestCase("film\r\nupload from=10.0.0.1 outcome=Uploaded.mp4", @"film\u000D\u000Aupload from=10.0.0.1 outcome=Uploaded.mp4")]
+        [TestCase("a\"b", @"a\u0022b")]
+        [TestCase("a\u2028b", @"a\u2028b")]
+        public void Escape_RewritesWhatCouldEndTheLineOrTheQuotedValue(string value, string expected)
+        {
+            // Arrange
+            // Act
+            var escaped = UploadSecurityLog.Escape(value);
+
+            // Assert
+            escaped.Should().Be(expected,
+                "because an untrusted name written raw could end the log line and forge the next one, or "
+                + "close its quoted value early");
+        }
+
+        [Test]
+        public void Escape_WithNothingToEscape_ReturnsTheSameInstance()
+        {
+            // Arrange
+            const string value = "/media/Films/film (2024).mp4";
+
+            // Act
+            var escaped = UploadSecurityLog.Escape(value);
+
+            // Assert
+            escaped.Should().BeSameAs(value,
+                "because the common case is a clean value, and it should cost no allocation");
+        }
     }
 }

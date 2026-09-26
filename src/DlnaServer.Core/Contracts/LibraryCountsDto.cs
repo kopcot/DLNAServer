@@ -20,5 +20,14 @@ namespace DlnaServer.Core.Contracts
         public required int Image { get; init; }
 
         public required int Other { get; init; }
+
+        /// <summary>
+        /// Linked subtitle and lyrics files, leaving out links the operator removed.
+        /// </summary>
+        /// <remarks>
+        /// Not part of <see cref="Total"/>: a linked file belongs to a media file rather than being one of the
+        /// library's own files, so the four kinds above still add up to the total on their own.
+        /// </remarks>
+        public required int Subtitles { get; init; }
     }
 }

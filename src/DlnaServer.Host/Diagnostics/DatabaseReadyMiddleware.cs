@@ -39,6 +39,14 @@ namespace DlnaServer.Host.Diagnostics
         {
             ArgumentNullException.ThrowIfNull(context);
 
+            // The steady state for the whole life of the process, so it must cost nothing: no linked
+            // token source and no timer per request once the schema is known to be there.
+            if (_readySignal.IsReady)
+            {
+                await _next(context);
+                return;
+            }
+
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
             timeout.CancelAfter(_waitLimit);
 

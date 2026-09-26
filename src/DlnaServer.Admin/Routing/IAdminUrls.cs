@@ -51,6 +51,12 @@ namespace DlnaServer.Admin.Routing
         string MediaFile(Guid filePublicId);
 
         /// <summary>
+        /// The subtitle and lyrics files linked to one media file, as a download - the file itself, or a zip
+        /// when there are several.
+        /// </summary>
+        string Subtitles(Guid filePublicId);
+
+        /// <summary>
         /// One thumbnail image, served on the admin port.
         /// </summary>
         /// <remarks>

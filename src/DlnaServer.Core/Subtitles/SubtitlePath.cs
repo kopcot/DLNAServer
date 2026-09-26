@@ -1,3 +1,4 @@
+using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Files;
 
 namespace DlnaServer.Core.Subtitles
@@ -23,6 +24,10 @@ namespace DlnaServer.Core.Subtitles
         /// Everything the library hides from listings - <c>ExcludeFolders</c> and the temporarily hidden
         /// folders that are not currently shown.
         /// </param>
+        /// <param name="subtitleTypes">
+        /// <c>Library.SubtitleFileExtensions</c>, keyed case-insensitively - a type no longer listed is refused
+        /// here, so a link to one stops being served the moment the setting changes.
+        /// </param>
         /// <param name="relativePath">The path with forward slashes, the form that is stored.</param>
         /// <param name="fullPath">The path on this machine.</param>
         /// <param name="problem">Why the path cannot be used, in the operator's terms.</param>
@@ -30,11 +35,13 @@ namespace DlnaServer.Core.Subtitles
             string mediaDirectory,
             string? input,
             IReadOnlyList<string> hiddenFolders,
+            IReadOnlyDictionary<string, DlnaMedia> subtitleTypes,
             out string relativePath,
             out string fullPath,
             out string problem)
         {
             ArgumentNullException.ThrowIfNull(hiddenFolders);
+            ArgumentNullException.ThrowIfNull(subtitleTypes);
 
             relativePath = string.Empty;
             fullPath = string.Empty;
@@ -65,9 +72,9 @@ namespace DlnaServer.Core.Subtitles
             {
                 problem = "Only one folder down is looked at - move the subtitle up, or next to the file.";
             }
-            else if (!SubtitleMatcher.IsLinkable(Path.GetExtension(segments[^1])))
+            else if (!SubtitleMatcher.IsLinkable(Path.GetExtension(segments[^1]), subtitleTypes))
             {
-                problem = "That is not a subtitle or lyrics file this server knows.";
+                problem = "That is not a subtitle or lyrics type listed under Subtitle types on the Settings page.";
             }
 
             if (problem.Length > 0)
@@ -95,6 +102,7 @@ namespace DlnaServer.Core.Subtitles
         /// <param name="mediaDirectory">The media file's folder, as an absolute path.</param>
         /// <param name="input">What the operator typed, or what was stored.</param>
         /// <param name="hiddenFolders">What the caller hides - see <see cref="TryResolve"/>.</param>
+        /// <param name="subtitleTypes">The configured subtitle types - see <see cref="TryResolve"/>.</param>
         /// <param name="relativePath">The path with forward slashes, the form that is stored.</param>
         /// <param name="fullPath">The path on this machine.</param>
         /// <param name="problem">Why the path cannot be used, in the operator's terms.</param>
@@ -102,11 +110,12 @@ namespace DlnaServer.Core.Subtitles
             string mediaDirectory,
             string? input,
             IReadOnlyList<string> hiddenFolders,
+            IReadOnlyDictionary<string, DlnaMedia> subtitleTypes,
             out string relativePath,
             out string fullPath,
             out string problem)
         {
-            if (!TryResolve(mediaDirectory, input, hiddenFolders, out relativePath, out fullPath, out problem))
+            if (!TryResolve(mediaDirectory, input, hiddenFolders, subtitleTypes, out relativePath, out fullPath, out problem))
             {
                 return false;
             }

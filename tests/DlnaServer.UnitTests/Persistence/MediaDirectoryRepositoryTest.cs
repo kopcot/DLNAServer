@@ -1,9 +1,9 @@
 using DlnaServer.Core.Contracts;
-using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Configuration;
 using DlnaServer.Persistence;
 using DlnaServer.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using static DlnaServer.UnitTests.Persistence.PersistenceTestData;
 
 namespace DlnaServer.UnitTests.Persistence
 {
@@ -607,25 +607,6 @@ namespace DlnaServer.UnitTests.Persistence
             _ = await repository.AddRangeAsync(files, CancellationToken.None);
         }
 
-        private static MediaFileCreateDto CreateFile(string fullPath)
-        {
-            var fileName = Path.GetFileName(fullPath);
-
-            return new MediaFileCreateDto
-            {
-                FullPath = fullPath,
-                FileName = fileName,
-                Title = Path.GetFileNameWithoutExtension(fileName),
-                Extension = Path.GetExtension(fileName).ToLowerInvariant(),
-                Mime = DlnaMime.VideoXMatroska,
-                UpnpClass = DlnaItemClass.VideoItem,
-                SizeInBytes = 1024,
-                FileCreatedUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                FileModifiedUtc = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                ContentStamp = "1024:638000000000000000",
-            };
-        }
-
         /// <summary>
         /// The batched read the indexer replaced two per-path loops with.
         /// </summary>
@@ -681,23 +662,6 @@ namespace DlnaServer.UnitTests.Persistence
             // Assert
             found.Should().BeEmpty(
                 "because a scan that discovered no directories must not issue a query at all");
-        }
-
-        private static MediaDirectoryCreateDto CreateDirectory(
-            string fullPath,
-            string name,
-            int depth,
-            bool isSourceRoot,
-            Guid? parent = null)
-        {
-            return new MediaDirectoryCreateDto
-            {
-                FullPath = fullPath,
-                Name = name,
-                Depth = depth,
-                IsSourceRoot = isSourceRoot,
-                ParentDirectoryPublicId = parent,
-            };
         }
 
         /// <remarks>

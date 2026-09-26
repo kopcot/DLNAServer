@@ -49,6 +49,14 @@ namespace DlnaServer.Host.Indexing
         private partial void LogReconcileSkipped(string unusableFolders);
 
         [LoggerMessage(
+            EventId = 15,
+            Level = LogLevel.Warning,
+            Message = "Reconciliation stopped part-way and removes nothing more this pass, because these "
+                + "source folder(s) became unreadable while it ran: {UnusableFolders}. Rows already "
+                + "reconciled stay as they are; the next scan reconciles normally once the folder(s) are back")]
+        private partial void LogReconcileHalted(string unusableFolders);
+
+        [LoggerMessage(
             EventId = 8,
             Level = LogLevel.Warning,
             Message = "'{FilePath}' could not be read, so its row was kept rather than removed. The file "

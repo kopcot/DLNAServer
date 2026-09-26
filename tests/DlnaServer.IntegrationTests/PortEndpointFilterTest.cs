@@ -1,3 +1,4 @@
+using System.Net;
 using DlnaServer.Host;
 using DlnaServer.Host.Diagnostics;
 using Microsoft.AspNetCore.Http;
@@ -264,6 +265,132 @@ namespace DlnaServer.IntegrationTests
                 "because nothing here has answered the request - the status is still the untouched default");
         }
 
+        /// <summary>
+        /// Kestrel binds the admin port on IPv6 too, so a NAS with a global address is reachable from the
+        /// internet wherever the router lets IPv6 in.
+        /// </summary>
+        [TestCase("/admin/settings")]
+        [TestCase("/_blazor/negotiate")]
+        [TestCase("/")]
+        public async Task AdminSurfaceMiddleware_RefusesTheAdminPortFromOffTheLocalNetwork(string path)
+        {
+            // Arrange
+            var context = CreateContext(path, AdminPort);
+            context.Connection.RemoteIpAddress = IPAddress.Parse("2a00:1450:4001::5");
+            context.Connection.LocalIpAddress = IPAddress.Parse("2001:db8:1:2::10");
+
+            // Act
+            var invoked = await InvokeAdminSurfaceAsync(context);
+
+            // Assert
+            invoked.Should().BeFalse("because a caller on the internet must not reach the admin surface");
+            context.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound,
+                "because from off the LAN the surface does not exist, the same answer /manage gives");
+        }
+
+        [TestCase("192.168.1.20", "192.168.1.10")]
+        [TestCase("100.100.1.2", "192.168.1.10")]
+        [TestCase("fe80::20", "fe80::10")]
+        [TestCase("2001:db8:1:2::20", "2001:db8:1:2::10")]
+        public async Task AdminSurfaceMiddleware_ServesTheAdminPortToTheLocalNetwork(string remote, string local)
+        {
+            // Arrange
+            var context = CreateContext("/admin/settings", AdminPort);
+            context.Connection.RemoteIpAddress = IPAddress.Parse(remote);
+            context.Connection.LocalIpAddress = IPAddress.Parse(local);
+
+            // Act
+            var invoked = await InvokeAdminSurfaceAsync(context);
+
+            // Assert
+            invoked.Should().BeTrue(
+                "because the LAN is the admin UI's audience - including Tailscale and a browser reaching the "
+                + "server over its global IPv6 address from inside the same /64");
+        }
+
+        /// <summary>
+        /// The remote-admin overlay's path: Caddy on loopback, and <c>UseForwardedHeaders</c> then rewriting
+        /// the remote address to the internet client Caddy has already put through its password.
+        /// </summary>
+        [Test]
+        public async Task AdminSurfaceMiddleware_JudgesTheRecordedSocketPeerNotTheForwardedClient()
+        {
+            // Arrange
+            var context = CreateContext("/admin/settings", AdminPort);
+            context.Connection.RemoteIpAddress = IPAddress.Loopback;
+            AdminSurfaceMiddleware.RecordConnectionPeer(context: context, adminPort: AdminPort);
+            context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.7");
+
+            // Act
+            var invoked = await InvokeAdminSurfaceAsync(context);
+
+            // Assert
+            invoked.Should().BeTrue(
+                "because the socket is the proxy on loopback, which is what the local-network check is about");
+        }
+
+        /// <summary>
+        /// A direct caller the forwarder did not trust keeps its own address, whatever headers it sent -
+        /// so the recorded peer must win over anything that looks local afterwards.
+        /// </summary>
+        [Test]
+        public async Task AdminSurfaceMiddleware_RefusesARemoteSocketPeerWhateverTheRemoteAddressBecame()
+        {
+            // Arrange
+            var context = CreateContext("/admin/settings", AdminPort);
+            context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.7");
+            AdminSurfaceMiddleware.RecordConnectionPeer(context: context, adminPort: AdminPort);
+            context.Connection.RemoteIpAddress = IPAddress.Loopback;
+
+            // Act
+            var invoked = await InvokeAdminSurfaceAsync(context);
+
+            // Assert
+            invoked.Should().BeFalse("because the connection itself came from the internet");
+            context.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound,
+                "because a remote socket peer is refused no matter what a later rewrite claims");
+        }
+
+        [Test]
+        public async Task AdminSurfaceMiddleware_LeavesTheMediaPortOpenToAnyAddress()
+        {
+            // Arrange
+            var context = CreateContext("/fileserver/file/abc", MediaPort);
+            context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.7");
+            AdminSurfaceMiddleware.RecordConnectionPeer(context: context, adminPort: AdminPort);
+
+            // Act
+            var invoked = await InvokeAdminSurfaceAsync(context);
+
+            // Assert
+            invoked.Should().BeTrue(
+                "because the local-network check is the admin port's alone; the media port's wire "
+                + "behaviour is unchanged");
+        }
+
+        [Test]
+        public async Task RejectRemoteManagementEndpointFilter_FromOffTheLocalNetwork_Returns404()
+        {
+            // Arrange
+            var invoked = false;
+            var context = CreateContext("/manage/stop", MediaPort);
+            context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.7");
+
+            // Act
+            _ = await new RejectRemoteManagementEndpointFilter().InvokeAsync(
+                new DefaultEndpointFilterInvocationContext(context),
+                _ =>
+                {
+                    invoked = true;
+                    return ValueTask.FromResult<object?>(Results.Ok());
+                });
+
+            // Assert
+            invoked.Should().BeFalse("because /manage is unauthenticated and the LAN is its whole audience");
+            context.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound,
+                "because from off the LAN this surface does not exist");
+        }
+
         private static async Task<(bool Invoked, object? Result)> InvokeAsync(
             AdminOrMediaPortEndpointFilter filter,
             string path,
@@ -290,6 +417,22 @@ namespace DlnaServer.IntegrationTests
             context.Connection.LocalPort = localPort;
 
             return context;
+        }
+
+        private static async Task<bool> InvokeAdminSurfaceAsync(DefaultHttpContext context)
+        {
+            var invoked = false;
+            var middleware = new AdminSurfaceMiddleware(
+                _ =>
+                {
+                    invoked = true;
+                    return Task.CompletedTask;
+                },
+                AdminPort);
+
+            await middleware.InvokeAsync(context);
+
+            return invoked;
         }
     }
 }

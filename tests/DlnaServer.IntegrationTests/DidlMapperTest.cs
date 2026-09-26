@@ -61,6 +61,39 @@ namespace DlnaServer.IntegrationTests
         }
 
         [Test]
+        public void Offerable_LeavesOutALinkWhoseTypeIsNoLongerListed()
+        {
+            // Arrange
+            var file = CreateFile(directoryPublicId: _directoryId);
+            var srt = CreateSubtitle(file, "film.srt");
+            var ass = CreateSubtitle(file, "film.ass");
+            var types = new Dictionary<string, DlnaMedia>(StringComparer.OrdinalIgnoreCase) { [".srt"] = DlnaMedia.Video };
+
+            // Act
+            var offered = DidlMapper.Offerable(subtitles: [srt, ass], subtitleTypes: types);
+
+            // Assert
+            offered.Should().Equal([srt],
+                "because a type taken off Settings is refused by the file server at once, so it must not be offered");
+        }
+
+        [Test]
+        public void Offerable_WhenEveryTypeIsListed_ReturnsTheSameList()
+        {
+            // Arrange
+            var file = CreateFile(directoryPublicId: _directoryId);
+            IReadOnlyList<SubtitleFileDto> subtitles = [CreateSubtitle(file, "film.SRT")];
+            var types = new Dictionary<string, DlnaMedia>(StringComparer.OrdinalIgnoreCase) { [".srt"] = DlnaMedia.Video };
+
+            // Act
+            var offered = DidlMapper.Offerable(subtitles: subtitles, subtitleTypes: types);
+
+            // Assert
+            offered.Should().BeSameAs(subtitles,
+                "because the usual case allocates nothing on the Browse path, and extensions match whatever their case");
+        }
+
+        [Test]
         public void MapItem_WithManyLinkedSubtitles_OffersOnlyTheFirstFew()
         {
             // Arrange

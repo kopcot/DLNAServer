@@ -36,6 +36,11 @@ namespace DlnaServer.Admin.Routing
             return $"/admin/media/file/{filePublicId}";
         }
 
+        public string Subtitles(Guid filePublicId)
+        {
+            return $"/admin/media/subtitles/{filePublicId}";
+        }
+
         public string Thumbnail(Guid thumbnailPublicId)
         {
             return $"/admin/media/thumbnail/{thumbnailPublicId}";

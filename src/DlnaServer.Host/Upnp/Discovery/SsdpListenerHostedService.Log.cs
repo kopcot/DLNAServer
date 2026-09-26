@@ -1,3 +1,5 @@
+using System.Net;
+
 namespace DlnaServer.Host.Upnp.Discovery
 {
     internal sealed partial class SsdpListenerHostedService
@@ -57,5 +59,12 @@ namespace DlnaServer.Host.Upnp.Discovery
             Message = "Dropped an M-SEARCH from {RemoteEndPoint}: {MaxConcurrentReplies} replies are "
                 + "already waiting out their MX delay. SSDP is best-effort and a renderer retries.")]
         private partial void LogSearchDropped(string remoteEndPoint, int maxConcurrentReplies);
+
+        // Takes the endpoint, not its text, so a flood from outside allocates nothing while Debug is off.
+        [LoggerMessage(
+            EventId = 10,
+            Level = LogLevel.Debug,
+            Message = "Ignored an M-SEARCH from {RemoteEndPoint}: it is not on the local network")]
+        private partial void LogSearchFromOutsideIgnored(IPEndPoint remoteEndPoint);
     }
 }

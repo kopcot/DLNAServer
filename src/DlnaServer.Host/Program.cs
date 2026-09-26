@@ -8,12 +8,10 @@ using DlnaServer.Host.Delivery;
 using DlnaServer.Host.Delivery.Caching;
 using DlnaServer.Host.Delivery.Prefetch;
 using DlnaServer.Host.Diagnostics;
-using DlnaServer.Host.Gena;
 using DlnaServer.Host.Hosting;
 using DlnaServer.Host.Indexing;
 using DlnaServer.Host.Uploads;
-using DlnaServer.Host.Upnp.Control;
-using DlnaServer.Host.Upnp.Discovery;
+using DlnaServer.Host.Upnp;
 using DlnaServer.Media;
 using DlnaServer.Persistence;
 using DlnaServer.Upnp.Constants;
@@ -34,7 +32,6 @@ using Serilog.Filters;
 using SoapCore;
 using DlnaServer.Core.Delivery;
 using DlnaServer.Core.Diagnostics;
-using DlnaServer.Core.Gena;
 using DlnaServer.Core.Uploads;
 using DlnaServer.Core.Subtitles;
 
@@ -228,10 +225,6 @@ namespace DlnaServer.Host
             _ = builder.Services.AddDlnaPersistence(connectionString);
             _ = builder.Services.AddDlnaMedia();
 
-            // Device identities are resolved once at startup: one per usable network interface, each with
-            // a stable identifier so renderers do not see a new device after every restart.
-            _ = builder.Services.AddSingleton<ILocalAddressProvider, LocalAddressProvider>();
-
             // Replaces the wildcard that appsettings.json ships - see AllowedHostsDefaults for why the
             // wildcard is a real gap. Registration ORDER is not what makes this work, though the comment
             // here used to say so: Options guarantees every Configure delegate runs before any
@@ -240,12 +233,6 @@ namespace DlnaServer.Host
             _ = builder.Services.AddOptions<HostFilteringOptions>()
                 .PostConfigure<ILocalAddressProvider>(static (options, addresses) =>
                     AllowedHostsDefaults.Apply(options, addresses));
-
-            _ = builder.Services.AddSingleton<IUpnpDeviceRegistry>(provider =>
-                new UpnpDeviceRegistry(
-                    provider.GetRequiredService<ILocalAddressProvider>(),
-                    Environment.MachineName,
-                    serverOptions.Port));
 
             // Delivery: the served-bytes cache and the queue that fills it behind a response. Both are
             // singletons - the cache owns the byte budget for the whole process, and the queue is the
@@ -286,14 +273,6 @@ namespace DlnaServer.Host
                 });
 
             _ = builder.Services.AddHttpContextAccessor();
-            _ = builder.Services.AddSoapCore<CustomEnvelopeMessage>();
-            _ = builder.Services.AddScoped<IContentDirectoryService, ContentDirectoryService>();
-            _ = builder.Services.AddScoped<IConnectionManagerService, ConnectionManagerService>();
-            _ = builder.Services.AddScoped<IAvTransportService, AvTransportService>();
-            _ = builder.Services.AddScoped<IMediaReceiverRegistrarService, MediaReceiverRegistrarService>();
-
-            // GENA subscriptions outlive a request, so the store is a singleton.
-            _ = builder.Services.AddSingleton<ISubscriptionStore, SubscriptionStore>();
 
             // Singleton: a block is process-wide state that outlives the request which raised it.
             _ = builder.Services.AddSingleton<IApiBlocker, ApiBlocker>();
@@ -335,7 +314,8 @@ namespace DlnaServer.Host
             // Scoped, so one per Blazor circuit. Serialises the admin UI's database work: every component
             // on a page shares the circuit's single DbContext, and a DbContext allows one operation at a
             // time - two interleaving handlers otherwise throw out of an event handler and kill the circuit.
-            _ = builder.Services.AddScoped<IAdminOperationGate, AdminOperationGate>();
+            // The same class as the index lock, registered separately so the two never share a permit.
+            _ = builder.Services.AddScoped<IAdminOperationGate, LibraryIndexLock>();
             _ = builder.Services.AddScoped<ILibraryIndexer, LibraryIndexer>();
 
             // The admin UI's own formatting and link building. Registered through its project's extension
@@ -360,8 +340,10 @@ namespace DlnaServer.Host
             _ = builder.Services.AddHostedService<FileWatcherHostedService>();
             _ = builder.Services.AddHostedService<MediaProcessingHostedService>();
             _ = builder.Services.AddHostedService<MediaCacheFillHostedService>();
-            _ = builder.Services.AddHostedService<SsdpNotifierHostedService>();
-            _ = builder.Services.AddHostedService<SsdpListenerHostedService>();
+
+            // Device identity, the SOAP services, GENA and the two SSDP hosted services. Called here so the
+            // hosted services keep their place at the end of the list above.
+            _ = builder.Services.AddDlnaUpnp(serverOptions.Port);
 
             _ = builder.WebHost.ConfigureKestrel(options =>
             {
@@ -651,6 +633,16 @@ namespace DlnaServer.Host
             // and nothing else. Caddy runs with network_mode: host, so it reaches the server over
             // 127.0.0.1 and is trusted, while a device on the LAN is not and cannot spoof either header.
             // Clearing those two collections is the usual way this middleware turns into a vulnerability.
+            //
+            // The socket's own peer is recorded first, because the rewrite below replaces it and the admin
+            // port's local-network check has to judge the proxy's connection, not the client it vouches for.
+            _ = app.Use((context, next) =>
+            {
+                AdminSurfaceMiddleware.RecordConnectionPeer(context, serverOptions.AdminPort);
+
+                return next(context);
+            });
+
             _ = app.UseForwardedHeaders(new ForwardedHeadersOptions
             {
                 ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor,
@@ -665,10 +657,15 @@ namespace DlnaServer.Host
             // route by which a hostile page could reach those handlers, since driving the Blazor circuit
             // cross-site needs a negotiate response it cannot read.
             //
-            // nosniff - media is served inline with a MIME type taken from the configured extension map.
-            // Nothing script-capable is in the shipped map, but DlnaMimeCatalog knows image/svg+xml, and
-            // adding that one line would turn "anyone who can write to the media share" into stored XSS
-            // on the admin origin. This makes that a dead end rather than one config edit away.
+            // nosniff - media is served inline with a MIME type taken from the configured extension map, so a
+            // file is never reinterpreted as something more dangerous than its extension says.
+            //
+            // It does NOT keep script off the admin origin, and this comment used to claim nothing
+            // script-capable was served. Since standing decision 16, .svg is indexed from the MIME catalog
+            // and served as image/svg+xml, and uploading accepts it: an SVG opened directly is a document
+            // that can carry script, so "anyone who can write to the media share" reaches stored XSS on the
+            // admin origin. What stops it is the CSP below - script-src 'self' with no 'unsafe-inline' -
+            // plus CSP: sandbox on the media controllers' SVG responses. Loosening script-src reopens it.
             //
             // Safe on the renderer port too: a television parses the body, not these headers.
             _ = app.Use(static async (context, next) =>

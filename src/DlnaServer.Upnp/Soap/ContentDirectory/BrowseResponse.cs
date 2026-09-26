@@ -11,8 +11,12 @@ namespace DlnaServer.Upnp.Soap.ContentDirectory
     [XmlRoot(ElementName = "BrowseResponse")]
     public sealed class BrowseResponse
     {
+        // Serialised once per process rather than per response: every Browse assigns Didl, so a
+        // per-instance initializer serialised an empty document only to throw the result away.
+        private static readonly string _emptyResult = DidlSerializer.Serialize(new DidlDocument());
+
         private DidlDocument _didl = new();
-        private string _result = DidlSerializer.Serialize(new DidlDocument());
+        private string _result = _emptyResult;
 
         /// <summary>
         /// The document that will be serialised into <see cref="Result"/>.

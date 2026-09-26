@@ -435,68 +435,77 @@ namespace DlnaServer.Persistence.Repositories
             Guid supersededPublicId,
             CancellationToken cancellationToken = default)
         {
-            var kept = await _dbContext.Files
-                .Include(static f => f.Thumbnail)
-                .FirstOrDefaultAsync(f => f.PublicId == publicId, cancellationToken);
-
-            var superseded = await _dbContext.Files
-                .FirstOrDefaultAsync(f => f.PublicId == supersededPublicId, cancellationToken);
-
-            if (kept is null || superseded is null || kept.Id == superseded.Id)
+            try
             {
-                return (false, null);
+                var kept = await _dbContext.Files
+                    .Include(static f => f.Thumbnail)
+                    .FirstOrDefaultAsync(f => f.PublicId == publicId, cancellationToken);
+
+                var superseded = await _dbContext.Files
+                    .FirstOrDefaultAsync(f => f.PublicId == supersededPublicId, cancellationToken);
+
+                if (kept is null || superseded is null || kept.Id == superseded.Id)
+                {
+                    return (false, null);
+                }
+
+                // Every location field is taken from the row the scan just inserted rather than recomputed
+                // here: that row was built by the scanner from the file as it now is, so the directory link
+                // and the name are already resolved and cannot disagree with what the rest of the pass saw.
+                var fullPath = superseded.FullPath;
+                var fileName = superseded.FileName;
+                var title = superseded.Title;
+                var extension = superseded.Extension;
+                var directoryId = superseded.DirectoryId;
+                var fileCreatedUtc = superseded.FileCreatedUtc;
+                var fileModifiedUtc = superseded.FileModifiedUtc;
+                var sizeInBytes = superseded.SizeInBytes;
+                var contentStamp = superseded.ContentStamp;
+
+                // Saved in two steps on purpose. FullPath is uniquely indexed, so moving the kept row onto a
+                // path the superseded row still occupies depends on EF choosing to emit the delete first -
+                // which it does not guarantee. Freeing the path in its own round trip makes the order ours.
+                // Deliberately untransacted: a failure between the two leaves the file simply un-indexed, and
+                // the next pass inserts it and pairs it again, so the window costs a scan rather than a row.
+                _ = _dbContext.Files.Remove(superseded);
+
+                _ = await _dbContext.SaveChangesAsync(cancellationToken);
+
+                kept.FullPath = fullPath;
+                kept.FileName = fileName;
+                kept.Title = title;
+                kept.Extension = extension;
+                kept.DirectoryId = directoryId;
+                kept.FileCreatedUtc = fileCreatedUtc;
+                kept.FileModifiedUtc = fileModifiedUtc;
+                kept.SizeInBytes = sizeInBytes;
+                kept.ContentStamp = contentStamp;
+
+                // The preview lives beside the media, so its path is derived from the old folder and is wrong
+                // the moment the file moves. Dropped and re-made rather than moved on disc, which is what the
+                // reference does: one regenerated preview is cheaper than a file operation that can half-fail
+                // and leave the row pointing at neither copy.
+                var abandonedThumbnailPath = kept.Thumbnail?.FilePath;
+
+                if (kept.Thumbnail is not null)
+                {
+                    _ = _dbContext.Thumbnails.Remove(kept.Thumbnail);
+
+                    kept.Thumbnail = null;
+                    kept.ThumbnailStamp = null;
+                    kept.ThumbnailFailureCount = 0;
+                }
+
+                _ = await _dbContext.SaveChangesAsync(cancellationToken);
+
+                return (true, abandonedThumbnailPath);
             }
-
-            // Every location field is taken from the row the scan just inserted rather than recomputed
-            // here: that row was built by the scanner from the file as it now is, so the directory link
-            // and the name are already resolved and cannot disagree with what the rest of the pass saw.
-            var fullPath = superseded.FullPath;
-            var fileName = superseded.FileName;
-            var title = superseded.Title;
-            var extension = superseded.Extension;
-            var directoryId = superseded.DirectoryId;
-            var fileCreatedUtc = superseded.FileCreatedUtc;
-            var fileModifiedUtc = superseded.FileModifiedUtc;
-            var sizeInBytes = superseded.SizeInBytes;
-            var contentStamp = superseded.ContentStamp;
-
-            // Saved in two steps on purpose. FullPath is uniquely indexed, so moving the kept row onto a
-            // path the superseded row still occupies depends on EF choosing to emit the delete first -
-            // which it does not guarantee. Freeing the path in its own round trip makes the order ours.
-            // Deliberately untransacted: a failure between the two leaves the file simply un-indexed, and
-            // the next pass inserts it and pairs it again, so the window costs a scan rather than a row.
-            _ = _dbContext.Files.Remove(superseded);
-
-            _ = await _dbContext.SaveChangesAsync(cancellationToken);
-
-            kept.FullPath = fullPath;
-            kept.FileName = fileName;
-            kept.Title = title;
-            kept.Extension = extension;
-            kept.DirectoryId = directoryId;
-            kept.FileCreatedUtc = fileCreatedUtc;
-            kept.FileModifiedUtc = fileModifiedUtc;
-            kept.SizeInBytes = sizeInBytes;
-            kept.ContentStamp = contentStamp;
-
-            // The preview lives beside the media, so its path is derived from the old folder and is wrong
-            // the moment the file moves. Dropped and re-made rather than moved on disc, which is what the
-            // reference does: one regenerated preview is cheaper than a file operation that can half-fail
-            // and leave the row pointing at neither copy.
-            var abandonedThumbnailPath = kept.Thumbnail?.FilePath;
-
-            if (kept.Thumbnail is not null)
+            finally
             {
-                _ = _dbContext.Thumbnails.Remove(kept.Thumbnail);
-
-                kept.Thumbnail = null;
-                kept.ThumbnailStamp = null;
-                kept.ThumbnailFailureCount = 0;
+                // The scan holds one context for the whole pass, so rows left tracked here would be re-walked
+                // by every later save - see InsertAsync. A failed save is forgotten too, or it is re-submitted.
+                _dbContext.ForgetTrackedEntities();
             }
-
-            _ = await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return (true, abandonedThumbnailPath);
         }
 
         public async Task<int> UpdateContentAsync(
@@ -538,7 +547,16 @@ namespace DlnaServer.Persistence.Repositories
                 entity.IsExcludedFromCache = false;
             }
 
-            _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                _ = await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            finally
+            {
+                // Same reason as MoveOrRenameAsync: the scan's context would otherwise keep every
+                // updated row and re-walk them all on each later save.
+                _dbContext.ForgetTrackedEntities();
+            }
 
             return entities.Count;
         }
@@ -1037,13 +1055,7 @@ namespace DlnaServer.Persistence.Repositories
 
         public async Task<LibraryCountsDto> CountByKindAsync(CancellationToken cancellationToken = default)
         {
-            IQueryable<MediaFileEntity> query = _dbContext.Files.AsNoTracking();
-            var hiddenFolders = _visibility.HiddenFromListings;
-
-            if (hiddenFolders is { Count: > 0 })
-            {
-                query = HiddenPathQuery.ExcludeHiddenFiles(query, hiddenFolders);
-            }
+            var query = ExcludeHidden(_dbContext.Files.AsNoTracking());
 
             // Grouped on the stored MIME, which is what SQL can see; the kind each one maps to is a
             // dictionary lookup in DlnaMimeCatalog and cannot be translated.
@@ -1076,6 +1088,11 @@ namespace DlnaServer.Persistence.Repositories
                 }
             }
 
+            // Reached through the visible files, as GetLanguagesAsync does, so a hidden folder's links stay hidden.
+            var subtitles = await query
+                .SelectMany(static f => f.SubtitleFiles)
+                .CountAsync(static s => s.Source != SubtitleSource.Removed, cancellationToken);
+
             return new LibraryCountsDto
             {
                 Total = video + audio + image + other,
@@ -1083,6 +1100,7 @@ namespace DlnaServer.Persistence.Repositories
                 Audio = audio,
                 Image = image,
                 Other = other,
+                Subtitles = subtitles,
             };
         }
 
@@ -1428,6 +1446,10 @@ namespace DlnaServer.Persistence.Repositories
         {
             // Rows first, for the same reason as thumbnails: a page load between the two statements
             // would otherwise show the old tags while the file was already marked for re-reading.
+            // One transaction: a crash between the two would leave the rows gone and the stamp current,
+            // and nothing would ever re-queue the file to read them again.
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
             _ = await _dbContext.MediaFileTags.ExecuteDeleteAsync(cancellationToken);
 
             // Tags can only be read by probing the file, and the probe that reads them is the metadata
@@ -1435,23 +1457,23 @@ namespace DlnaServer.Persistence.Repositories
             // every file for it; suppression is lifted for the same reason ClearAllMetadataAsync lifts
             // it, since a file an operator had cleared individually would otherwise stay tagless and
             // look like a failure.
-            return await _dbContext.Files
-                .Where(static f => f.MetadataStamp != null || f.MetadataFailureCount != 0 || f.IsMetadataSuppressed)
-                .ExecuteUpdateAsync(
-                    setters => setters
-                        .SetProperty(static f => f.MetadataStamp, static _ => null)
-                        .SetProperty(static f => f.MetadataFailureCount, static _ => 0)
-                        .SetProperty(static f => f.IsMetadataSuppressed, static _ => false),
-                    cancellationToken);
+            var requeued = await ClearAllMetadataAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return requeued;
         }
 
         public async Task<int> ClearAllThumbnailsAsync(CancellationToken cancellationToken = default)
         {
             // Rows first: the file's stamp must not be cleared while a thumbnail row still exists, or a
             // browse between the two statements would serve the old image as though it were current.
+            // One transaction, for the reason RecreateAllTagsAsync gives.
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
             _ = await _dbContext.Thumbnails.ExecuteDeleteAsync(cancellationToken);
 
-            return await _dbContext.Files
+            var cleared = await _dbContext.Files
                 .Where(static f => f.ThumbnailStamp != null || f.ThumbnailFailureCount != 0 || f.IsThumbnailSuppressed)
                 .ExecuteUpdateAsync(
                     setters => setters
@@ -1463,6 +1485,10 @@ namespace DlnaServer.Persistence.Repositories
                         // this endpoint reported success and produced nothing.
                         .SetProperty(static f => f.IsThumbnailRebuildForced, static _ => true),
                     cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return cleared;
         }
 
         /// <remarks>
@@ -1481,7 +1507,15 @@ namespace DlnaServer.Persistence.Repositories
                 return 0;
             }
 
-            return await files.ExecuteUpdateAsync(
+            return await RequeueMetadataAsync(files, isSuppressed, cancellationToken);
+        }
+
+        private static Task<int> RequeueMetadataAsync(
+            IQueryable<MediaFileEntity> files,
+            bool isSuppressed,
+            CancellationToken cancellationToken)
+        {
+            return files.ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(static f => f.MetadataStamp, static _ => null)
                     .SetProperty(static f => f.MetadataFailureCount, static _ => 0)
@@ -1713,9 +1747,16 @@ namespace DlnaServer.Persistence.Repositories
 
             if (request.HasSubtitles is { } hasSubtitles)
             {
-                query = hasSubtitles
-                    ? query.Where(static f => f.Subtitles.Count != 0 || f.SubtitleFiles.Any(static s => s.Source != SubtitleSource.Removed))
-                    : query.Where(static f => f.Subtitles.Count == 0 && !f.SubtitleFiles.Any(static s => s.Source != SubtitleSource.Removed));
+                query = hasSubtitles switch
+                {
+                    SubtitlePresence.Yes => query.Where(static f => f.Subtitles.Count != 0
+                        || f.SubtitleFiles.Any(static s => s.Source != SubtitleSource.Removed)),
+                    SubtitlePresence.Embedded => query.Where(static f => f.Subtitles.Count != 0),
+                    SubtitlePresence.Linked => query.Where(static f => f.SubtitleFiles.Any(static s => s.Source != SubtitleSource.Removed)),
+                    SubtitlePresence.No => query.Where(static f => f.Subtitles.Count == 0
+                        && !f.SubtitleFiles.Any(static s => s.Source != SubtitleSource.Removed)),
+                    _ => throw new ArgumentOutOfRangeException(nameof(request), hasSubtitles, null),
+                };
             }
 
             return await query
@@ -1801,11 +1842,14 @@ namespace DlnaServer.Persistence.Repositories
             // Server-side: materialising every file key and sending it back as a parameter turned a
             // delete SQLite can express on its own into 20,000 integers on the wire. files is already an
             // IQueryable over the scope, so it composes directly.
+            // One transaction, for the reason RecreateAllTagsAsync gives.
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
             _ = await _dbContext.Thumbnails
                 .Where(t => files.Select(static f => f.Id).Contains(t.MediaFileId))
                 .ExecuteDeleteAsync(cancellationToken);
 
-            return await files.ExecuteUpdateAsync(
+            var cleared = await files.ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(static f => f.ThumbnailStamp, static _ => null)
                     .SetProperty(static f => f.ThumbnailFailureCount, static _ => 0)
@@ -1815,6 +1859,10 @@ namespace DlnaServer.Persistence.Repositories
                     // marking it would leave the flag standing for whenever it is un-suppressed.
                     .SetProperty(f => f.IsThumbnailRebuildForced, _ => !isSuppressed),
                 cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return cleared;
         }
 
         public async Task<int> ClearTagsAsync(
@@ -1849,18 +1897,20 @@ namespace DlnaServer.Persistence.Repositories
 
             // Rows first, so a page load between the two statements cannot show the old tags against a
             // file already marked for re-reading.
+            // One transaction, for the reason RecreateAllTagsAsync gives.
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
             _ = await _dbContext.MediaFileTags
                 .Where(t => files.Select(static f => f.Id).Contains(t.MediaFileId))
                 .ExecuteDeleteAsync(cancellationToken);
 
             // Tags come only from probing the file, and the probe that reads them is the metadata pass -
             // so this necessarily rebuilds the typed details too, exactly as RecreateMetadataAsync does.
-            return await files.ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(static f => f.MetadataStamp, static _ => null)
-                    .SetProperty(static f => f.MetadataFailureCount, static _ => 0)
-                    .SetProperty(static f => f.IsMetadataSuppressed, static _ => false),
-                cancellationToken);
+            var requeued = await RequeueMetadataAsync(files, isSuppressed: false, cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+
+            return requeued;
         }
 
         /// <summary>

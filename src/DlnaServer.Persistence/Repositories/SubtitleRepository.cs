@@ -30,11 +30,13 @@ namespace DlnaServer.Persistence.Repositories
         public async Task<(int Added, int Dropped)> SyncAutomaticAsync(
             IReadOnlyDictionary<string, HashSet<string>> fileNamesByDirectory,
             IReadOnlyList<string> excludedFolders,
+            IReadOnlyDictionary<string, DlnaMedia> subtitleTypes,
             Func<string, bool> isDefinitelyAbsent,
             CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(fileNamesByDirectory);
             ArgumentNullException.ThrowIfNull(excludedFolders);
+            ArgumentNullException.ThrowIfNull(subtitleTypes);
             ArgumentNullException.ThrowIfNull(isDefinitelyAbsent);
 
             var existing = await _dbContext.SubtitleFiles
@@ -80,7 +82,7 @@ namespace DlnaServer.Persistence.Repositories
 
                 if (mediaByDirectory.TryGetValue(directory, out var ownMedia))
                 {
-                    foreach (var match in SubtitleMatcher.Match(ownMedia, fileNames))
+                    foreach (var match in SubtitleMatcher.Match(ownMedia, fileNames, subtitleTypes))
                     {
                         wanted[(match.Key, match.FileName)] = match.Language;
                         matchedHere.Add(match.FileName);
@@ -93,15 +95,22 @@ namespace DlnaServer.Persistence.Repositories
                     var folderName = Path.GetFileName(directory);
                     var leftOver = fileNames.Where(n => !matchedHere.Contains(n)).ToList();
 
-                    foreach (var match in SubtitleMatcher.Match(parentMedia, leftOver))
+                    foreach (var match in SubtitleMatcher.Match(parentMedia, leftOver, subtitleTypes))
                     {
                         wanted[(match.Key, $"{folderName}/{match.FileName}")] = match.Language;
                     }
                 }
             }
 
+            bool IsListedType(string relativePath)
+            {
+                return subtitleTypes.ContainsKey(Path.GetExtension(relativePath));
+            }
+
+            // Only manual links that survive this sync: one of a type no longer listed is dropped below, and
+            // must not keep its media's automatic links away for one more scan.
             var withManualLinks = existing
-                .Where(static s => s.Source == SubtitleSource.Manual)
+                .Where(s => s.Source == SubtitleSource.Manual && IsListedType(s.RelativePath))
                 .Select(static s => s.MediaFileId)
                 .ToHashSet();
             var known = existing
@@ -125,6 +134,14 @@ namespace DlnaServer.Persistence.Repositories
             {
                 var isAutomatic = link.Source == SubtitleSource.Automatic;
                 var fullPath = ResolveFullPath(link.MediaFullPath, link.RelativePath);
+
+                // A type taken off the list is refused wherever a link is served, and the scan stopped reporting
+                // its files, so nothing below would ever drop the link. A removed marker is harmless and stays.
+                if (link.Source != SubtitleSource.Removed && !IsListedType(link.RelativePath))
+                {
+                    toDrop.Add(link.Id);
+                    continue;
+                }
 
                 // The operator's choice is kept until it cannot work: its file gone - deleted, or left
                 // behind when the film moved - or its folder excluded, which a manual link may not point into.
@@ -261,26 +278,34 @@ namespace DlnaServer.Persistence.Repositories
 
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-            // A manual link replaces the automatic ones outright, so a television never sees both sets.
-            _ = await _dbContext.SubtitleFiles
-                .Where(s => s.MediaFileId == id && s.Source == SubtitleSource.Automatic && s.RelativePath != relativePath)
-                .ExecuteDeleteAsync(cancellationToken);
-
-            var row = await _dbContext.SubtitleFiles
-                .FirstOrDefaultAsync(s => s.MediaFileId == id && s.RelativePath == relativePath, cancellationToken);
-
-            if (row is null)
+            try
             {
-                row = new SubtitleFileEntity { MediaFileId = id, RelativePath = relativePath };
-                _ = _dbContext.SubtitleFiles.Add(row);
+                // A manual link replaces the automatic ones outright, so a television never sees both sets.
+                _ = await _dbContext.SubtitleFiles
+                    .Where(s => s.MediaFileId == id && s.Source == SubtitleSource.Automatic && s.RelativePath != relativePath)
+                    .ExecuteDeleteAsync(cancellationToken);
+
+                var row = await _dbContext.SubtitleFiles
+                    .FirstOrDefaultAsync(s => s.MediaFileId == id && s.RelativePath == relativePath, cancellationToken);
+
+                if (row is null)
+                {
+                    row = new SubtitleFileEntity { MediaFileId = id, RelativePath = relativePath };
+                    _ = _dbContext.SubtitleFiles.Add(row);
+                }
+
+                row.Source = SubtitleSource.Manual;
+                row.Language = NormaliseLanguage(language) ?? row.Language;
+
+                _ = await _dbContext.SaveChangesSurfacingDbExceptionAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
             }
-
-            row.Source = SubtitleSource.Manual;
-            row.Language = NormaliseLanguage(language) ?? row.Language;
-
-            _ = await _dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            _dbContext.ChangeTracker.Clear();
+            finally
+            {
+                // The admin circuit keeps this context for its whole life, so a row left tracked by a
+                // failed save would be re-submitted by the next write from any page in it.
+                _dbContext.ChangeTracker.Clear();
+            }
 
             return true;
         }

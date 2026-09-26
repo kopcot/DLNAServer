@@ -1,4 +1,9 @@
+using DlnaServer.Core.Dlna;
 using DlnaServer.Media.Processing;
+using DlnaServer.Media.Processing.Provisioning;
+using DlnaServer.Media.Processing.Thumbnails;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xabe.FFmpeg;
 
 namespace DlnaServer.UnitTests.Media
 {
@@ -57,6 +62,54 @@ namespace DlnaServer.UnitTests.Media
 
             // Assert
             isRace.Should().BeFalse("because an exception that was never thrown cannot have come from Xabe");
+        }
+
+        /// <summary>
+        /// A probe that times out is a failed read, not a file with no streams.
+        /// </summary>
+        /// <remarks>
+        /// It returned an empty result, so the caller saved it: the file's stored streams were wiped and it
+        /// was stamped done with no failure recorded, and <c>MaxFailureCount</c> never saw it. The seam
+        /// throws what the linked timeout token throws, while the caller's own token stays live.
+        /// </remarks>
+        [Test]
+        public async Task ExtractMetadataAsync_WhenTheProbeTimesOut_ReportsAReadFailure()
+        {
+            // Arrange
+            var processor = new MediaProcessor(
+                new AvailableFFmpeg(),
+                new ImageThumbnailGenerator(NullLogger<ImageThumbnailGenerator>.Instance),
+                NullLogger<MediaProcessor>.Instance,
+                getMediaInfo: static (_, _) => throw new OperationCanceledException());
+
+            var settings = new MediaProcessingSettings(
+                MaxWidth: 160,
+                MaxHeight: 160,
+                Quality: 80,
+                ThumbnailMime: DlnaMime.ImageJpeg,
+                StoreThumbnailContent: false,
+                AllowFFmpegDownload: false,
+                ReadContainerTags: false);
+
+            // Act
+            var metadata = await processor.ExtractMetadataAsync(
+                filePath: Path.Combine(Path.GetTempPath(), "hung.mkv"),
+                mime: DlnaMime.VideoXMatroska,
+                settings: settings,
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            metadata.Should().BeNull(
+                "because a timed-out probe read nothing, and only null makes the caller record a failure "
+                + "instead of saving an empty result over the file's streams");
+        }
+
+        private sealed class AvailableFFmpeg : IFFmpegProvisioner
+        {
+            public Task<bool> EnsureAvailableAsync(bool allowDownload, CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(true);
+            }
         }
     }
 }

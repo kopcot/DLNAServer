@@ -925,6 +925,27 @@ namespace DlnaServer.IntegrationTests
         }
 
         [Test]
+        public async Task IndexAsync_AfterASubtitleTypeIsTakenOffTheList_UnlinksItsFilesAndLinksANewType()
+        {
+            // Arrange
+            var film = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            CreateFile(Path.Combine("movies", "film.srt"), sizeInBytes: 10);
+            CreateFile(Path.Combine("movies", "film.en.txt"), sizeInBytes: 10);
+            _ = await IndexAsync();
+            var options = CreateOptions();
+            _ = options.Library.SubtitleFileExtensions.Remove(".srt");
+            options.Library.SubtitleFileExtensions[".txt"] = DlnaMedia.Video;
+
+            // Act
+            _ = await IndexAsync(options);
+            var links = await SubtitlesOfAsync(film);
+
+            // Assert
+            links.Should().ContainSingle("because the next scan follows the edited list, and film.srt is still on disc")
+                .Which.RelativePath.Should().Be("film.en.txt", "because .txt was added and .srt taken off the list");
+        }
+
+        [Test]
         public async Task IndexAsync_AfterTheOperatorRemovedAnAutomaticLink_DoesNotAddItBack()
         {
             // Arrange
@@ -1449,6 +1470,41 @@ namespace DlnaServer.IntegrationTests
         }
 
         /// <summary>
+        /// A source folder that becomes unusable part-way through a pass stops the deletions there.
+        /// </summary>
+        /// <remarks>
+        /// The gate runs once, before a reconcile that pages through the whole index. A share that
+        /// unmounts after it leaves an empty mountpoint, where every file and folder beneath reads as
+        /// definitely absent - so without a re-check the rest of the pass deleted them, cascading.
+        /// </remarks>
+        [Test]
+        public async Task IndexAsync_WhenASourceFolderBecomesUnusableMidPass_DeletesNothingMore()
+        {
+            // Arrange
+            _ = CreateFile(Path.Combine("movies", "film.mkv"), sizeInBytes: 100);
+            _ = CreateFile("photo.jpg", sizeInBytes: 50);
+            _ = await IndexAsync();
+
+            Directory.Delete(Path.Combine(_mediaRoot, "movies"), recursive: true);
+            File.Delete(Path.Combine(_mediaRoot, "photo.jpg"));
+
+            // Act - usable for the gate at the start of the pass, unusable for every check after it.
+            var result = await IndexWithCheckerAsync(new LaterUnusableSourceFolderChecker(usableChecks: 1));
+
+            // Assert
+            result.FilesRemoved.Should().Be(0,
+                "because the folder was unusable by the time the missing rows would have been deleted");
+            result.DirectoriesRemoved.Should().Be(0,
+                "because a directory delete cascades, so the folder pass must stop as well");
+
+            using var scope = _provider.CreateScope();
+            var files = scope.ServiceProvider.GetRequiredService<IMediaFileRepository>();
+
+            (await files.CountAsync(CancellationToken.None)).Should().Be(2,
+                "because rows are the only record of the library while its share is away");
+        }
+
+        /// <summary>
         /// Every indexed directory's path and the date the row records as its own indexing time.
         /// </summary>
         private async Task<Dictionary<string, DateTime>> ReadIndexedDirectoryDatesAsync()
@@ -1957,6 +2013,9 @@ namespace DlnaServer.IntegrationTests
             options.Library.MediaFileExtensions[".mkv"] = new MediaExtensionOptions { Mime = "VideoXMatroska" };
             options.Library.MediaFileExtensions[".jpg"] = new MediaExtensionOptions { Mime = "ImageJpeg" };
             options.Library.MediaFileExtensions[".mp3"] = new MediaExtensionOptions { Mime = "AudioMpeg" };
+
+            // Seeded by DlnaOptionsDefaults in production, which this fixture does not run.
+            options.Library.SubtitleFileExtensions = SubtitleFileExtensionDefaults.Create();
 
             return options;
         }

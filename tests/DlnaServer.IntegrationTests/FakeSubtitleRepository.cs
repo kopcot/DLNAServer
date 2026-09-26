@@ -1,3 +1,4 @@
+using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Contracts;
 using DlnaServer.Persistence.Repositories;
 
@@ -14,6 +15,7 @@ namespace DlnaServer.IntegrationTests
         public Task<(int Added, int Dropped)> SyncAutomaticAsync(
             IReadOnlyDictionary<string, HashSet<string>> fileNamesByDirectory,
             IReadOnlyList<string> excludedFolders,
+            IReadOnlyDictionary<string, DlnaMedia> subtitleTypes,
             Func<string, bool> isDefinitelyAbsent,
             CancellationToken cancellationToken = default)
         {

@@ -1543,6 +1543,18 @@ Decided 2026-09-08, during the fix pass for the third `/review-all --full` (sect
     of the library. Closing it would need an open-then-verify helper, for example reading `/proc/self/fd` on
     Linux, shared by both endpoints. **Reporting this as a new finding is a false positive** unless the threat
     model changes.
+29. **The admin port answers the local network only, and that is not authentication** (`docs/history.md`
+    6u). `AdminSurfaceMiddleware` refuses an admin-port request whose socket peer is not local per
+    `LocalNetworkAddress` - private and link-local ranges, loopback, CGNAT (for Tailscale), and a global IPv6
+    peer in the server's own /64. The peer is recorded **before** `UseForwardedHeaders` rewrites it, which is
+    what keeps the Caddy overlay working without trusting a client-sent header. Decision 1 still stands; do
+    not read this as a step towards auth, and do not "simplify" it to read `RemoteIpAddress` after the
+    forwarder - that locks out the proxy's users or, the other way round, admits a forged header.
+30. **Kestrel's request-header limits stay at their defaults** (6u). They already bound a header flood; a
+    tighter limit turns a dev box's `localhost` cookie jar, which browsers do not scope by port, into 431s.
+    **Reporting the defaults as a finding is a false positive.**
+31. **Stop is refused while a database reset is pending** (6u). `/manage/stop` answers 409 and the page
+    says why. Clearing the restart flag would lose the reset; keeping it would turn Stop into a restart.
 
 ### Open work from the 2026-09-23 batches (6p to 6s)
 
@@ -1840,8 +1852,8 @@ question again later.
 **Deploying is not a routine redeploy, for two separate reasons.** The migration squash (6i) means a
 database older than `20260908162737_InitialSchema` fails to migrate, is moved aside as
 `dlna.sqlite.corrupt-<date>_<time>` and rebuilt empty - a full rescan and a new `PublicId` for every file,
-with thumbnails adopted rather than rebuilt. The **second** migration, `20260915173846_AddUploadDevices`,
-is additive and costs nothing on top of that. And the config-shaped fixes still want the live checks at
+with thumbnails adopted rather than rebuilt. Every migration after `InitialSchema` is additive and costs
+nothing on top of that. And the config-shaped fixes still want the live checks at
 the end of section 7b's open work, because this project's own rule is that a green suite does not verify
 them. After deploying, About reports the version - that is the quickest confirmation the redeploy took.
 

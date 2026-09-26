@@ -1,3 +1,5 @@
+using System.Net;
+
 namespace DlnaServer.Host.Controllers
 {
     public sealed partial class EventController
@@ -59,12 +61,14 @@ namespace DlnaServer.Host.Controllers
 
         /// <summary>
         /// Error, not warning: the store is bounded, so reaching the limit means subscriptions are
-        /// accumulating without being released - a renderer misbehaving, or a leak here.
+        /// accumulating without being released - a renderer misbehaving, or a leak here. The same holds
+        /// for one device reaching its own share.
         /// </summary>
         [LoggerMessage(
             EventId = 9,
             Level = LogLevel.Error,
-            Message = "Cannot accept a subscription to {ServiceId}: the subscription store is full")]
-        private partial void LogStoreFull(string serviceId);
+            Message = "Cannot accept a subscription to {ServiceId} from {Subscriber}: the subscription store "
+                + "is full, or that device already holds its share of it")]
+        private partial void LogStoreFull(string serviceId, IPAddress? subscriber);
     }
 }

@@ -13,7 +13,7 @@ namespace DlnaServer.IntegrationTests
         private static readonly DateTimeOffset _takenAt = new(2026, 9, 24, 8, 0, 0, TimeSpan.Zero);
 
         private static readonly LibraryCountsDto _counts =
-            new() { Total = 10, Video = 4, Audio = 3, Image = 2, Other = 1 };
+            new() { Total = 10, Video = 4, Audio = 3, Image = 2, Other = 1, Subtitles = 0 };
 
         [Test]
         public void Find_ForTheSameGenerationAndHiddenFolders_ReturnsTheStoredCounts()

@@ -157,6 +157,91 @@ namespace DlnaServer.IntegrationTests
             queued.FilePath.Should().Be(FilePath, "because the queued read is for that same file");
         }
 
+        [Test]
+        public async Task ResolveThumbnailAsync_WhenHeldInMemory_ServesFromTheCache()
+        {
+            // Arrange
+            var thumbnail = CreateThumbnail(Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.jpg"));
+            _cache.Store(thumbnail.FilePath, CachedContentClass.Thumbnail, new byte[] { 1, 2, 3 });
+
+            // Act
+            var (source, content) = await _resolver.ResolveThumbnailAsync(
+                thumbnail: thumbnail,
+                files: new RecordingMediaFileRepository(),
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            source.Should().Be(ThumbnailSource.Cache, "because memory is the first source tried");
+            content.Length.Should().Be(3, "because the caller streams the held payload");
+        }
+
+        /// <summary>
+        /// A file that exists but cannot be held - caching switched off - is still served, straight from disc.
+        /// </summary>
+        [Test]
+        public async Task ResolveThumbnailAsync_WhenTheFileCannotBeCached_ServesItFromDisc()
+        {
+            // Arrange
+            var options = new DlnaOptions();
+            options.FileCache.Enabled = false;
+
+            using var cache = new ServedFileCache(
+                new StaticOptionsMonitor<DlnaOptions>(options),
+                TimeProvider.System,
+                NullLogger<ServedFileCache>.Instance);
+            var resolver = new MediaContentResolver(cache, _backlog);
+            var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.jpg");
+            await File.WriteAllBytesAsync(path, [1, 2, 3]);
+
+            try
+            {
+                // Act
+                var (source, content) = await resolver.ResolveThumbnailAsync(
+                    thumbnail: CreateThumbnail(path),
+                    files: new RecordingMediaFileRepository(),
+                    cancellationToken: CancellationToken.None);
+
+                // Assert
+                source.Should().Be(ThumbnailSource.Disc, "because the file is there and only memory is unavailable");
+                content.IsEmpty.Should().BeTrue("because the caller streams the file itself");
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [Test]
+        public async Task ResolveThumbnailAsync_WhenFoundNowhere_ReportsNone()
+        {
+            // Arrange
+            var thumbnail = CreateThumbnail(Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.jpg"));
+
+            // Act
+            var (source, _) = await _resolver.ResolveThumbnailAsync(
+                thumbnail: thumbnail,
+                files: new RecordingMediaFileRepository(),
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            source.Should().Be(ThumbnailSource.None, "because every source has been tried by this point");
+        }
+
+        private static ThumbnailDto CreateThumbnail(string filePath)
+        {
+            return new ThumbnailDto
+            {
+                PublicId = Guid.NewGuid(),
+                MediaFilePublicId = Guid.NewGuid(),
+                FilePath = filePath,
+                Mime = DlnaMime.ImageJpeg,
+                Width = 160,
+                Height = 90,
+                SizeInBytes = 3,
+                HasStoredContent = false,
+            };
+        }
+
         private static MediaFileDto CreateFile(bool isExcludedFromCache = false, long sizeInBytes = 1024)
         {
             return new MediaFileDto

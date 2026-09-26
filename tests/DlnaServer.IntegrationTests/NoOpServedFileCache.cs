@@ -47,8 +47,12 @@ namespace DlnaServer.IntegrationTests
                 Misses = 0,
                 DatabaseHits = 0,
                 ReadsInFlight = 0,
-                Paths = [],
             };
+        }
+
+        public IReadOnlyList<string> ListPaths()
+        {
+            return [];
         }
 
         public int Clear()

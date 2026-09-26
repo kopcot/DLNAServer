@@ -175,6 +175,32 @@ namespace DlnaServer.Host.Upnp.Control
         }
 
         /// <summary>
+        /// The links whose type is still a configured subtitle type - the ones <c>GetSubtitle</c> will serve.
+        /// </summary>
+        /// <remarks>
+        /// A type removed on Settings drops its links only at the next scan, while the file server refuses
+        /// them at once. Filtering here keeps a television from being offered a subtitle that then 404s in
+        /// between. Returns the list it was given when nothing is left out, which is the usual case.
+        /// </remarks>
+        public static IReadOnlyList<SubtitleFileDto> Offerable(
+            IReadOnlyList<SubtitleFileDto> subtitles,
+            IDictionary<string, DlnaMedia> subtitleTypes)
+        {
+            ArgumentNullException.ThrowIfNull(subtitles);
+            ArgumentNullException.ThrowIfNull(subtitleTypes);
+
+            for (var i = 0; i < subtitles.Count; i++)
+            {
+                if (!subtitleTypes.ContainsKey(Path.GetExtension(subtitles[i].RelativePath)))
+                {
+                    return subtitles.Where(s => subtitleTypes.ContainsKey(Path.GetExtension(s.RelativePath))).ToArray();
+                }
+            }
+
+            return subtitles;
+        }
+
+        /// <summary>
         /// The one subtitle a Samsung television is told about, which reads a single subtitle from
         /// <c>sec:CaptionInfoEx</c> or the <c>CaptionInfo.sec</c> header: the first SRT, the format it is
         /// surest to show, or else the first subtitle.

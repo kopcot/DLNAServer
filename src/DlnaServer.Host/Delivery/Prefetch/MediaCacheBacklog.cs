@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using DlnaServer.Core.Delivery;
 
 namespace DlnaServer.Host.Delivery.Prefetch
 {
@@ -11,6 +12,16 @@ namespace DlnaServer.Host.Delivery.Prefetch
         /// memory, so a longer backlog would describe more work than the budget can hold anyway.
         /// </summary>
         private const int Capacity = 32;
+
+        /// <summary>
+        /// How many of those slots previews may hold at once, waiting or being read.
+        /// </summary>
+        /// <remarks>
+        /// Browse warms a whole page of previews at a time, so without a cap one page filled the backlog
+        /// and the film a television asked for next was refused - the one read the cache exists for. The
+        /// remaining slots are left to media.
+        /// </remarks>
+        private const int MaxWaitingThumbnails = 24;
 
         /// <remarks>
         /// <see cref="BoundedChannelFullMode.Wait"/> is what makes the writer report a full backlog:
@@ -25,7 +36,10 @@ namespace DlnaServer.Host.Delivery.Prefetch
                 SingleReader = true,
             });
 
-        private readonly ConcurrentDictionary<string, byte> _waitingPaths = new(StringComparer.Ordinal);
+        // Valued by content class, so releasing a path knows whether it gives a preview slot back.
+        private readonly ConcurrentDictionary<string, CachedContentClass> _waitingPaths = new(StringComparer.Ordinal);
+
+        private int _waitingThumbnails;
 
         public ChannelReader<MediaCacheRequest> Reader => _channel.Reader;
 
@@ -33,10 +47,24 @@ namespace DlnaServer.Host.Delivery.Prefetch
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(request.FilePath);
 
+            var isThumbnail = request.ContentClass == CachedContentClass.Thumbnail;
+
+            // Reserved before the path is claimed, so two concurrent pages cannot both slip past the cap.
+            if (isThumbnail && Interlocked.Increment(ref _waitingThumbnails) > MaxWaitingThumbnails)
+            {
+                _ = Interlocked.Decrement(ref _waitingThumbnails);
+                return false;
+            }
+
             // A renderer issues many range requests for one file, so without this the same file would be
             // added - and read - dozens of times over a single playback.
-            if (!_waitingPaths.TryAdd(request.FilePath, value: 0))
+            if (!_waitingPaths.TryAdd(request.FilePath, request.ContentClass))
             {
+                if (isThumbnail)
+                {
+                    _ = Interlocked.Decrement(ref _waitingThumbnails);
+                }
+
                 return false;
             }
 
@@ -53,7 +81,10 @@ namespace DlnaServer.Host.Delivery.Prefetch
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
-            _ = _waitingPaths.TryRemove(filePath, out _);
+            if (_waitingPaths.TryRemove(filePath, out var contentClass) && contentClass == CachedContentClass.Thumbnail)
+            {
+                _ = Interlocked.Decrement(ref _waitingThumbnails);
+            }
         }
     }
 }

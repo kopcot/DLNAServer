@@ -53,10 +53,5 @@ namespace DlnaServer.Core.Delivery
         /// Reads being shared between concurrent callers at this instant.
         /// </summary>
         public required int ReadsInFlight { get; init; }
-
-        /// <summary>
-        /// Every cached path, which is what makes the holding visible rather than a total.
-        /// </summary>
-        public required IReadOnlyList<string> Paths { get; init; }
     }
 }

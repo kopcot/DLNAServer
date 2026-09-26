@@ -123,6 +123,36 @@ namespace DlnaServer.IntegrationTests
                 + "never initialised");
         }
 
+        /// <summary>
+        /// A failed initialisation exits non-zero, so it cannot be mistaken for a requested stop.
+        /// </summary>
+        [Test]
+        public async Task StartAsync_WhenInitialisationThrows_SetsAFailingExitCode()
+        {
+            // Arrange
+            var initializer = new FakeDatabaseInitializer { Fail = true };
+            using var lifetime = new RecordingApplicationLifetime();
+            var readySignal = new DatabaseReadySignal();
+
+            using var service = CreateService(initializer, lifetime, readySignal);
+
+            try
+            {
+                // Act
+                await service.StartAsync(CancellationToken.None);
+                await service.ExecuteTask!;
+
+                // Assert
+                Environment.ExitCode.Should().NotBe(0,
+                    "because StopApplication alone exits 0, which is exactly what /manage/stop looks like");
+            }
+            finally
+            {
+                // Process-wide, and this process is the test host.
+                Environment.ExitCode = 0;
+            }
+        }
+
         private sealed class FakeDatabaseInitializer : IDatabaseInitializer
         {
             public bool Fail { get; init; }

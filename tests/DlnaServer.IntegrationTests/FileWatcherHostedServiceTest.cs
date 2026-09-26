@@ -196,6 +196,86 @@ namespace DlnaServer.IntegrationTests
             _indexer.Passes.Should().Be(2, "because both attempts reached the indexer");
         }
 
+        /// <summary>
+        /// A watch that faults straight after every rebuild is rebuilt at a backing-off pace.
+        /// </summary>
+        /// <remarks>
+        /// An exhausted inotify limit faults every rebuilt watch, and each fault also asks for a resync -
+        /// so a rebuild per two-second tick meant a full pass per tick, back to back.
+        /// </remarks>
+        [Test]
+        public void TryTakeFaultRestart_ForRepeatedFaults_BacksOff()
+        {
+            // Act
+            var first = _service.TryTakeFaultRestart(isFaultRaised: true);
+            var immediateRepeat = _service.TryTakeFaultRestart(isFaultRaised: true);
+
+            _time.Advance(TimeSpan.FromSeconds(59));
+            var beforeOneMinute = _service.TryTakeFaultRestart(isFaultRaised: false);
+
+            _time.Advance(TimeSpan.FromSeconds(1));
+            var afterOneMinute = _service.TryTakeFaultRestart(isFaultRaised: false);
+
+            _time.Advance(TimeSpan.FromMinutes(1));
+            var thirdTooSoon = _service.TryTakeFaultRestart(isFaultRaised: true);
+
+            _time.Advance(TimeSpan.FromMinutes(1));
+            var thirdOnTime = _service.TryTakeFaultRestart(isFaultRaised: false);
+
+            // Assert
+            first.Should().BeTrue("because a first fault is rebuilt at once - the watch is dead");
+            immediateRepeat.Should().BeFalse(
+                "because a fault straight after a rebuild waits out the first backoff step");
+            beforeOneMinute.Should().BeFalse("because the first backoff step is one minute");
+            afterOneMinute.Should().BeTrue(
+                "because the fault consumed earlier is remembered and served once its wait is over");
+            thirdTooSoon.Should().BeFalse("because the wait doubles to two minutes after the second rebuild");
+            thirdOnTime.Should().BeTrue("because two minutes have passed since the second rebuild");
+        }
+
+        [Test]
+        public void TryTakeFaultRestart_AfterAHealthyHour_RebuildsAtOnce()
+        {
+            // Arrange
+            _ = _service.TryTakeFaultRestart(isFaultRaised: true);
+            _time.Advance(TimeSpan.FromMinutes(1));
+            _ = _service.TryTakeFaultRestart(isFaultRaised: true);
+
+            // Act
+            _time.Advance(TimeSpan.FromHours(1));
+            var restarted = _service.TryTakeFaultRestart(isFaultRaised: true);
+
+            // Assert
+            restarted.Should().BeTrue(
+                "because a watch that stayed up for an hour was healthy, so its next fault starts a new streak");
+        }
+
+        [Test]
+        public void TryTakeFaultRestart_WithoutAFault_DoesNotRestart()
+        {
+            // Act
+            var restarted = _service.TryTakeFaultRestart(isFaultRaised: false);
+
+            // Assert
+            restarted.Should().BeFalse("because nothing faulted");
+        }
+
+        [TestCase(1, 1)]
+        [TestCase(2, 2)]
+        [TestCase(3, 4)]
+        [TestCase(5, 16)]
+        [TestCase(6, 30)]
+        [TestCase(5_000, 30)]
+        public void ResolveFaultRestartDelay_DoublesToTheCap(int consecutiveFaultRestarts, int expectedMinutes)
+        {
+            // Act
+            var delay = FileWatcherHostedService.ResolveFaultRestartDelay(consecutiveFaultRestarts);
+
+            // Assert
+            delay.Should().Be(TimeSpan.FromMinutes(expectedMinutes),
+                $"because {consecutiveFaultRestarts} rebuild(s) in a row wait {expectedMinutes} minute(s) before the next");
+        }
+
         private sealed class RecordingIndexer : ILibraryIndexer
         {
             public int Passes { get; private set; }

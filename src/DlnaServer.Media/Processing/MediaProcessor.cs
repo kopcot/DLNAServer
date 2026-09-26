@@ -30,14 +30,28 @@ namespace DlnaServer.Media.Processing
         private readonly ImageThumbnailGenerator _imageThumbnails;
         private readonly ILogger<MediaProcessor> _logger;
 
+        // The ffprobe call, a seam only so a test can make it time out: Xabe's entry point is static and
+        // refuses to run without real binaries, so the timeout arm is otherwise unreachable in a test.
+        private readonly Func<string, CancellationToken, Task<IMediaInfo>> _getMediaInfo;
+
         public MediaProcessor(
             IFFmpegProvisioner ffmpeg,
             ImageThumbnailGenerator imageThumbnails,
             ILogger<MediaProcessor> logger)
+            : this(ffmpeg, imageThumbnails, logger, FFmpeg.GetMediaInfo)
+        {
+        }
+
+        internal MediaProcessor(
+            IFFmpegProvisioner ffmpeg,
+            ImageThumbnailGenerator imageThumbnails,
+            ILogger<MediaProcessor> logger,
+            Func<string, CancellationToken, Task<IMediaInfo>> getMediaInfo)
         {
             _ffmpeg = ffmpeg;
             _imageThumbnails = imageThumbnails;
             _logger = logger;
+            _getMediaInfo = getMediaInfo;
         }
 
         public async Task<MediaMetadataResult?> ExtractMetadataAsync(
@@ -80,7 +94,7 @@ namespace DlnaServer.Media.Processing
             {
                 using var timeout = CreateTimeout(cancellationToken);
 
-                var info = await FFmpeg.GetMediaInfo(filePath, timeout.Token);
+                var info = await _getMediaInfo(filePath, timeout.Token);
 
                 return new MediaMetadataResult(
                     MapAudioStreams(info),
@@ -95,7 +109,7 @@ namespace DlnaServer.Media.Processing
                 // The timeout fired, not the host stopping. Reported as a read failure so the caller
                 // records the attempt - which is what lets MaxFailureCount retire the file.
                 LogFFmpegTimedOut(filePath, (int)_ffmpegTimeout.TotalSeconds);
-                return MediaMetadataResult.Empty;
+                return null;
             }
             catch (OperationCanceledException)
             {
@@ -197,7 +211,7 @@ namespace DlnaServer.Media.Processing
         /// The extracted frame goes to a temporary file that is always deleted, so a failure part-way
         /// through cannot leave stray frames accumulating in the cache directory.
         /// </remarks>
-        private async Task<GeneratedThumbnail?> GenerateVideoThumbnailAsync(
+        private Task<GeneratedThumbnail?> GenerateVideoThumbnailAsync(
             string filePath,
             string targetPath,
             ThumbnailRequest request,
@@ -205,89 +219,33 @@ namespace DlnaServer.Media.Processing
             TimeSpan? knownDuration,
             CancellationToken cancellationToken)
         {
-            if (IsUnsafeForFFmpeg(filePath))
-            {
-                LogUnsafePathRefused(filePath);
-                return null;
-            }
-
-            if (!await _ffmpeg.EnsureAvailableAsync(settings.AllowFFmpegDownload, cancellationToken))
-            {
-                return null;
-            }
-
-            var framePath = Path.Combine(
-                Path.GetDirectoryName(targetPath)!,
-                $"{Path.GetFileNameWithoutExtension(targetPath)}.frame.png");
-
-            try
-            {
-                _ = Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-
-                using var timeout = CreateTimeout(cancellationToken);
-
-                // Probed under the timeout token, and the conversion built by hand rather than through
-                // FromSnippet.Snapshot. That helper takes no token and calls GetMediaInfo itself, so the
-                // probe ran outside the very timeout this method sets up - reopening the hang that
-                // stopped the whole processing loop, and with MaxWorkers at 2 it takes only two such
-                // files to stop it for good.
-                //
-                // It costs no extra work: Snapshot probed internally on every call anyway, so skipping
-                // our own probe when knownDuration was supplied saved nothing - the fork and exec
-                // happened regardless, just untimed and invisible. This is one probe either way.
-                var info = await FFmpeg.GetMediaInfo(filePath, timeout.Token);
-                var videoStream = info.VideoStreams.FirstOrDefault();
-
-                if (videoStream is null)
+            return GenerateFrameThumbnailAsync(
+                filePath,
+                targetPath,
+                request,
+                settings,
+                (info, framePath) =>
                 {
-                    return null;
-                }
+                    var videoStream = info.VideoStreams.FirstOrDefault();
 
-                var captureAt = VideoCaptureTime.For(knownDuration ?? videoStream.Duration);
+                    if (videoStream is null)
+                    {
+                        return null;
+                    }
 
-                // Deleted first rather than overwritten, matching GenerateAudioThumbnailAsync: a previous
-                // run killed part-way through leaves the frame behind, and ffmpeg then stops to ask
-                // whether to overwrite it, on stdin that nothing is attached to - so the file stalled the
-                // full timeout on every later pass. The audio path documented this and the video path,
-                // which writes the same .frame.png, did not do it.
-                TryDeleteFrame(framePath);
+                    var captureAt = VideoCaptureTime.For(knownDuration ?? videoStream.Duration);
 
-                var conversion = FFmpeg.Conversions.New()
-                    .AddStream(videoStream.SetOutputFramesCount(1).SetSeek(captureAt))
-                    .SetOutput(framePath);
+                    var conversion = FFmpeg.Conversions.New()
+                        .AddStream(videoStream.SetOutputFramesCount(1).SetSeek(captureAt))
+                        .SetOutput(framePath);
 
-                // A fast preset: this extracts one frame, and the reference used VerySlow here, which is
-                // an encoding-effort setting that buys nothing for a single still and costs real CPU.
-                _ = conversion.SetPreset(ConversionPreset.VeryFast);
+                    // A fast preset: this extracts one frame, and the reference used VerySlow here, which is
+                    // an encoding-effort setting that buys nothing for a single still and costs real CPU.
+                    _ = conversion.SetPreset(ConversionPreset.VeryFast);
 
-                await StartConversionAsync(conversion, filePath, framePath, timeout.Token);
-
-                return _imageThumbnails.Generate(framePath, targetPath, request);
-            }
-            catch (ConversionException exception)
-            {
-                LogThumbnailConversionFailed(filePath, FFmpegFailureReason.Summarise(exception.Message));
-                return null;
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                // The timeout fired, not the host stopping - see CreateTimeout.
-                LogFFmpegTimedOut(filePath, (int)_ffmpegTimeout.TotalSeconds);
-                return null;
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                LogThumbnailFailed(filePath, FFmpegFailureReason.Summarise(exception.Message));
-                return null;
-            }
-            finally
-            {
-                TryDeleteFrame(framePath);
-            }
+                    return conversion;
+                },
+                cancellationToken);
         }
 
         /// <summary>
@@ -373,11 +331,44 @@ namespace DlnaServer.Media.Processing
         /// to a temporary PNG rather than copied out, so a JPEG and a PNG cover take the same path.
         /// </para>
         /// </remarks>
-        private async Task<GeneratedThumbnail?> GenerateAudioThumbnailAsync(
+        private Task<GeneratedThumbnail?> GenerateAudioThumbnailAsync(
             string filePath,
             string targetPath,
             ThumbnailRequest request,
             MediaProcessingSettings settings,
+            CancellationToken cancellationToken)
+        {
+            return GenerateFrameThumbnailAsync(
+                filePath,
+                targetPath,
+                request,
+                settings,
+                (info, framePath) =>
+                {
+                    var artwork = info.VideoStreams.FirstOrDefault();
+
+                    if (artwork is null)
+                    {
+                        LogNoEmbeddedArtwork(filePath);
+                        return null;
+                    }
+
+                    return FFmpeg.Conversions.New()
+                        .AddStream(artwork)
+                        .SetOutput(framePath);
+                },
+                cancellationToken);
+        }
+
+        // Shared by the video and audio thumbnails. buildConversion picks the stream and returns a
+        // conversion writing to the frame path, or null when there is nothing to make one from - and must
+        // not touch the disc, because the leftover frame is only deleted after it returns.
+        private async Task<GeneratedThumbnail?> GenerateFrameThumbnailAsync(
+            string filePath,
+            string targetPath,
+            ThumbnailRequest request,
+            MediaProcessingSettings settings,
+            Func<IMediaInfo, string, IConversion?> buildConversion,
             CancellationToken cancellationToken)
         {
             if (IsUnsafeForFFmpeg(filePath))
@@ -401,23 +392,27 @@ namespace DlnaServer.Media.Processing
 
                 using var timeout = CreateTimeout(cancellationToken);
 
-                var info = await FFmpeg.GetMediaInfo(filePath, timeout.Token);
-                var artwork = info.VideoStreams.FirstOrDefault();
+                // Probed under the timeout token, and the conversion built by hand rather than through
+                // FromSnippet.Snapshot. That helper takes no token and calls GetMediaInfo itself, so the
+                // probe ran outside the very timeout this method sets up - reopening the hang that
+                // stopped the whole processing loop, and with MaxWorkers at 2 it takes only two such
+                // files to stop it for good.
+                //
+                // It costs no extra work: Snapshot probed internally on every call anyway, so skipping
+                // our own probe when knownDuration was supplied saved nothing - the fork and exec
+                // happened regardless, just untimed and invisible. This is one probe either way.
+                var info = await _getMediaInfo(filePath, timeout.Token);
+                var conversion = buildConversion(info, framePath);
 
-                if (artwork is null)
+                if (conversion is null)
                 {
-                    LogNoEmbeddedArtwork(filePath);
                     return null;
                 }
 
                 // Deleted first rather than overwritten: a previous run killed part-way through leaves
                 // the file behind, and ffmpeg then stops to ask whether to overwrite it, on stdin that
-                // nothing is attached to.
+                // nothing is attached to - so the file stalled the full timeout on every later pass.
                 TryDeleteFrame(framePath);
-
-                var conversion = FFmpeg.Conversions.New()
-                    .AddStream(artwork)
-                    .SetOutput(framePath);
 
                 await StartConversionAsync(conversion, filePath, framePath, timeout.Token);
 

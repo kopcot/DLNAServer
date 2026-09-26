@@ -1,5 +1,6 @@
 using DlnaServer.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace DlnaServer.UnitTests.Persistence
 {
@@ -22,10 +23,11 @@ namespace DlnaServer.UnitTests.Persistence
             context.Database.Migrate();
         }
 
-        public DlnaDbContext CreateContext()
+        public DlnaDbContext CreateContext(params IInterceptor[] interceptors)
         {
             var options = new DbContextOptionsBuilder<DlnaDbContext>()
                 .UseSqlite($"Data Source={_databasePath}")
+                .AddInterceptors(interceptors)
                 .Options;
 
             return new DlnaDbContext(options);

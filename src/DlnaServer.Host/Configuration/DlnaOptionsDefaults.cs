@@ -1,4 +1,5 @@
 using DlnaServer.Core.Configuration;
+using DlnaServer.Core.Dlna;
 
 namespace DlnaServer.Host.Configuration
 {
@@ -48,7 +49,44 @@ namespace DlnaServer.Host.Configuration
             // needs the same repair against the ConfigurationBinder append described below.
             options.Library.TemporarilyHiddenFolders = Deduplicate(options.Library.TemporarilyHiddenFolders);
 
+            ApplySubtitleFileExtensionDefaults(options.Library);
             ApplySourceFolderFallback(options);
+        }
+
+        /// <summary>
+        /// Seeds the shipped subtitle types when configuration names none, and puts every key in the form
+        /// the file types editor stores - lower case, with a leading dot - either way.
+        /// </summary>
+        /// <remarks>
+        /// Always a fresh case-insensitive map, whatever the binder built, so every reader can look an
+        /// extension up in it directly. An empty list is not a way to switch linking off - it would link
+        /// nothing and send nothing - so it means "not configured"; <c>Compatibility.SendSubtitles</c> is the
+        /// switch for that.
+        /// </remarks>
+        private static void ApplySubtitleFileExtensionDefaults(LibraryOptions library)
+        {
+            var normalised = new Dictionary<string, DlnaMedia>(library.SubtitleFileExtensions.Count, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (extension, kind) in library.SubtitleFileExtensions)
+            {
+                var key = extension.Trim().ToLowerInvariant();
+
+                if (key.Length == 0)
+                {
+                    continue;
+                }
+
+                if (!key.StartsWith('.'))
+                {
+                    key = "." + key;
+                }
+
+                normalised[key] = kind;
+            }
+
+            library.SubtitleFileExtensions = normalised.Count == 0
+                ? SubtitleFileExtensionDefaults.Create()
+                : normalised;
         }
 
         /// <summary>

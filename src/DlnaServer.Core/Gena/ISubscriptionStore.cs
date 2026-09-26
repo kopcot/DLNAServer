@@ -1,3 +1,5 @@
+using System.Net;
+
 namespace DlnaServer.Core.Gena
 {
     /// <summary>
@@ -11,13 +13,27 @@ namespace DlnaServer.Core.Gena
     public interface ISubscriptionStore
     {
         /// <summary>
-        /// Creates a subscription and returns it, or null when the store is full.
+        /// Creates a subscription and returns it, or null when the store is full or
+        /// <paramref name="subscriber"/> already holds its share of it.
         /// </summary>
         /// <remarks>
         /// Null means the server must answer <c>503 Service Unavailable</c>, which is what the
-        /// specification prescribes for a device that cannot accept another subscriber.
+        /// specification prescribes for a device that cannot accept another subscriber. The per-device
+        /// share is what stops one device that subscribes in a loop from holding every slot and refusing
+        /// every television after it.
         /// </remarks>
-        EventSubscription? Add(string serviceId, IReadOnlyList<string> callbackUrls, TimeSpan granted);
+        /// <param name="serviceId">Service subscribed to, from the <c>eventSubURL</c> that was called.</param>
+        /// <param name="callbackUrls">Where NOTIFY messages would be delivered.</param>
+        /// <param name="granted">Lifetime granted.</param>
+        /// <param name="subscriber">
+        /// The address the request came from - the connection's, never the callback's, which the device
+        /// chooses freely. Null when there is no socket behind the request.
+        /// </param>
+        EventSubscription? Add(
+            string serviceId,
+            IReadOnlyList<string> callbackUrls,
+            TimeSpan granted,
+            IPAddress? subscriber);
 
         /// <summary>
         /// Extends an existing subscription, or returns null when the identifier is unknown or lapsed.

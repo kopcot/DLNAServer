@@ -308,10 +308,11 @@ namespace DlnaServer.Host.Upnp.Control
         /// </summary>
         /// <remarks>
         /// Internal rather than private so it can be tested directly, exactly as <see cref="Paginate"/>
-        /// is - and here for a sharper reason. The ordering is carried by the ORDER OF TWO STATEMENTS:
-        /// the sort runs while the file list is still empty, and the recently added files are appended
-        /// after it. Appending them first would silently sort them by title and throw the indexing order
-        /// away, which is a customer-reported defect, and nothing about it would fail to compile.
+        /// is. Only the containers are sorted, and <see cref="Sort"/> takes no file list so that it cannot
+        /// be otherwise: sorting the recently added files by title throws the indexing order away, which
+        /// is a customer-reported defect. It used to take one, and the ordering then rested on the sort
+        /// running while that list was still empty - one reordered statement from the defect returning,
+        /// with nothing about it failing to compile.
         /// <para>
         /// Recently added therefore stays in the order <c>GetRecentlyAddedAsync</c> produced - newest
         /// indexed first - whatever <c>SortCriteria</c> asks for. That is deliberate: the list means
@@ -324,35 +325,26 @@ namespace DlnaServer.Host.Upnp.Control
             BrowseRequest options)
         {
             var containers = new List<MediaDirectoryDto>(roots);
-            var files = new List<MediaFileDto>();
 
-            Sort(containers, files, options);
+            Sort(containers, options);
 
-            files.AddRange(recentlyAdded);
-
-            return (containers, files);
+            return (containers, new List<MediaFileDto>(recentlyAdded));
         }
 
-        private static void Sort(
-            List<MediaDirectoryDto> containers,
-            List<MediaFileDto> files,
-            BrowseRequest options)
+        private static void Sort(List<MediaDirectoryDto> containers, BrowseRequest options)
         {
             if (options.SortByDate)
             {
                 containers.Sort(static (a, b) => a.CreatedUtc.CompareTo(b.CreatedUtc));
-                files.Sort(static (a, b) => a.FileCreatedUtc.CompareTo(b.FileCreatedUtc));
             }
             else
             {
                 containers.Sort(static (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name));
-                files.Sort(static (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Title, b.Title));
             }
 
             if (options.SortDescending)
             {
                 containers.Reverse();
-                files.Reverse();
             }
         }
 
@@ -465,12 +457,12 @@ namespace DlnaServer.Host.Upnp.Control
                 : await _subtitles.GetForFilesAsync(withSubtitles, cancellationToken);
         }
 
-        private static IReadOnlyList<SubtitleFileDto> SubtitlesOf(
+        private IReadOnlyList<SubtitleFileDto> SubtitlesOf(
             IReadOnlyDictionary<Guid, IReadOnlyList<SubtitleFileDto>> subtitles,
             MediaFileDto file)
         {
             return subtitles.TryGetValue(file.PublicId, out var found)
-                ? found
+                ? DidlMapper.Offerable(found, _options.CurrentValue.Library.SubtitleFileExtensions)
                 : [];
         }
 

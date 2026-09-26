@@ -118,6 +118,39 @@ namespace DlnaServer.IntegrationTests
                 "because the file that just failed must wait out its retry delay rather than be tried again");
         }
 
+        /// <summary>
+        /// A half that <c>MaxFailureCount</c> has retired stays retired when the other half is claimed.
+        /// </summary>
+        /// <remarks>
+        /// The claim is an OR across the two halves, so a file still owed its metadata came back with a
+        /// thumbnail that had already failed three times - and the thumbnail was attempted again.
+        /// </remarks>
+        [Test]
+        public async Task ExecuteAsync_ForARetiredThumbnail_DoesNotAttemptItAgain()
+        {
+            // Arrange
+            var file = CreateFile(_failingPath) with { ThumbnailFailureCount = 3 };
+            var repository = new RecordingMediaFileRepository(file);
+            var processor = new ThrowingMediaProcessor(_failingPath);
+
+            using var service = CreateService(repository, processor);
+
+            // Act
+            await service.StartAsync(CancellationToken.None);
+            await repository.PendingRequestedTwice.WaitAsync(_signalTimeout);
+            await service.StopAsync(CancellationToken.None);
+
+            // Assert
+            repository.RecordedFailures.Should().ContainSingle(
+                "because the metadata half was still owed and was attempted");
+            repository.RecordedFailures[0].MetadataFailed.Should().BeTrue(
+                "because the metadata call is the one that was made, and it threw");
+            repository.RecordedFailures[0].ThumbnailFailed.Should().BeFalse(
+                "because a thumbnail retired by MaxFailureCount must not be attempted again");
+            repository.SavedThumbnails.Should().BeEmpty(
+                "because nothing was generated for the retired thumbnail");
+        }
+
         [TestCase(1, 5)]
         [TestCase(2, 30)]
         [TestCase(3, 30)]

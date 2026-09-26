@@ -69,6 +69,15 @@
         ".jpeg": {
           "Mime": "ImageJpeg"
         }
+      },
+      "SubtitleFileExtensions": {
+        ".srt": "Video",
+        ".vtt": "Video",
+        ".ass": "Video",
+        ".ssa": "Video",
+        ".sub": "Video",
+        ".smi": "Video",
+        ".lrc": "Audio"
       }
     },
     "Thumbnails": {

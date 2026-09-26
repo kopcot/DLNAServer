@@ -23,16 +23,25 @@ namespace DlnaServer.Media.Processing.Provisioning
         private readonly ILogger<FFmpegProvisioner> _logger;
         // A Nullable<bool> read outside the gate is two fields, so a second caller could observe
         // hasValue = true with value = false and conclude ffmpeg was unavailable - retiring every
-        // in-flight file as a failure. Latent today, because the only consumer chain is single-threaded,
-        // but the semaphore's presence says concurrency was intended.
-        private bool? _isAvailable;
+        // in-flight file as a failure. Not latent: MediaProcessingHostedService runs two workers, and the
+        // dashboard reads this too. Hence one int, read and written through Volatile - see the constants.
+        private int _availability;
+
+        private const int AvailabilityUnknown = 0;
+        private const int AvailabilityYes = 1;
+        private const int AvailabilityNo = 2;
 
         public FFmpegProvisioner(ILogger<FFmpegProvisioner> logger)
         {
             _logger = logger;
         }
 
-        public bool? IsVideoProcessingAvailable => _isAvailable;
+        public bool? IsVideoProcessingAvailable => Volatile.Read(ref _availability) switch
+        {
+            AvailabilityYes => true,
+            AvailabilityNo => false,
+            _ => null,
+        };
 
         private string? _lastUnavailableReason;
 
@@ -44,7 +53,7 @@ namespace DlnaServer.Media.Processing.Provisioning
             // recreate metadata from Maintenance, but every reprocessed file was skipped against the
             // cached "no" and the notice never cleared. Re-resolving costs a directory probe on a path
             // that only runs when ffmpeg is absent, and absent is the state worth escaping.
-            if (_isAvailable is true)
+            if (Volatile.Read(ref _availability) == AvailabilityYes)
             {
                 return true;
             }
@@ -53,14 +62,15 @@ namespace DlnaServer.Media.Processing.Provisioning
 
             try
             {
-                if (_isAvailable is true)
+                if (Volatile.Read(ref _availability) == AvailabilityYes)
                 {
                     return true;
                 }
 
-                _isAvailable = await ResolveAsync(allowDownload, cancellationToken);
+                var isAvailable = await ResolveAsync(allowDownload, cancellationToken);
+                Volatile.Write(ref _availability, isAvailable ? AvailabilityYes : AvailabilityNo);
 
-                return _isAvailable.Value;
+                return isAvailable;
             }
             finally
             {

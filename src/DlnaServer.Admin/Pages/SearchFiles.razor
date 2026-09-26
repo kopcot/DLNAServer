@@ -107,11 +107,16 @@
                 <ChildContent>
                     <select id="hasSubtitles" @bind="_criteria.HasSubtitles">
                         <option value="">any</option>
-                        <option value="@Presence.Yes">yes</option>
-                        <option value="@Presence.No">no</option>
+                        <option value="@SubtitlePresence.Yes">yes</option>
+                        <option value="@SubtitlePresence.Embedded">yes (embedded in file)</option>
+                        <option value="@SubtitlePresence.Linked">yes (linked file)</option>
+                        <option value="@SubtitlePresence.No">no</option>
                     </select>
                 </ChildContent>
-                <Hint>A track inside the file, or a subtitle or lyrics file linked to it.</Hint>
+                <Hint>
+                    A track inside the file, or a subtitle or lyrics file linked to it. The two narrower choices
+                    ask for that kind, so a film carrying both appears under either.
+                </Hint>
             </FormField>
         </div>
 
@@ -274,7 +279,14 @@
 
         if (_criteria.HasSubtitles is { } hasSubtitles)
         {
-            set.Add(hasSubtitles == Presence.Yes ? "with subtitles" : "without subtitles");
+            set.Add(hasSubtitles switch
+            {
+                SubtitlePresence.Yes => "with subtitles",
+                SubtitlePresence.Embedded => "with embedded subtitles",
+                SubtitlePresence.Linked => "with a linked subtitle file",
+                SubtitlePresence.No => "without subtitles",
+                _ => throw new ArgumentOutOfRangeException(nameof(hasSubtitles), hasSubtitles, null),
+            });
         }
 
         return set.Count switch
@@ -394,7 +406,7 @@
 
         public Presence? KeptInMemory { get; set; }
 
-        public Presence? HasSubtitles { get; set; }
+        public SubtitlePresence? HasSubtitles { get; set; }
 
         public int Take { get; } = 200;
 
@@ -430,7 +442,7 @@
                 HasMetadata = ToFlag(DetailsRead),
                 HasThumbnail = ToFlag(PreviewMade),
                 IsKeptInMemory = ToFlag(KeptInMemory),
-                HasSubtitles = ToFlag(HasSubtitles),
+                HasSubtitles = HasSubtitles,
                 Take = Take,
             };
         }

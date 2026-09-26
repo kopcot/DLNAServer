@@ -9,6 +9,9 @@
 	# name pointing here. Remove this whole block and use `tls internal` if you are testing.
 	encode zstd gzip
 
+	# No brute-force limiting here - Caddy's basic_auth has none built in. bcrypt cost 10-12 (see
+	# .env.example) keeps a failed attempt cheap enough that this matters; run fail2ban against
+	# admin-access.log below if this proxy faces the open internet.
 	basic_auth {
 		{$ADMIN_USER} {$ADMIN_PASSWORD_HASH}
 	}
@@ -27,7 +30,10 @@
 	}
 
 	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# No includeSubDomains: ADMIN_HOSTNAME is this operator's own domain, and that directive would
+		# force HTTPS on every subdomain of it for a year, not just this one - too wide a blast radius to
+		# set by default. Add it back explicitly once every subdomain is confirmed to serve HTTPS.
+		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
