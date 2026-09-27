@@ -21,23 +21,28 @@ namespace DlnaServer.UnitTests.Hosting
             using var indexLock = new LibraryIndexLock();
             var firstEntered = new TaskCompletionSource();
             var releaseFirst = new TaskCompletionSource();
+            var firstRunning = false;
             var overlapped = false;
 
             var first = indexLock.RunAsync(
                 async _ =>
                 {
+                    firstRunning = true;
                     firstEntered.SetResult();
                     await releaseFirst.Task;
+                    firstRunning = false;
                 },
                 CancellationToken.None);
 
             await firstEntered.Task;
 
             // Act
+            // Not first.IsCompleted: the permit is released a moment before that task completes,
+            // and the second operation resumes on the pool, so it can run inside that gap.
             var second = indexLock.RunAsync(
                 _ =>
                 {
-                    overlapped = !first.IsCompleted;
+                    overlapped = firstRunning;
                     return Task.CompletedTask;
                 },
                 CancellationToken.None);
