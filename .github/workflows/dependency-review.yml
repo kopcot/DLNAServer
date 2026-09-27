@@ -1,0 +1,31 @@
+# Summarise the dependencies a pull request adds or removes, and refuse a known advisory where it can.
+#
+# BLIND TO NUGET VERSIONS: GitHub's dependency graph does not read Directory.Packages.props, so every
+# NuGet package appears as ">= 0" (checked against the repository's SBOM on 2026-09-27). A version bump
+# is therefore invisible here and passes. NuGetAudit in dotnet.yml is the gate that catches a vulnerable
+# package; this only lists packages and GitHub Actions entering or leaving. Needs the Dependency graph on.
+name: Dependency review
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+# Read-only: the result is reported as the check itself, not as a pull-request comment.
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # moderate matches NuGetAudit's own threshold, for whatever the graph can see a version of.
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate

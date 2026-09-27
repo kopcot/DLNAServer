@@ -1,6 +1,7 @@
 # Publish the deployable artifact for a tagged version.
 #
-# Tag with the version carried by Directory.Build.props, prefixed with `v` - `v1.1.0917`. The archive is
+# Tag with the product version - the `<Version>` in src/DlnaServer.Host/DlnaServer.Host.csproj - prefixed
+# with `v`, as in `v1.1.0917`. The archive is
 # the same framework-dependent linux-x64 publish NasBuild.sh produces by hand, so what a release contains
 # is reproducible instead of being whatever was on the maintainer's machine that day.
 name: Release

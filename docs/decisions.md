@@ -1841,13 +1841,11 @@ This file is written to be the only context needed. Work through it in order.
 0 warnings, and the work has shifted from writing milestones to fixing what real devices
 and real memory readings reveal.
 
-**The NAS is one batch behind the tree.** Checked 2026-09-15 against
-`http://192.168.1.100:26853/admin/about`, which is served from the `publishNAS` folder: the page answers,
-and it reports **version `1.0.0`**. Both halves of that are evidence. The page existing means the deployed
-build carries **section 6m** - About arrived with it on 2026-09-12 - and the version reading `1.0.0`, the
-implicit default, means it predates the `<Version>` property added on 2026-09-15. So everything through 6m
-is deployed and **section 6n and `1.1.0915` are not**. That one request is the cheapest way to ask the
-question again later.
+**The NAS runs the current product version.** Checked 2026-09-27 against
+`http://192.168.1.200:26853/admin/about`, served from `T:\apps\Dlna-server`: the page answers and reports
+**version `1.1.0926`**, the `DlnaServer.Host` version of the 2026-09-26 batch (section 6u). Earlier
+readings, below and in `history.md`, reached it at `192.168.1.100`. That one request is
+the cheapest way to ask the question again later.
 
 **Deploying is not a routine redeploy, for two separate reasons.** The migration squash (6i) means a
 database older than `20260908162737_InitialSchema` fails to migrate, is moved aside as

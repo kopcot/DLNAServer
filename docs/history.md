@@ -14,9 +14,9 @@ resolves.
 The server runs on the QNAP NAS and a television plays from it. Milestones 1 to 10 are complete, the
 build is at 0 warnings, and **1,111 tests pass** (496 unit, 593 integration, 22 architecture).
 
-**The NAS is behind this tree.** Checked 2026-09-15 against `http://192.168.1.100:26853/admin/about`,
-which answered and reported version `1.0.0` - so it carries everything through section 6m and not 6n
-onwards. That one request is the cheapest way to ask again later. Deploying is not a routine redeploy:
+**The NAS runs the current product version.** Checked 2026-09-27 against
+`http://192.168.1.200:26853/admin/about`, which answered and reported version `1.1.0926`; the server is
+started from `T:\apps\Dlna-server`. That one request is the cheapest way to ask again later. Deploying is not a routine redeploy:
 see "Deploying is not a routine redeploy" in section 8 of [decisions.md](decisions.md).
 
 What is owed needs a person, a television or a quiet server rather than a patch, and the list lives in
@@ -3511,3 +3511,14 @@ A second `/review-all --full` over the whole uncommitted change - 18 agents, 5 s
 - **Smaller:** subtitle types are read once per Browse; the stale-partial sweep runs once per upload and matches only this server's own partial names; the search page treats an undefined subtitle filter as "any"; *Recently added*'s refresh no longer wipes another message; the log escapes `\` and invisible format characters, and upload names refuse them and Windows device names; GENA counts an IPv6 device by its /64; `FileExtension`, `SubtitleFileCheckerExtensions.Usable`, `SubtitleMatcher.IsLinkablePath` and `SubtitleContentType` each replace two or more copies; `SubtitleFileExtensions` is a `Dictionary`; `/manage/directory` pages its two lists separately; the unpaged `GetChildrenAsync` / `GetByDirectoryAsync` lost their last caller and were removed; the workflows pin actions by commit SHA and `.dockerignore` excludes every `.env` variant.
 - **Removing a subtitle type** keeps the documented behaviour (the next scan drops its links, hand-added ones included); Settings now names the removed types in its save message.
 - **Not changed:** a Dashboard notice for a halted reconcile or for settings running on last-good values needs a new Core seam, since Admin cannot see the Host; the two HEAD ladders stay separate, as sharing them needs a resolver member. The skeptic's "Stop refused forever" and "stalled upload loses its partial" were checked and are not reachable.
+
+## 6v. The CI workflows split, and a flaky lock test (2026-09-27, product still `1.1.0926`)
+
+Asked for as four workflows: build and test, dependency review, a container build, and a release on a tag. Two of them already existed and one was a job inside another.
+
+- **Dependency review** is new, and **blind to NuGet versions**: `.github/workflows/dependency-review.yml` runs `actions/dependency-review-action` on every pull request, but GitHub's dependency graph does not read `Directory.Packages.props` - the repository's SBOM lists all 28 NuGet packages as `>= 0` - so a version bump is invisible to it and passes. It still lists packages and GitHub Actions entering or leaving. Kept on the maintainer's decision, with the limit written into its header; NuGetAudit (`moderate`, `-warnaserror`) remains the gate that fails a vulnerable package.
+- **The container build moved out of `dotnet.yml`** into `docker.yml`, with a path filter over everything the image build reads - including `tests/**`, since restoring the solution needs the test projects, `release-notes.md`, which the Host copies into its output, and `Directory.Build.*` / `NuGet.Config`, which change how it restores. A documentation-only change no longer builds the image; a weekly run and a manual trigger keep a floating base image or Debian ffmpeg from breaking unseen.
+- **Build and test** (`dotnet.yml`) and **release** (`release.yml`) were already what was asked for and are unchanged apart from a comment.
+- **Stale version wording:** `release.yml`, `.github/SECURITY.md` and the pull-request template still named one `<Version>` in `Directory.Build.props`; each project has carried its own since 2026-09-23.
+- **`LibraryIndexLockTest.RunAsync_WithASecondCallerWaiting_DoesNotOverlap` failed once on a GitHub runner** and never locally, not in 5,000 repetitions, pinned to one CPU or under full load. The lock releases its permit a moment before `RunAsync`'s task completes and the waiting caller resumes on the pool, so reading `first.IsCompleted` could catch that gap; the test now flags the end of the first operation itself. `DlnaServer.UnitTests` is at `1.1.0927`.
+- **The NAS state** in `CLAUDE.md`, section 8 of [decisions.md](decisions.md) and "Where things stand" above now reads `1.1.0926` at `192.168.1.200`, instead of the `1.0.0` reading of 2026-09-15.

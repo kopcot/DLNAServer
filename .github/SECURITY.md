@@ -2,8 +2,9 @@
 
 ## Supported versions
 
-Only the latest release receives fixes. The version scheme is `Major.Minor.MonthDate`, carried by a
-single `<Version>` property in `Directory.Build.props`.
+Only the latest release receives fixes. The version scheme is `Major.Minor.MonthDate`. The release
+version is the `<Version>` in `src/DlnaServer.Host/DlnaServer.Host.csproj`; every other project carries
+its own and is bumped only when it changes.
 
 | Version | Supported |
 | ------- | --------- |

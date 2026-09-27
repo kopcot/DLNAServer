@@ -1,0 +1,69 @@
+# Build the container image, without pushing it.
+#
+# The image is multi-stage and installs ffmpeg from Debian, so a broken base image or a missing package
+# surfaces here rather than on the next deploy. Runs when something the build reads changed - a
+# documentation-only change skips it - and weekly, because the base images and ffmpeg float.
+name: Docker
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    # Keep the two lists identical.
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "global.json"
+      - "Directory.*.props"
+      - "Directory.Build.*"
+      - "NuGet.Config"
+      - "nuget.config"
+      - "DlnaServer.sln"
+      - "src/**"
+      # Restoring the solution needs the test projects too.
+      - "tests/**"
+      # The Host copies it into its output; the publish fails without it.
+      - "release-notes.md"
+      - ".github/workflows/docker.yml"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "global.json"
+      - "Directory.*.props"
+      - "Directory.Build.*"
+      - "NuGet.Config"
+      - "nuget.config"
+      - "DlnaServer.sln"
+      - "src/**"
+      - "tests/**"
+      - "release-notes.md"
+      - ".github/workflows/docker.yml"
+
+# Least privilege: nothing here writes to the repository or to a registry.
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the running job pointless.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  container:
+    name: Container build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Build the image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          push: false

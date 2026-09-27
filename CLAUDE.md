@@ -42,9 +42,9 @@ decision record and running two of them is how they drift apart. `docs/developme
 > them and is gone.
 >
 > **State.** Running on the NAS, working set 563.4 MB → **177.7 MB** after the memory pass, a television
-> plays from it, **1,111 tests at 0 warnings**, no vulnerable packages. **The NAS is several batches behind
-> this tree**: its About page answers and reported `1.0.0` on 2026-09-15, so it carries everything through
-> section 6m but not 6n, 6o or `1.1.0917`. See "Where things stand" in docs/decisions.md section 8. Three `/review-all --full`
+> plays from it, **1,111 tests at 0 warnings**, no vulnerable packages. **The NAS runs the current product
+> version**: `http://192.168.1.200:26853/admin/about` reported `1.1.0926` on 2026-09-27, started from
+> `T:\apps\Dlna-server`. See "Where things stand" in docs/decisions.md section 8. Three `/review-all --full`
 > passes and a deduplication pass have run and everything they raised is closed except the items listed
 > below. The third pass (2026-09-08, whole-tree) found two Blockers in the configuration-reload path -
 > a failed or missing re-read blanked every setting and the next scan cascade-deleted the index, and one

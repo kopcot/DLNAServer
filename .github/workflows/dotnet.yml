@@ -68,20 +68,3 @@ jobs:
           name: test-results
           path: ./TestResults
           retention-days: 14
-
-  container:
-    name: Container builds
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-
-      # Build only - nothing is pushed. The image is multi-stage and installs ffmpeg from Debian, so a
-      # broken base image or a missing package surfaces here rather than on the next deploy.
-      - name: Build the image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: .
-          push: false

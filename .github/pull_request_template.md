@@ -17,6 +17,6 @@
 
 ## Housekeeping
 
-- [ ] `<Version>` in `Directory.Build.props` bumped
+- [ ] `<Version>` bumped in every project this changes (`DlnaServer.Host` is the product version)
 - [ ] `release-notes.md` updated, if an operator would notice this
 - [ ] `docs/decisions.md` updated, if a decision or a trap came out of it, and `docs/history.md` for the batch itself
