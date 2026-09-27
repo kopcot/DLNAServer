@@ -18,7 +18,7 @@ worth telling you about is added to the version it belongs to.
 
 **Download them.** A file's page has a *Download subtitle* button beside *Download* when one subtitle file is linked to it, and *Download subtitles (zip)* when several are - all of them in one zip, each under its own name.
 
-**Choose which files count as subtitles.** *Settings* has a *Subtitle types* list beside *File types*: which extensions are linked to videos as subtitles and which to music as lyrics. *Restore the default subtitle types* puts the usual list back.
+**Choose which files count as subtitles.** *Settings* has a *Subtitle types* list beside *File types*: which extensions are linked to videos as subtitles and which to music as lyrics. Only formats the server knows as subtitles can be added. *Restore the default subtitle types* puts the usual list back, and saving tells you if a type you removed will take its links with it at the next scan.
 
 **The Dashboard counts them.** The Library panel shows *Video*, *Music*, *Photos* and *Subtitles* in one row, and *Other* below them when your library holds files of no media kind. Subtitles are the files linked to your media, so they are not part of the *Files* total; Video, Music, Photos and Other still add up to it.
 
@@ -30,7 +30,7 @@ worth telling you about is added to the version it belongs to.
 
 **A slow file no longer loses its details.** When reading a file's details timed out - a disc spinning up is enough - the server stored the empty result as though it were the answer, wiping the duration, resolution and codecs it already had, and never tried again. A timeout is now a failed attempt that is retried like any other.
 
-**Uploads are sturdier.** Two uploads of the same name at once no longer spoil each other, *keep existing files* is honoured even when a file of that name arrives mid-upload, an upload cut off halfway leaves nothing behind, and one oversized request can no longer run the server out of memory. *Settings* now refuses an upload folder inside one of your *Excluded folders*, instead of accepting it and refusing every upload later.
+**Uploads are sturdier.** Two uploads of the same name at once no longer spoil each other, *keep existing files* is honoured even when a file of that name arrives mid-upload, an upload cut off halfway leaves nothing behind, an upload that goes over the limit still keeps and reports the files that arrived, and one oversized request can no longer run the server out of memory. *Settings* now refuses an upload folder inside one of your *Excluded folders*, instead of accepting it and refusing every upload later.
 
 **Stop waits for Recreate database.** Pressing *Stop server* while *Recreate database* was restarting the server quietly cancelled the recreate. Stop is now refused until the restart has happened.
 
