@@ -92,8 +92,12 @@ headings, its trap entries, `release-notes.md`'s section headings - is a **histo
 correct as written. Do not sweep those; rewriting history to match the present is how a decision record
 stops being one.
 
-A release is a `v`-prefixed tag on the host's version (`v1.1.0926`); pushing it builds, tests and
+A release is a `v`-prefixed tag on the host's version (`v1.1.0928`); pushing it builds, tests and
 attaches the linux-x64 archive.
+
+Every product version gets its tag, and it is set **when the version moves on, not while it is current**: before
+the first change that bumps the host past `X`, tag the last commit that carried `X` as `vX`. Several commits under
+one version share that one tag, on the newest of them.
 
 ## Pull requests
 

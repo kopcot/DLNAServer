@@ -45,6 +45,15 @@ namespace DlnaServer.Host
         private const string ConfigurationFileName = "config.json";
 
         /// <summary>
+        /// Environment variable that moves <see cref="ConfigurationFileName"/> out of the content root.
+        /// </summary>
+        /// <remarks>
+        /// The Settings page saves through a temporary file beside the target, so the file's directory must be
+        /// writable - which the binaries' folder of a container image run as a non-root user is not.
+        /// </remarks>
+        private const string ConfigurationFileVariable = "DLNA_CONFIG_FILE";
+
+        /// <summary>
         /// Key of the media index connection string in <c>appsettings.json</c>.
         /// </summary>
         private const string DatabaseConnectionName = "DlnaDatabase";
@@ -158,7 +167,9 @@ namespace DlnaServer.Host
 
             // Before the configuration provider sees the file: a malformed config.json would otherwise
             // throw while the host is being built, killing the process with a bare parse error.
-            var configurationPath = Path.Combine(builder.Environment.ContentRootPath, ConfigurationFileName);
+            var configurationPath = Environment.GetEnvironmentVariable(ConfigurationFileVariable) is { Length: > 0 } configuredPath
+                ? Path.GetFullPath(configuredPath)
+                : Path.Combine(builder.Environment.ContentRootPath, ConfigurationFileName);
             var configurationResult = ConfigurationFileGuard.EnsureUsable(configurationPath, TimeProvider.System);
 
             // The guard above only covers startup, and reloadOnChange makes the same parse failure

@@ -98,6 +98,11 @@ RUN mkdir --parents /data /app/logs \
 
 ENV ConnectionStrings__DlnaDatabase="Data Source=/data/dlna.sqlite;Pooling=True;Default Timeout=30;" \
     #
+    # The Settings page saves through a temporary file beside config.json, and /app belongs to root, so a
+    # config.json in /app could never be saved. On the data volume it is writable and survives a recreate;
+    # a missing one is written with defaults on the first start.
+    DLNA_CONFIG_FILE=/data/config.json \
+    #
     # Blazor Server's circuits use data protection, whose keys default to $HOME/.aspnet and are therefore
     # lost with the container - the framework warns about exactly this at startup. Pointing HOME at the
     # data volume persists them, so the admin UI survives a `docker compose up -d` without every open

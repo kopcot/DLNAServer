@@ -28,6 +28,10 @@ worth telling you about is added to the version it belongs to.
 
 **A share that drops out mid-scan no longer empties the library.** The server checked once, at the start of a scan, that your media folders were really there. If a share disappeared partway through, the rest of the scan took every file under it for deleted. It now checks again as it goes and stops removing anything the moment a folder goes missing.
 
+**Settings save in Docker.** In the container, pressing *Save* on Settings failed every time, because the settings file sat in a folder the server was not allowed to write to. It now lives on the data volume beside the database, so saving works and your settings survive the container being recreated. A setting that `docker-compose.yml` also sets is still overridden by the compose file - remove it there once you want to manage it on Settings.
+
+**The phone menu opens over the page.** On a phone, opening the menu at the top of a page pushed the page down, while opening it after scrolling laid it over the page. It now always opens over the page, and the page stays where it was.
+
 **A slow file no longer loses its details.** When reading a file's details timed out - a disc spinning up is enough - the server stored the empty result as though it were the answer, wiping the duration, resolution and codecs it already had, and never tried again. A timeout is now a failed attempt that is retried like any other.
 
 **Uploads are sturdier.** Two uploads of the same name at once no longer spoil each other, *keep existing files* is honoured even when a file of that name arrives mid-upload, an upload cut off halfway leaves nothing behind, an upload that goes over the limit still keeps and reports the files that arrived, and one oversized request can no longer run the server out of memory. *Settings* now refuses an upload folder inside one of your *Excluded folders*, instead of accepting it and refusing every upload later.

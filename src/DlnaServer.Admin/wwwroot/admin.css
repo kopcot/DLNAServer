@@ -752,11 +752,20 @@ dl.meta dd { margin: 0; word-break: break-all; }
 
     /* Hidden until the button is pressed, then a list down the screen - scrolled inside itself if the
        phone is too short to show all of it, so the page underneath does not scroll away. 60px is the
-       name row with the sidebar's padding; dvh follows a mobile browser's toolbar where vh does not. */
+       name row with the sidebar's padding; dvh follows a mobile browser's toolbar where vh does not.
+       Absolute against the sticky bar, so it always drops OVER the page: in the flow it pushed the page
+       down at the top and overlaid it once scrolled, since a stuck bar's growth no longer moves anything. */
     .nav { display: none; }
 
     .menutoggle:checked ~ .nav {
         display: block;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        box-shadow: 0 2px 10px rgb(0 0 0 / 22%);
         max-height: calc(100vh - 60px);
         max-height: calc(100dvh - 60px);
         overflow-y: auto;

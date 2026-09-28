@@ -51,21 +51,25 @@ So the media mount is read-write, and **the container user must own or be able t
 tree**. Set `PUID`/`PGID` in `.env` to the owner of your media (`id -u`, `id -g` on the host). Mount
 `:ro` only if you accept a library with no previews at all.
 
-### 3. Settings changed in the UI are lost unless you mount `config.json`
+### 3. `config.json` lives on the data volume
 
-The Settings page writes back to `config.json`, which lives next to the binaries — inside the image. Any
-setting you change in the UI disappears the next time the container is recreated.
+The image sets `DLNA_CONFIG_FILE=/data/config.json`, so the file the Settings page writes back to sits on
+the `dlna-data` volume beside the database: it survives a recreate, and a missing one is written with
+defaults on the first start. It cannot live beside the binaries - `/app` belongs to root, the container
+runs as `PUID`, and a save goes through a temporary file next to the target, so every *Save* failed there.
 
-Once past the first run, uncomment the `./config.json:/app/config.json` mount in `docker-compose.yml`:
+Do not bind-mount the file itself either (`./config.json:/app/config.json`): a save replaces the file by
+renaming over it, and a rename onto a single-file mount point fails with `EBUSY`. To edit it by hand:
 
 ```bash
-docker compose cp dlna:/app/config.json ./config.json
-# uncomment the mount, then
-docker compose up -d
+docker compose cp dlna:/data/config.json ./config.json
+# edit, then
+docker compose cp ./config.json dlna:/data/config.json
 ```
 
-A mounted `config.json` overrides every `Dlna__` environment variable, so remove the ones you have moved
-into the file rather than leaving both.
+The `Dlna__` environment variables in `docker-compose.yml` **win over the file**. A setting saved on the
+Settings page is written to `config.json`, but if the compose file also sets it, the environment value is
+the one that applies. Remove a variable from the compose file once you want the Settings page to own it.
 
 ### 4. Turn the periodic rescan off if you do not need it
 
@@ -117,7 +121,7 @@ cross-compiling it to ARM from an x64 builder is the awkward case. It only short
 | ffmpeg | absent unless `DownloadFFmpeg` is turned on | **installed from Debian**, `DownloadFFmpeg` stays off |
 | Database | `dlna.sqlite` beside the binaries | `/data/dlna.sqlite`, its own volume |
 | Logs | `logs/` beside the binaries | `/app/logs`, its own volume |
-| `config.json` | preserved across deploys by the script | inside the image unless you mount one |
+| `config.json` | preserved across deploys by the script | `/data/config.json`, on the data volume |
 | GC / allocator | exported in the generated `run.sh` | baked into the image as `ENV` |
 
 The ffmpeg difference is a real improvement, not just packaging. `Thumbnails.DownloadFFmpeg` fetches an
@@ -234,7 +238,7 @@ publishing the admin port does not publish the management API.
 | No previews, no errors | The container user cannot write `.@__thumb` into the media tree — check `PUID`/`PGID` |
 | No durations, resolutions or language filters | ffmpeg missing. `docker compose exec dlna /app/ffmpeg/ffprobe -version` |
 | New files never appear | The watcher gets no inotify events. Set `UsePeriodicRescan=true` |
-| Settings revert after a rebuild | `config.json` is not mounted |
+| A saved setting does not take effect | The same setting is also a `Dlna__` variable in `docker-compose.yml`, which wins |
 | Admin page returns 400 remotely | `AllowedHosts` does not include the external name |
 | A renderer on the LAN gets 400 with `docker-compose.admin-remote.yml` up | `LAN_HOSTS` is unset - `ADMIN_HOSTNAME` alone disables the automatic LAN-address detection for the whole process |
 | Working set climbs and stays | Press *Empty the memory* on `/admin/cache`; check `CacheSizeInMegabytes` is 2, not 32 |

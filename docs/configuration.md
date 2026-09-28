@@ -22,7 +22,8 @@ receives a 404 for anything on the admin surface. The two ports must differ or s
 > The schema is **not** compatible with the reference's flat `config.json`. Settings are grouped into
 > `Server`, `Library`, `Thumbnails`, `FileCache` and `Compatibility`. Port values across by hand.
 
-`config.json` sits beside the binaries, binds to `DlnaOptions` (section `Dlna`) through the normal
+`config.json` sits beside the binaries - or wherever the `DLNA_CONFIG_FILE` environment variable points, which
+the container image uses to put it on its data volume - binds to `DlnaOptions` (section `Dlna`) through the normal
 `IConfiguration` pipeline, and is consumed via `IOptionsMonitor` so most edits apply without a restart.
 
 With **no source folder configured the application's own folder is served**, so a fresh deployment starts

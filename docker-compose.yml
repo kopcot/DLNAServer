@@ -40,11 +40,10 @@ services:
       # Logs, so they survive a container replacement and can be read without docker exec.
       - dlna-logs:/app/logs
 
-      # OPTIONAL, and the better way to configure this once you are past the first run: drop a
-      # config.json beside this file and uncomment. It replaces every Dlna__ variable below, and the
-      # admin Settings page writes back to it, so changes made in the UI persist across a rebuild.
-      # Without it, settings changed in the UI are lost the next time the container is recreated.
-      #- ./config.json:/app/config.json
+      # config.json is on dlna-data too (DLNA_CONFIG_FILE in the Dockerfile), which is what lets the
+      # Settings page save it. Do not bind-mount the file itself: a save renames over it, and a rename onto a
+      # single-file mount fails. The Dlna__ variables below WIN over the file - remove one from here once
+      # you want the Settings page to own that setting.
 
     environment:
       Dlna__Server__Port: 25002
