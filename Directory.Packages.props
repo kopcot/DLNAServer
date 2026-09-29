@@ -22,7 +22,7 @@
       bump to one of them alone builds clean and fails at runtime - PR #11 bumped only the first.
     -->
     <PackageVersion Include="SkiaSharp" Version="4.153.0" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.152.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.0" />
     <PackageVersion Include="SoapCore" Version="1.2.1.11" />
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <!--
