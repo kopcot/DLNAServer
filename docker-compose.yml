@@ -15,9 +15,9 @@
 services:
   dlna:
     build:
-      context: .
+      context: https://github.com/kopcot/DLNAServer.git#main
       dockerfile: Dockerfile
-    image: dlna-server:local
+    image: kopcot/dlnaserver:latest
     container_name: dlna-server
     restart: unless-stopped
 
@@ -53,7 +53,7 @@ services:
       # config.json carries rather than appending to it, which is what you want - but note that
       # ConfigurationBinder ADDS to a non-empty list, so a second source folder is __1, not a repeat
       # of __0.
-      Dlna__Library__SourceFolders__0: /media
+      #Dlna__Library__SourceFolders__0: /media
 
       # THE REASON THIS FEATURE EXISTS. A bind mount or an overlay filesystem usually delivers no inotify
       # events for writes made outside the container, so FileSystemWatcher stays silent and the library
