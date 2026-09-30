@@ -1,4 +1,4 @@
-# Build the container image, without pushing it.
+# Build the container image without pushing it, start it, smoke test it over HTTP and scan it.
 #
 # The image is multi-stage and installs ffmpeg from Debian, so a broken base image or a missing package
 # surfaces here rather than on the next deploy. Runs when something the build reads changed - a
@@ -27,6 +27,7 @@ on:
       # The Host copies it into its output; the publish fails without it.
       - "release-notes.md"
       - ".github/workflows/docker.yml"
+      - ".github/scripts/smoke-test.sh"
   pull_request:
     branches: [ "main" ]
     paths:
@@ -42,6 +43,7 @@ on:
       - "tests/**"
       - "release-notes.md"
       - ".github/workflows/docker.yml"
+      - ".github/scripts/smoke-test.sh"
 
 # Least privilege: nothing here writes to the repository or to a registry.
 permissions:
@@ -62,8 +64,43 @@ jobs:
         with:
           persist-credentials: false
 
+      # Buildx for the GitHub Actions layer cache - the restore layer only changes with a project file.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
       - name: Build the image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           push: false
+          load: true
+          tags: dlna-server:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Host networking, as docker-compose.yml runs it. No media is mounted, so the server serves its own
+      # folder, which is enough to prove it starts, migrates and answers.
+      - name: Start the container
+        run: docker run --detach --name smoke --network host dlna-server:ci
+
+      - name: Smoke test
+        run: bash .github/scripts/smoke-test.sh
+
+      - name: Container log
+        if: always()
+        run: docker logs smoke
+
+      # Covers what NuGetAudit cannot see - the Debian packages under the runtime image, ffmpeg among them.
+      # ignore-unfixed: a finding with no patched package yet cannot be acted on, so it must not block a
+      # pull request; one that has a fix fails the job until the base image or the package is updated.
+      # The database from GHCR: the default mirror.gcr.io copy answered 404 on 2026-09-30 and Trivy did not
+      # fall back, which failed the scan without scanning anything.
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
+        with:
+          image-ref: dlna-server:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"

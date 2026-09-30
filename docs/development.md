@@ -93,7 +93,7 @@ correct as written. Do not sweep those; rewriting history to match the present i
 stops being one.
 
 A release is a `v`-prefixed tag on the host's version (`v1.1.0928`); pushing it builds, tests and
-attaches the linux-x64 archive.
+attaches the linux-x64 archive, and publishes the container image to `ghcr.io/kopcot/dlnaserver` under that tag and `latest`, signed with cosign.
 
 Every product version gets its tag, and it is set **when the version moves on, not while it is current**: before
 the first change that bumps the host past `X`, tag the last commit that carried `X` as `vX`. Several commits under

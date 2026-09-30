@@ -21,8 +21,15 @@ concurrency:
 
 jobs:
   build:
-    name: Build and test
-    runs-on: ubuntu-latest
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    # Windows because it is the development box and paths are where the two differ - ExcludeFolders takes
+    # either separator, and a test that only ever ran on Linux cannot show that both work.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
 
     steps:
       # persist-credentials: false - nothing in this job pushes to the repository, so the token has no
@@ -43,7 +50,9 @@ jobs:
 
       # Analyzers and EnforceCodeStyleInBuild cover the rules the compiler knows about; this covers
       # whitespace, using ordering and the rest of the .editorconfig that only the formatter applies.
+      # Once is enough - the sources are identical on both runners.
       - name: Verify formatting
+        if: runner.os == 'Linux'
         run: dotnet format DlnaServer.sln --verify-no-changes --no-restore --verbosity diagnostic
 
       # Release, because that is what the NAS and the container run - SatelliteResourceLanguages and the
@@ -61,10 +70,24 @@ jobs:
           --collect:"XPlat Code Coverage"
           --results-directory ./TestResults
 
+      # Published as the run's job summary - GitHub's own reporting, so no third-party account or token.
+      # One runner is enough: the same tests cover the same code on both.
+      - name: Summarise coverage
+        if: runner.os == 'Linux'
+        uses: danielpalme/ReportGenerator-GitHub-Action@d3ebf1f760f7d8ab92cc44d9bcfee7ad73722a31 # 5.5.11
+        with:
+          reports: TestResults/**/coverage.cobertura.xml
+          targetdir: TestResults/coverage-report
+          reporttypes: MarkdownSummaryGithub
+
+      - name: Publish coverage summary
+        if: runner.os == 'Linux'
+        run: cat TestResults/coverage-report/SummaryGithub.md >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Upload test results and coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: test-results
+          name: test-results-${{ matrix.os }}
           path: ./TestResults
           retention-days: 14

@@ -1,0 +1,117 @@
+# Publish the container image for a tagged version.
+#
+# Fires on the same `v`-prefixed tag as release.yml, so the image and the archive describe one version. The
+# image is pushed to ghcr.io/kopcot/dlnaserver as both the tag (`v1.1.0928`) and `latest`, and signed keyless
+# with cosign, then started once to prove it answers. Verifying that the image still builds on every change
+# is docker.yml's job, not this one's.
+name: Docker publish
+
+on:
+  push:
+    tags: [ "v*" ]
+
+env:
+  REGISTRY: ghcr.io
+  # Lowercase on purpose - a registry rejects an uppercase repository name, and github.repository is
+  # `kopcot/DLNAServer`.
+  IMAGE_NAME: kopcot/dlnaserver
+
+# Least privilege at the workflow level; the job below elevates only what pushing and signing need.
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build, push and sign the image
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      # The OIDC token cosign exchanges for a short-lived signing certificate - no key to store.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to ${{ env.REGISTRY }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # type=ref rather than type=semver: `1.1.0928` carries a leading zero, which semver does not allow, so a
+      # semver pattern would silently produce no tag at all.
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+
+      - name: Build and push
+        id: build-and-push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # Signs the digest, not the tag, so the signature cannot follow `latest` to a different image.
+      - name: Sign the image
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+
+    outputs:
+      digest: ${{ steps.build-and-push.outputs.digest }}
+
+  smoke:
+    name: Smoke test the published image
+    needs: publish
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      # Pulling - a new GHCR package is private until it is made public.
+      packages: read
+
+    steps:
+      # For the smoke-test script only.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Log in to ${{ env.REGISTRY }}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # By digest, so this tests exactly the image that was pushed and signed, whatever `latest` says now.
+      # Host networking as in docker-compose.yml; no media is mounted, so the server serves its own folder.
+      - name: Start the image
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.publish.outputs.digest }}
+        run: docker run --detach --name smoke --network host "${IMAGE}"
+
+      - name: Smoke test
+        run: bash .github/scripts/smoke-test.sh
+
+      - name: Container log
+        if: always()
+        run: docker logs smoke

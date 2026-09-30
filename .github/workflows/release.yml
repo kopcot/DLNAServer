@@ -96,3 +96,42 @@ jobs:
           --title "${GITHUB_REF_NAME}"
           --notes-file release-notes.md
           --verify-tag
+
+  smoke:
+    name: Smoke test the published archive
+    needs: publish
+    runs-on: ubuntu-latest
+
+    steps:
+      # For the smoke-test script only.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: 8.0.x
+
+      # From the release itself rather than the build artifact, so this tests what an operator downloads.
+      - name: Download the published archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release download "${GITHUB_REF_NAME}"
+          --repo "${GITHUB_REPOSITORY}"
+          --pattern "DlnaServer-${GITHUB_REF_NAME}-linux-x64.zip"
+
+      # No source folder is configured, so the server falls back to its own folder - enough to prove it
+      # starts, migrates a fresh database and answers on both ports.
+      - name: Start the server
+        run: |
+          unzip -q "DlnaServer-${GITHUB_REF_NAME}-linux-x64.zip" -d app
+          (cd app && dotnet DlnaServer.Host.dll > ../server.log 2>&1 &)
+
+      - name: Smoke test
+        run: bash .github/scripts/smoke-test.sh
+
+      - name: Server log
+        if: always()
+        run: cat server.log
