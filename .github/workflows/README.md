@@ -12,7 +12,7 @@ comment, and Dependabot keeps those pins current. The traps that shaped them are
 | --- | --- | --- | --- |
 | [`dotnet.yml`](dotnet.yml) | push and PR to `main`; nightly via `full-suite.yml` | Formatting check, Release build at 0 warnings, all tests on Linux **and** Windows, coverage summary on the run page | no |
 | [`docker.yml`](docker.yml) | push and PR to `main` when anything the image reads changed; manual; nightly | Builds the image, starts it with host networking, smoke tests it, scans it with Trivy | no |
-| [`codeql.yml`](codeql.yml) | push and PR to `main`; weekly | CodeQL security analysis of the C# (buildless, `security-extended`) | `security-events: write` |
+| CodeQL *default setup* - no file here | push and PR to `main`; weekly | CodeQL analysis of the C# and of these workflow files, with the *Extended* query suite | configured in **Settings → Code security** |
 | [`dependency-review.yml`](dependency-review.yml) | PR to `main` | Lists packages and actions a PR adds or removes | no |
 | [`vulnerability-audit.yml`](vulnerability-audit.yml) | manual; nightly | Vulnerable NuGet packages, direct and transitive | no |
 | [`workflow-lint.yml`](workflow-lint.yml) | push and PR that touch `.github/workflows/` | actionlint and zizmor over these files | no |
@@ -34,7 +34,9 @@ no Codecov account or token to look after - and the raw results are kept as an a
 `docker.yml` runs only when something the image build reads changed, so a documentation-only change skips
 it. The build uses a Buildx layer cache, so the restore layer is only redone when a project file changes.
 
-`codeql.yml` and `dependency-review.yml` are the security checks on a pull request. **Dependency review is
+CodeQL and `dependency-review.yml` are the security checks on a pull request. CodeQL runs as GitHub's
+**default setup**, reported as `Analyze (csharp)` and `Analyze (actions)` - **do not add a CodeQL workflow
+file**: while default setup is on, GitHub rejects the results of one. **Dependency review is
 blind to NuGet versions** - GitHub's dependency graph does not read `Directory.Packages.props` - so it only
 lists packages and actions entering or leaving; `NuGetAudit` in `dotnet.yml` is what fails a vulnerable one.
 
@@ -159,8 +161,16 @@ A published image is signed by digest, keyless, with the identity of `docker-pub
 
 - **Make the GHCR package public** after the first image is published - a new package is private, and
   pulling it then needs a login.
-- **Branch protection**, if you require checks: the build check is now `Build and test (ubuntu-latest)` and
-  `Build and test (windows-latest)`, not `Build and test`.
+- **Branch protection on `main` requires checks that no longer exist**, as read on 2026-09-30:
+  `Build and test`, now `Build and test (ubuntu-latest)` and `Build and test (windows-latest)`, and
+  `Container builds`, a job renamed `Container build` on 2026-09-27. Only an admin's bypass merges a pull
+  request until they are replaced. Do not require the container check: `docker.yml` is path-filtered, so a
+  documentation-only pull request would wait for it forever. As an admin:
+
+  ```powershell
+  '{"checks":[{"context":"Build and test (ubuntu-latest)","app_id":15368},{"context":"Build and test (windows-latest)","app_id":15368}]}' |
+    gh api -X PATCH repos/kopcot/DLNAServer/branches/main/protection/required_status_checks --input -
+  ```
 - **Dependency graph** must be on for `dependency-review.yml`.
 - **Trivy's database** comes from `ghcr.io/aquasecurity/trivy-db` because the default `mirror.gcr.io` copy
   answered 404 on 2026-09-30 and Trivy failed without falling back.

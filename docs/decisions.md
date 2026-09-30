@@ -1316,6 +1316,12 @@ Each has a workflow built around it; `.github/workflows/README.md` describes the
   sees an empty one there; `tag-release.yml` skips it, or it would tag `v`.
 - **actionlint and zizmor disagree on `$/...`**, GitHub's July-2026 self-repository syntax: zizmor asks for
   it, actionlint 1.7.12 rejects it. The five reusable-workflow calls keep `./` with an inline zizmor ignore.
+- **CodeQL default setup is on, and it excludes a CodeQL workflow** - GitHub rejects an advanced setup's
+  results while default setup is enabled. Its checks are `Analyze (csharp)` and `Analyze (actions)`, with the
+  *Extended* suite chosen in Settings. Do not add a `codeql.yml`.
+- **Renaming a job renames its check, and branch protection does not follow.** `Container builds` →
+  `Container build` on 2026-09-27 and the matrix's `Build and test (<os>)` both left a required check that
+  nothing reports. Update the required checks in the same change as the rename.
 - **Docker Desktop does not mount a mapped network drive** - the checkout's `T:` is the NAS share
   `\\NASKopcoTS464\Public` - so `-v "${PWD}:/repo"` comes up empty and a linter image reports no files. Run
   the linters through `uvx`, not their container images. `docker build` is unaffected: it sends the context.
