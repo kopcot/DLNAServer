@@ -1,12 +1,16 @@
 version: 2
 
 updates:
+  # cooldown: a version must be public for 7 days before a PR proposes it, so a hijacked release is usually
+  # caught and yanked first. Security updates are exempt and still arrive at once.
   # The transitive advisory that reached the NAS is the reason this file exists - see the
   # System.Security.Cryptography.Xml pin in Directory.Packages.props.
   - package-ecosystem: "nuget"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     groups:
       microsoft:
@@ -29,12 +33,16 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
 
   # Base images in Dockerfile - the runtime image is what ships to the NAS.
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     ignore:
       # The solution targets net8.0 and global.json pins the 8.0.4xx SDK, so a major bump of either
       # image produces a container that cannot run what it just built.

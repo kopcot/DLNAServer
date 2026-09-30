@@ -110,12 +110,16 @@ docker rm -f smoke
 ```powershell
 $sc = uvx --from shellcheck-py python -c "import shutil; print(shutil.which('shellcheck'))"
 uvx --from actionlint-py actionlint -shellcheck="$sc"
-$env:GH_TOKEN = gh auth token; uvx zizmor .github/workflows; Remove-Item Env:GH_TOKEN
+$env:GH_TOKEN = gh auth token; uvx zizmor .
 ```
 
-**Pass `-shellcheck` explicitly.** Without shellcheck on the `PATH`, actionlint skips every `run:` script
-without saying so and reports clean - the runner has shellcheck, so CI then fails on what the local run
-never looked at. zizmor with a token also runs its online audits, as CI does.
+Both lines reproduce exactly what `workflow-lint.yml` runs, and each detail is there because leaving it out
+reported clean locally and failed on the runner:
+
+- **`-shellcheck`** - without shellcheck on the `PATH`, actionlint skips every `run:` script silently.
+- **`zizmor .`**, the repository root, not `.github/workflows` - the action audits the whole repository,
+  `.github/dependabot.yml` included.
+- **`GH_TOKEN`** - zizmor runs its online audits only with a token, and CI has one.
 
 `full-suite.yml` and `tag-release.yml` suppress zizmor's `self-repository` finding on their `uses: ./...`
 lines. zizmor prefers the newer `$/...` form because a `./` **action** can be loaded from files an earlier

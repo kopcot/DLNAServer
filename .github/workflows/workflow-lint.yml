@@ -2,7 +2,8 @@
 #
 # actionlint catches what GitHub only reports once a run fails - a bad expression, a wrong input name, a
 # shell error in a run block. zizmor catches what never fails at all - an untrusted value expanded into a
-# script, a token wider than the job needs, credentials left in .git/config.
+# script, a token wider than the job needs, credentials left in .git/config - and it audits dependabot.yml too,
+# which is why that file is in the path filter.
 name: Workflow lint
 
 on:
@@ -10,10 +11,12 @@ on:
     branches: [ "main" ]
     paths:
       - ".github/workflows/**"
+      - ".github/dependabot.yml"
   pull_request:
     branches: [ "main" ]
     paths:
       - ".github/workflows/**"
+      - ".github/dependabot.yml"
 
 permissions:
   contents: read
