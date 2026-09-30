@@ -1322,6 +1322,9 @@ Each has a workflow built around it; `.github/workflows/README.md` describes the
 - **Renaming a job renames its check, and branch protection does not follow.** `Container builds` →
   `Container build` on 2026-09-27 and the matrix's `Build and test (<os>)` both left a required check that
   nothing reports. Update the required checks in the same change as the rename.
+- **actionlint without shellcheck skips every `run:` script, silently.** Locally it reported clean; on the
+  runner, which has shellcheck, it failed on an unquoted `${DIGEST}` in `docker-publish.yml`. The workflows
+  README's lint commands pass `-shellcheck` for that reason.
 - **Docker Desktop does not mount a mapped network drive** - the checkout's `T:` is the NAS share
   `\\NASKopcoTS464\Public` - so `-v "${PWD}:/repo"` comes up empty and a linter image reports no files. Run
   the linters through `uvx`, not their container images. `docker build` is unaffected: it sends the context.
