@@ -23,7 +23,7 @@
     -->
     <PackageVersion Include="SkiaSharp" Version="4.153.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.0" />
-    <PackageVersion Include="SoapCore" Version="1.2.1.11" />
+    <PackageVersion Include="SoapCore" Version="1.2.1.16" />
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <!--
       Not referenced by anything here. It arrives transitively as
