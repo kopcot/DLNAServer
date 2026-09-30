@@ -12,6 +12,24 @@ docker compose logs -f
 Admin pages: `http://<host>:26853` - the admin port's root redirects to `/admin`. Televisions find the
 server on their own.
 
+**To run a released image instead of building one**, point the `dlna` service at the published image and
+drop its `build:` block - every release is pushed as `ghcr.io/kopcot/dlnaserver:v<version>` and `:latest`:
+
+```yaml
+services:
+  dlna:
+    image: ghcr.io/kopcot/dlnaserver:latest
+```
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+As `docker-compose.yml` ships, `image:` is `kopcot/dlnaserver:latest` with a `build:` block beside it, so
+compose builds from GitHub's `main` and only names the result - that name is **not** the published image,
+and without `build:` it would be looked up on Docker Hub. Each published image is signed keyless with
+cosign; `.github/SECURITY.md` has the command that verifies one.
+
 ---
 
 ## The four things that will bite you

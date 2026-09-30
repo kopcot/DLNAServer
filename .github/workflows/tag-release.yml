@@ -1,0 +1,120 @@
+# Tag a version when it is left behind, then release it.
+#
+# The rule in docs/development.md: before the first change that bumps the host past `X`, the last commit that
+# carried `X` is tagged `vX`. This does that on the push that carries the bump, so nobody tags by hand -
+# walking main's first-parent history of the push, every commit whose host `<Version>` differs from its
+# predecessor's has its predecessor tagged. A tag that already exists is left alone.
+#
+# A tag pushed with the workflow token starts no other workflow, which is GitHub's guard against loops, so
+# release.yml and docker-publish.yml are called directly with the tag rather than triggered by it.
+name: Tag and release
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "src/DlnaServer.Host/DlnaServer.Host.csproj"
+
+permissions:
+  contents: read
+
+# Two pushes racing could both see a version as untagged.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag the version left behind
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Creating the tag through the API.
+      contents: write
+
+    outputs:
+      tags: ${{ steps.tag.outputs.tags }}
+
+    steps:
+      # Full history, to walk the pushed range and to see the existing tags.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Tag each version the push moved past
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          project="src/DlnaServer.Host/DlnaServer.Host.csproj"
+          version_at() {
+            git show "$1:${project}" | sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' | head -n 1
+          }
+
+          # A new branch or a force-push has no predecessor to compare with.
+          if ! git cat-file -e "${BEFORE}^{commit}" 2> /dev/null; then
+            echo "tags=[]" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          tags=()
+          previous=$(version_at "${BEFORE}")
+          parent="${BEFORE}"
+          for commit in $(git rev-list --reverse --first-parent "${BEFORE}..${AFTER}"); do
+            current=$(version_at "${commit}")
+            # An empty version is a project from before it carried its own `<Version>` - nothing to tag.
+            if [ -n "${previous}" ] && [ "${current}" != "${previous}" ]; then
+              tag="v${previous}"
+              if git rev-parse --quiet --verify "refs/tags/${tag}" > /dev/null; then
+                echo "${tag} already exists, left alone"
+              else
+                object=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags" \
+                  -f tag="${tag}" -f message="${tag}" -f object="${parent}" -f type=commit --jq .sha)
+                gh api "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${tag}" -f sha="${object}" > /dev/null
+                echo "Tagged ${parent} as ${tag}"
+                tags+=("${tag}")
+              fi
+            fi
+            previous="${current}"
+            parent="${commit}"
+          done
+
+          if [ ${#tags[@]} -eq 0 ]; then
+            echo "tags=[]" >> "${GITHUB_OUTPUT}"
+          else
+            echo "tags=$(printf '%s\n' "${tags[@]}" | jq --raw-input . | jq --slurp --compact-output .)" >> "${GITHUB_OUTPUT}"
+          fi
+
+  # One tag at a time, oldest first, so `latest` ends on the newest.
+  release:
+    name: Release
+    needs: tag
+    if: needs.tag.outputs.tags != '[]'
+    strategy:
+      max-parallel: 1
+      matrix:
+        tag: ${{ fromJSON(needs.tag.outputs.tags) }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml # zizmor: ignore[self-repository] - see workflows README
+    with:
+      tag: ${{ matrix.tag }}
+
+  image:
+    name: Image
+    needs: [ tag, release ]
+    if: needs.tag.outputs.tags != '[]'
+    strategy:
+      max-parallel: 1
+      matrix:
+        tag: ${{ fromJSON(needs.tag.outputs.tags) }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/docker-publish.yml # zizmor: ignore[self-repository] - see workflows README
+    with:
+      tag: ${{ matrix.tag }}

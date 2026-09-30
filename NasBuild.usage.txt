@@ -8,6 +8,11 @@ WHAT IT DOES
     The NAS has the .NET 8.0 runtime installed, so the runtime is not bundled.
     This keeps the publish output small and the startup fast.
 
+    A released version needs no build at all: its GitHub release carries
+    DlnaServer-v<version>-linux-x64.zip, the same framework-dependent publish, built and
+    smoke tested by .github/workflows/release.yml. Unpack it and run
+    `dotnet DlnaServer.Host.dll`. This script is for anything that is not a release.
+
 
 USAGE
     ./NasBuild.sh [PUBLISH_DIR] [ASSEMBLY_NAME] [run]

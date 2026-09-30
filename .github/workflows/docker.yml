@@ -6,9 +6,8 @@
 name: Docker
 
 on:
-  schedule:
-    - cron: "0 5 * * 1"
   workflow_dispatch:
+  workflow_call:
   push:
     branches: [ "main" ]
     # Keep the two lists identical.
@@ -49,9 +48,10 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch makes the running job pointless.
+# A newer push to the same branch makes the running job pointless. The literal keeps this apart from the
+# other workflows full-suite.yml calls, since github.workflow is then the caller's name.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-docker-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

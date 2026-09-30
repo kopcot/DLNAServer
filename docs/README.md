@@ -15,6 +15,7 @@ whoever runs the server.
 | [Decisions, conventions and traps](decisions.md) | Why it is built this way, and the rules for changing it |
 | [Status and history](history.md) | What is deployed, and the batch-by-batch record |
 | [Development](development.md) | Building, testing, versioning and releasing |
+| [CI and releases](../.github/workflows/README.md) | Every GitHub Actions workflow, when it runs, and how a version bump becomes a release |
 | [Docker](../Docker.usage.md) | Running it in a container, and why it needs host networking |
 | [NAS build](../NasBuild.usage.txt) | Publishing for the QNAP NAS: arguments, ports, configuration |
 

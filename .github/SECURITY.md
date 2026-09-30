@@ -11,6 +11,21 @@ its own and is bumped only when it changes.
 | `1.1.x` | yes       |
 | `< 1.1` | no        |
 
+## Verifying a release
+
+Every release is built, tested and smoke tested on GitHub Actions from the tagged commit, never on a
+workstation; [`workflows/README.md`](workflows/README.md) describes each step. The container image is signed
+keyless with cosign, so a pulled image can be checked against the workflow that built it:
+
+```bash
+cosign verify ghcr.io/kopcot/dlnaserver:v<version> \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github\.com/kopcot/DLNAServer/\.github/workflows/docker-publish\.yml@'
+```
+
+The same pipeline runs CodeQL on the code, scans the image for known vulnerabilities, and checks the NuGet
+packages against the advisory database every night.
+
 ## Reporting a vulnerability
 
 Report privately through GitHub: **Security → Advisories → Report a vulnerability** on this

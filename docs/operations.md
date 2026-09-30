@@ -15,7 +15,9 @@ with no source folder configured at all `DlnaOptionsDefaults` falls back to the 
 warns rather than refusing to start — so a fresh deployment comes up serving the wrong thing rather than
 not coming up. See "Configuration" below for what the validator does refuse.
 
-Deployment to the NAS is `./NasBuild.sh`; see `NasBuild.usage.txt`.
+Deployment to the NAS is `./NasBuild.sh`; see `NasBuild.usage.txt`. A released version needs no build: its
+GitHub release carries `DlnaServer-v<version>-linux-x64.zip`, the same framework-dependent publish, which
+runs with `dotnet DlnaServer.Host.dll` from wherever it is unpacked.
 
 **A fatal database-initialisation failure exits non-zero**, deliberately distinct from the exit-0 a
 deliberate `/manage/stop` produces. That is what lets a supervisor (`restart: unless-stopped`, systemd,

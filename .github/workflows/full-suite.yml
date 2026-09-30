@@ -1,0 +1,30 @@
+# Everything, nightly and on demand.
+#
+# The per-change workflows only run when something changes, and docker.yml only when something the image
+# reads changed - but the base images, Debian's ffmpeg and the advisory database all move without a
+# commit. This runs the whole set against main every night, and by hand against any branch from the
+# Actions tab: build and test on both runners with coverage, the container build with its smoke test and
+# Trivy scan, and the NuGet advisory audit. Each is the same workflow a change runs, called rather than
+# copied, so the two cannot drift apart.
+name: Full test suite
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    name: Build and test
+    uses: ./.github/workflows/dotnet.yml # zizmor: ignore[self-repository] - see workflows README
+
+  docker:
+    name: Container
+    uses: ./.github/workflows/docker.yml # zizmor: ignore[self-repository] - see workflows README
+
+  audit:
+    name: Vulnerability audit
+    uses: ./.github/workflows/vulnerability-audit.yml # zizmor: ignore[self-repository] - see workflows README

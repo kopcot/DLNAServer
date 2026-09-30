@@ -4,11 +4,23 @@
 # with `v`, as in `v1.1.0917`. The archive is
 # the same framework-dependent linux-x64 publish NasBuild.sh produces by hand, so what a release contains
 # is reproducible instead of being whatever was on the maintainer's machine that day.
+#
+# Two ways in: a `v*` tag pushed by hand, or tag-release.yml calling this with the tag it just created - a
+# tag pushed with the workflow token starts no other workflow, so that one has to be called directly.
 name: Release
 
 on:
   push:
     tags: [ "v*" ]
+  workflow_call:
+    inputs:
+      tag:
+        description: The existing `v*` tag to release.
+        required: true
+        type: string
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 # Least privilege at the workflow level. Only the publish job below elevates to contents: write, and
 # only for the one step that needs it (gh release create) - restore, build and test run with no more
@@ -27,6 +39,7 @@ jobs:
       # package's install script). Nothing after this step needs git access.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.TAG }}
           persist-credentials: false
 
       - name: Setup .NET
@@ -57,13 +70,13 @@ jobs:
       - name: Archive
         run: |
           cd publish
-          zip -r "../DlnaServer-${GITHUB_REF_NAME}-linux-x64.zip" .
+          zip -r "../DlnaServer-${TAG}-linux-x64.zip" .
 
       - name: Upload the archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-archive
-          path: DlnaServer-${{ github.ref_name }}-linux-x64.zip
+          path: DlnaServer-${{ env.TAG }}-linux-x64.zip
           retention-days: 1
 
   publish:
@@ -80,6 +93,7 @@ jobs:
       # writable token: gh release create authenticates with GH_TOKEN below, not with git credentials.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.TAG }}
           persist-credentials: false
 
       - name: Download the archive
@@ -91,9 +105,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
-          gh release create "${GITHUB_REF_NAME}"
-          "DlnaServer-${GITHUB_REF_NAME}-linux-x64.zip"
-          --title "${GITHUB_REF_NAME}"
+          gh release create "${TAG}"
+          "DlnaServer-${TAG}-linux-x64.zip"
+          --title "${TAG}"
           --notes-file release-notes.md
           --verify-tag
 
@@ -106,6 +120,7 @@ jobs:
       # For the smoke-test script only.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.TAG }}
           persist-credentials: false
 
       - name: Setup .NET
@@ -118,15 +133,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
-          gh release download "${GITHUB_REF_NAME}"
+          gh release download "${TAG}"
           --repo "${GITHUB_REPOSITORY}"
-          --pattern "DlnaServer-${GITHUB_REF_NAME}-linux-x64.zip"
+          --pattern "DlnaServer-${TAG}-linux-x64.zip"
 
       # No source folder is configured, so the server falls back to its own folder - enough to prove it
       # starts, migrates a fresh database and answers on both ports.
       - name: Start the server
         run: |
-          unzip -q "DlnaServer-${GITHUB_REF_NAME}-linux-x64.zip" -d app
+          unzip -q "DlnaServer-${TAG}-linux-x64.zip" -d app
           (cd app && dotnet DlnaServer.Host.dll > ../server.log 2>&1 &)
 
       - name: Smoke test

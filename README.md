@@ -89,6 +89,11 @@ startup fails. Deployment to the NAS is `./NasBuild.sh` (`NasBuild.usage.txt`); 
 `Docker.usage.md`, and **host networking is not optional** there, because SSDP is UDP multicast and a
 bridge does not forward it.
 
+Nothing needs building to run a released version: each release on GitHub carries a linux-x64 archive, the
+same framework-dependent publish `NasBuild.sh` produces, and the image is published as
+`ghcr.io/kopcot/dlnaserver`, signed with cosign. Both are built, tested and smoke tested by the workflows in
+[.github/workflows](.github/workflows/README.md).
+
 ## Documentation
 
 | Where | What |
@@ -104,6 +109,7 @@ bridge does not forward it.
 | [docs/history.md](docs/history.md) | Status, milestones, and the batch-by-batch record |
 | `release-notes.md` | What changed, for whoever runs the server |
 | [docs/development.md](docs/development.md) | Build, the two hard rules, versioning, releases |
+| [.github/workflows](.github/workflows/README.md) | CI and releases: what runs on every change, nightly, and on a version bump |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Who contributes, and where to start |
 
 ## Licence

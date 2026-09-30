@@ -3,14 +3,21 @@
 # Fires on the same `v`-prefixed tag as release.yml, so the image and the archive describe one version. The
 # image is pushed to ghcr.io/kopcot/dlnaserver as both the tag (`v1.1.0928`) and `latest`, and signed keyless
 # with cosign, then started once to prove it answers. Verifying that the image still builds on every change
-# is docker.yml's job, not this one's.
+# is docker.yml's job, not this one's. Like release.yml, tag-release.yml calls it with the tag it created.
 name: Docker publish
 
 on:
   push:
     tags: [ "v*" ]
+  workflow_call:
+    inputs:
+      tag:
+        description: The existing `v*` tag to publish.
+        required: true
+        type: string
 
 env:
+  TAG: ${{ inputs.tag || github.ref_name }}
   REGISTRY: ghcr.io
   # Lowercase on purpose - a registry rejects an uppercase repository name, and github.repository is
   # `kopcot/DLNAServer`.
@@ -34,6 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.TAG }}
           persist-credentials: false
 
       - name: Install cosign
@@ -49,15 +57,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # type=ref rather than type=semver: `1.1.0928` carries a leading zero, which semver does not allow, so a
-      # semver pattern would silently produce no tag at all.
+      # type=raw from TAG rather than type=semver: `1.1.0928` carries a leading zero, which semver does not
+      # allow, so a semver pattern would silently produce no tag at all. Not type=ref either - when called
+      # from tag-release.yml the triggering ref is main, not the tag.
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=tag
+            type=raw,value=${{ env.TAG }}
             type=raw,value=latest
 
       - name: Build and push
@@ -93,6 +102,7 @@ jobs:
       # For the smoke-test script only.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ env.TAG }}
           persist-credentials: false
 
       - name: Log in to ${{ env.REGISTRY }}

@@ -1300,6 +1300,26 @@ session rather than the current one.
   file (`cat backup > source`) or `touch` it afterwards, and treat a surprising mutation result as a
   build-freshness question first. Sibling of the 2026-09-04 trap 1 in section 7.
 
+### CI and release traps, all hit on 2026-09-30
+Each has a workflow built around it; `.github/workflows/README.md` describes the workflows themselves.
+- **A tag pushed with the workflow token starts no other workflow.** GitHub's loop guard - so
+  `tag-release.yml` *calls* `release.yml` and `docker-publish.yml` with a `tag` input instead of relying on
+  the tag it just created. Anything added to that chain has to be called the same way, or needs a PAT.
+- **In a called workflow, `github.workflow` is the caller's name.** Every workflow `full-suite.yml` calls
+  therefore got a literal in its concurrency group; without one the three share a group and cancel one
+  another. A new callable workflow with a concurrency group needs its own literal too.
+- **`1.1.0928` is not semver** - the leading zero is invalid - so `docker/metadata-action`'s `type=semver`
+  produces no tag at all, silently. The image tag is `type=raw` from the git tag.
+- **Trivy's default database mirror answered 404** and Trivy failed without falling back, which reads as a
+  failed scan but scanned nothing. `docker.yml` sets `TRIVY_DB_REPOSITORY` to the GHCR copy.
+- **The Host project carried no `<Version>` before 2026-09-23**, so a history walk that compares versions
+  sees an empty one there; `tag-release.yml` skips it, or it would tag `v`.
+- **actionlint and zizmor disagree on `$/...`**, GitHub's July-2026 self-repository syntax: zizmor asks for
+  it, actionlint 1.7.12 rejects it. The five reusable-workflow calls keep `./` with an inline zizmor ignore.
+- **Docker Desktop does not mount a mapped network drive** - the checkout's `T:` is the NAS share
+  `\\NASKopcoTS464\Public` - so `-v "${PWD}:/repo"` comes up empty and a linter image reports no files. Run
+  the linters through `uvx`, not their container images. `docker build` is unaffected: it sends the context.
+
 ### Recurring checks - do these, they have each caught a real defect
 1. **Grep new configuration properties for readers.** `SlowQueryThresholdInMilliseconds` was declared,
    documented and read by nothing - the same dead-setting defect flagged in the reference's
@@ -1555,6 +1575,12 @@ Decided 2026-09-08, during the fix pass for the third `/review-all --full` (sect
     **Reporting the defaults as a finding is a false positive.**
 31. **Stop is refused while a database reset is pending** (6u). `/manage/stop` answers 409 and the page
     says why. Clearing the restart flag would lose the reset; keeping it would turn Stop into a restart.
+32. **Release tags are created by `tag-release.yml`, never by hand on a workstation** (6y). The rule of
+    tagging a version when it is left behind is unchanged; only who applies it moved. A missing local
+    `git tag` step in a change is therefore not an omission. The `./` reusable-workflow calls with a zizmor
+    `self-repository` ignore are deliberate too, until actionlint accepts the `$/` form.
+33. **The smoke test does not exercise SSDP discovery** (6x). A runner has no television on its network,
+    so it checks the HTTP half only. **Reporting the missing discovery test as a gap is a false positive.**
 
 ### Open work from the 2026-09-23 batches (6p to 6s)
 

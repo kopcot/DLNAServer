@@ -9,14 +9,16 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_call:
 
 # Least privilege: nothing here writes to the repository.
 permissions:
   contents: read
 
-# A newer push to the same branch makes the running job pointless.
+# A newer push to the same branch makes the running job pointless. The literal keeps this apart from the
+# other workflows full-suite.yml calls, since github.workflow is then the caller's name.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-dotnet-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

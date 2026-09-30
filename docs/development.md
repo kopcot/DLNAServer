@@ -16,6 +16,10 @@ dotnet run --project src\DlnaServer.Host    # needs Library.SourceFolders set in
 
 `Docker.usage.md` covers the container path and `NasBuild.usage.txt` the QNAP deployment.
 
+Every push and pull request is built and tested on Linux and Windows, the container is built and smoke
+tested, and the whole set runs again every night; what runs when is in
+[.github/workflows/README.md](../.github/workflows/README.md), with the commands to lint a workflow locally.
+
 ## The two hard rules
 
 - **The build stays at 0 warnings.** CI builds with `-warnaserror`, so a warning is a failed build.
@@ -96,8 +100,11 @@ A release is a `v`-prefixed tag on the host's version (`v1.1.0928`); pushing it 
 attaches the linux-x64 archive, and publishes the container image to `ghcr.io/kopcot/dlnaserver` under that tag and `latest`, signed with cosign.
 
 Every product version gets its tag, and it is set **when the version moves on, not while it is current**: before
-the first change that bumps the host past `X`, tag the last commit that carried `X` as `vX`. Several commits under
-one version share that one tag, on the newest of them.
+the first change that bumps the host past `X`, the last commit that carried `X` is tagged `vX`. Several commits under
+one version share that one tag, on the newest of them. Since 2026-09-30 `tag-release.yml` sets it on the push that
+carries the bump and releases it, so **do not tag locally** - a local tag that differs from the one the workflow made
+is refused by the next fetch. Pushing a `v*` tag by hand still releases it. The whole flow is in
+[.github/workflows/README.md](../.github/workflows/README.md).
 
 ## Pull requests
 
