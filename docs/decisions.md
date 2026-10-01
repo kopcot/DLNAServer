@@ -1587,8 +1587,9 @@ Decided 2026-09-08, during the fix pass for the third `/review-all --full` (sect
     **Reporting the defaults as a finding is a false positive.**
 31. **Stop is refused while a database reset is pending** (6u). `/manage/stop` answers 409 and the page
     says why. Clearing the restart flag would lose the reset; keeping it would turn Stop into a restart.
-32. **Release tags are created by `tag-release.yml`, never by hand on a workstation** (6y). The rule of
-    tagging a version when it is left behind is unchanged; only who applies it moved. A missing local
+32. **Release tags are created by `tag-release.yml`, never by hand on a workstation** (6y). Since
+    2026-10-01 it tags the pushed head with its version, not the version left behind - the workflow token
+    cannot tag an older commit once a workflow file has changed after it, which failed `v1.1.0928`. A missing local
     `git tag` step in a change is therefore not an omission. The `./` reusable-workflow calls with a zizmor
     `self-repository` ignore are deliberate too, until actionlint accepts the `$/` form.
 33. **The smoke test does not exercise SSDP discovery** (6x). A runner has no television on its network,

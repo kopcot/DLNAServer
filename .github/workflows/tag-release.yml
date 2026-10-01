@@ -1,9 +1,10 @@
-# Tag a version when it is left behind, then release it.
+# Tag the version a push to main carries, then release it.
 #
-# The rule in docs/development.md: before the first change that bumps the host past `X`, the last commit that
-# carried `X` is tagged `vX`. This does that on the push that carries the bump, so nobody tags by hand -
-# walking main's first-parent history of the push, every commit whose host `<Version>` differs from its
-# predecessor's has its predecessor tagged. A tag that already exists is left alone.
+# On a push that changes the host project, the pushed head is tagged `v<its host <Version>>` unless that tag
+# already exists, so nobody tags by hand. Only the head: GitHub treats a new tag as creating every workflow
+# file that differs from main's tip, and the workflow token can never hold the `workflows` permission, so
+# tagging an older commit was refused with a 403 the first time a workflow changed after the bump (2026-10-01).
+# A push that bumps twice releases only the newer version.
 #
 # A tag pushed with the workflow token starts no other workflow, which is GitHub's guard against loops, so
 # release.yml and docker-publish.yml are called directly with the tag rather than triggered by it.
@@ -14,6 +15,8 @@ on:
     branches: [ "main" ]
     paths:
       - "src/DlnaServer.Host/DlnaServer.Host.csproj"
+      # So a change to this file is exercised, and a version a failed run left untagged gets tagged.
+      - ".github/workflows/tag-release.yml"
 
 permissions:
   contents: read
@@ -25,7 +28,7 @@ concurrency:
 
 jobs:
   tag:
-    name: Tag the version left behind
+    name: Tag the pushed version
     runs-on: ubuntu-latest
 
     permissions:
@@ -36,59 +39,33 @@ jobs:
       tags: ${{ steps.tag.outputs.tags }}
 
     steps:
-      # Full history, to walk the pushed range and to see the existing tags.
+      # The tags are needed to see whether this version is already tagged.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Tag each version the push moved past
+      - name: Tag the pushed version
         id: tag
         env:
           GH_TOKEN: ${{ github.token }}
-          BEFORE: ${{ github.event.before }}
-          AFTER: ${{ github.sha }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
-          project="src/DlnaServer.Host/DlnaServer.Host.csproj"
-          version_at() {
-            git show "$1:${project}" | sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' | head -n 1
-          }
-
-          # A new branch or a force-push has no predecessor to compare with.
-          if ! git cat-file -e "${BEFORE}^{commit}" 2> /dev/null; then
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/DlnaServer.Host/DlnaServer.Host.csproj | head -n 1)
+          tag="v${version}"
+          if [ -z "${version}" ] || git rev-parse --quiet --verify "refs/tags/${tag}" > /dev/null; then
+            echo "${tag} already exists or no version found, nothing to tag"
             echo "tags=[]" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
-          tags=()
-          previous=$(version_at "${BEFORE}")
-          parent="${BEFORE}"
-          for commit in $(git rev-list --reverse --first-parent "${BEFORE}..${AFTER}"); do
-            current=$(version_at "${commit}")
-            # An empty version is a project from before it carried its own `<Version>` - nothing to tag.
-            if [ -n "${previous}" ] && [ "${current}" != "${previous}" ]; then
-              tag="v${previous}"
-              if git rev-parse --quiet --verify "refs/tags/${tag}" > /dev/null; then
-                echo "${tag} already exists, left alone"
-              else
-                object=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags" \
-                  -f tag="${tag}" -f message="${tag}" -f object="${parent}" -f type=commit --jq .sha)
-                gh api "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${tag}" -f sha="${object}" > /dev/null
-                echo "Tagged ${parent} as ${tag}"
-                tags+=("${tag}")
-              fi
-            fi
-            previous="${current}"
-            parent="${commit}"
-          done
+          object=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags" \
+            -f tag="${tag}" -f message="${tag}" -f object="${HEAD_SHA}" -f type=commit --jq .sha)
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${tag}" -f sha="${object}" > /dev/null
+          echo "Tagged ${HEAD_SHA} as ${tag}"
+          echo "tags=[\"${tag}\"]" >> "${GITHUB_OUTPUT}"
 
-          if [ ${#tags[@]} -eq 0 ]; then
-            echo "tags=[]" >> "${GITHUB_OUTPUT}"
-          else
-            echo "tags=$(printf '%s\n' "${tags[@]}" | jq --raw-input . | jq --slurp --compact-output .)" >> "${GITHUB_OUTPUT}"
-          fi
-
-  # One tag at a time, oldest first, so `latest` ends on the newest.
+  # A matrix of at most one tag.
   release:
     name: Release
     needs: tag

@@ -79,10 +79,14 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:2f202e1169ec507bdc07007cf68c14d0
 # ffmpeg from the distribution, deliberately, so Thumbnails.DownloadFFmpeg can stay OFF. That setting
 # fetches an archive from whatever URL a third-party API names, verifies no hash or signature, and then
 # executes the result as the server user - a compromise of that host, its CDN or its DNS would be code
-# execution here. Debian's package is signed and updated by 'docker build --pull'.
+# execution here. Debian's package is signed.
 #
 # curl is for the HEALTHCHECK below and for reaching /manage from inside the container.
+#
+# upgrade first: the base image is pinned by digest and Microsoft rebuilds it on its own schedule, so a
+# Debian security fix (libexpat1 deb12u4, 2026-10-01) would otherwise stay out of the image until then.
 RUN apt-get update \
+    && apt-get upgrade --yes \
     && apt-get install --yes --no-install-recommends ffmpeg curl \
     && rm --recursive --force /var/lib/apt/lists/*
 

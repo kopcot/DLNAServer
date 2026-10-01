@@ -105,10 +105,11 @@ stops being one.
 A release is a `v`-prefixed tag on the host's version (`v1.1.0928`); pushing it builds, tests and
 attaches the linux-x64 archive, and publishes the container image to `ghcr.io/kopcot/dlnaserver` under that tag and `latest`, signed with cosign.
 
-Every product version gets its tag, and it is set **when the version moves on, not while it is current**: before
-the first change that bumps the host past `X`, the last commit that carried `X` is tagged `vX`. Several commits under
-one version share that one tag, on the newest of them. Since 2026-09-30 `tag-release.yml` sets it on the push that
-carries the bump and releases it, so **do not tag locally** - a local tag that differs from the one the workflow made
+Every product version gets its tag, set **on the push that carries it**: `tag-release.yml` tags the head of a push
+to `main` that changes the host project as `v<its version>`, unless that tag already exists, and releases it. Commits
+pushed later under the same version are not in that release - bump the version to ship them. Until 2026-10-01 the
+tag went on the last commit of a version *left behind*; the workflow token cannot tag a commit older than `main`'s
+tip once a workflow file has changed since, so that rule failed. **Do not tag locally** - a local tag that differs from the one the workflow made
 is refused by the next fetch. Pushing a `v*` tag by hand still releases it. The whole flow is in
 [.github/workflows/README.md](../.github/workflows/README.md).
 

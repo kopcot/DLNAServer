@@ -18,7 +18,7 @@ comment, and Dependabot keeps those pins current. The traps that shaped them are
 | [`workflow-lint.yml`](workflow-lint.yml) | push and PR that touch `.github/workflows/` | actionlint and zizmor over these files | no |
 | [`scorecard.yml`](scorecard.yml) | push to `main`; weekly; branch-protection change | OpenSSF Scorecard of the repository's supply-chain posture | `security-events`, `id-token` |
 | [`full-suite.yml`](full-suite.yml) | nightly 03:00 UTC; manual on any branch | Calls `dotnet.yml`, `docker.yml` and `vulnerability-audit.yml` | no |
-| [`tag-release.yml`](tag-release.yml) | push to `main` that changes the host `<Version>` | Tags the version left behind, then calls the two below | `contents`, `packages`, `id-token` |
+| [`tag-release.yml`](tag-release.yml) | push to `main` that changes the host `<Version>` | Tags the pushed head with its version, then calls the two below | `contents`, `packages`, `id-token` |
 | [`release.yml`](release.yml) | a `v*` tag pushed by hand; called by `tag-release.yml` | linux-x64 archive, GitHub release with `release-notes.md`, smoke test of the downloaded archive | `contents: write` |
 | [`docker-publish.yml`](docker-publish.yml) | a `v*` tag pushed by hand; called by `tag-release.yml` | Pushes `ghcr.io/kopcot/dlnaserver`, signs it with cosign, smoke tests it by digest | `packages`, `id-token` |
 
@@ -50,14 +50,13 @@ copying them, so the nightly run and the per-change run cannot drift apart.
 
 ## Releasing
 
-A version is tagged when it is **left behind**: before the first change that bumps the host past `X`, the
-last commit that carried `X` becomes `vX`. `tag-release.yml` does this for you:
+A version is tagged when it is **pushed**: the head of a push to `main` that changes the host project is
+tagged `v<its version>`, unless that tag already exists. `tag-release.yml` does this for you:
 
 ```text
-push to main that changes <Version> in src/DlnaServer.Host/DlnaServer.Host.csproj
+push to main that changes src/DlnaServer.Host/DlnaServer.Host.csproj (or tag-release.yml)
   └─ tag-release.yml
-       ├─ walks main's first-parent history of the push
-       ├─ tags the commit before each version change as v<old version>
+       ├─ tags the pushed head as v<its host version>
        │    (a tag that already exists is left alone)
        ├─ release.yml         build + test at the tag, publish linux-x64, GitHub release,
        │                      download it back and smoke test it
@@ -65,12 +64,17 @@ push to main that changes <Version> in src/DlnaServer.Host/DlnaServer.Host.cspro
                               sign with cosign, pull by digest and smoke test it
 ```
 
+**Only the pushed head can be tagged.** GitHub treats a new tag as creating every workflow file that differs
+from `main`'s tip, and the workflow token can never hold the `workflows` permission - so tagging an older
+commit, which the previous "left behind" rule did, failed with a 403 once a workflow changed after the bump
+(2026-10-01, `v1.1.0928`, never released). A push carrying two bumps releases only the newer one.
+
 **Do not create release tags locally any more** - push the version bump and the workflow tags the right
 commit. A tag created locally with a different object from the one the workflow made is refused by the
 next `git fetch` ("would clobber existing tag").
 
 Pushing a `v*` tag by hand still works and runs `release.yml` and `docker-publish.yml` directly, which is
-the way to release a version that is *not* being left behind, or to redo a failed one.
+the way to release a commit other than a pushed head, or to redo a failed one.
 
 **Why the workflow calls the other two instead of letting the tag trigger them.** A tag pushed with the
 workflow's own token starts no other workflow - GitHub's guard against loops. Calling them directly with the
