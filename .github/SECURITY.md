@@ -45,7 +45,7 @@ intended. They are listed here so the boundary is explicit.
   concept of a user. Anything that can reach the media port can browse and stream the library.
 - **The admin UI is unauthenticated for the same reason**, and it can stop the server, rebuild the
   index and delete the database. Exposing it beyond the LAN is only supported behind the reverse
-  proxy and password in `docker-compose.admin-remote.yml`; see `Docker.usage.md`.
+  proxy and password in `deploy/docker-compose/2-admin-remote`; see `Docker.usage.md`.
 - **Uploading is off by default** and is the only path that writes into the media tree. It is read
   once at startup, so enabling it needs a restart. Every upload is recorded in
   `logs/uploadSecurity.log`.

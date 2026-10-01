@@ -1,4 +1,4 @@
-# Fronts the DLNA admin pages with TLS and a password. Used by docker-compose.admin-remote.yml.
+# Fronts the DLNA admin pages with TLS and a password. Used by docker-compose.yml in this folder.
 #
 # Only the name below is answered. A request arriving on the IP, or under any other name, gets no
 # response at all rather than a redirect - which keeps the admin UI out of the way of anything scanning

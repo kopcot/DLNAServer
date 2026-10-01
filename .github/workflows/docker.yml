@@ -78,7 +78,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Host networking, as docker-compose.yml runs it. No media is mounted, so the server serves its own
+      # Host networking, as deploy/docker-compose/ runs it. No media is mounted, so the server serves its own
       # folder, which is enough to prove it starts, migrates and answers.
       - name: Start the container
         run: docker run --detach --name smoke --network host dlna-server:ci

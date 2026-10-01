@@ -1,6 +1,8 @@
-# Overlay that puts ONLY the admin pages on the internet, behind TLS and a password.
+# The DLNA server with ONLY its admin pages on the internet, behind TLS and a password. Standalone: run it
+# from this folder, with Caddyfile and .env beside it. The build context is the GitHub repository.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.admin-remote.yml up -d
+#   cp .env.example .env    # then fill in every required value - see README.md
+#   docker compose up --build -d
 #
 # ---------------------------------------------------------------------------------------------------
 # READ THIS FIRST
@@ -20,7 +22,7 @@
 # does not publish /manage/stop.
 #
 # "Never publish the media port" is what this used to say next, and it described a control that does not
-# exist. docker-compose.yml mandates network_mode: host because SSDP needs multicast, and Program.cs binds
+# exist. The dlna service mandates network_mode: host because SSDP needs multicast, and Program.cs binds
 # both ports with ListenAnyIP - so the media port is already on every interface and there is nothing to
 # publish or withhold. The HOST FIREWALL is the only thing confining it.
 #
@@ -34,7 +36,39 @@
 
 services:
   dlna:
+    build:
+      context: https://github.com/kopcot/DLNAServer.git#main
+      dockerfile: Dockerfile
+    image: kopcot/dlnaserver:latest
+    container_name: dlna-server
+    restart: unless-stopped
+
+    # SSDP discovery is multicast and a bridge does not forward it - see Docker.usage.md. Host networking
+    # also ignores `ports:`; both ports come from the variables below.
+    network_mode: host
+
+    # Match the owner of your media, or thumbnail writes fail - previews are written beside the media.
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    volumes:
+      # Read-write on purpose, see "Why the media mount is not read-only" in Docker.usage.md.
+      - ${MEDIA_PATH:?set MEDIA_PATH in .env}:/media
+      - dlna-data:/data
+      - dlna-logs:/app/logs
+
     environment:
+      Dlna__Server__Port: ${MEDIA_PORT:-26852}
+      # The same variable Caddy proxies to below, so the two cannot disagree.
+      Dlna__Server__AdminPort: ${ADMIN_PORT:-26853}
+      # Index 0 replaces the folder the shipped config.json names rather than adding to it.
+      Dlna__Library__SourceFolders__0: /media
+      # A bind mount usually delivers no inotify events for writes made outside the container.
+      Dlna__Library__UsePeriodicRescan: "true"
+      Dlna__Library__RescanIntervalMinutes: "5"
+      # ffmpeg is in the image; on would download and execute an unverified binary.
+      Dlna__Thumbnails__DownloadFFmpeg: "false"
+      TZ: ${TZ:-Europe/Prague}
+
       # WITHOUT THIS YOU GET A 400 AND NOTHING ELSE. AllowedHostsDefaults replaces the shipped wildcard
       # with loopback, this machine's name and its LAN addresses - a DNS-rebinding guard - so a request
       # arriving as dlna.example.com matches nothing and host filtering rejects it before any page runs.
@@ -46,6 +80,14 @@ services:
       # widening to "*", which would also defeat the DNS-rebinding guard this exists for. Semicolon-
       # separated. Keep localhost so the container's own healthcheck still passes.
       AllowedHosts: "${ADMIN_HOSTNAME:?set ADMIN_HOSTNAME in .env};localhost;127.0.0.1;${LAN_HOSTS:-}"
+
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+    # Below ~512m the SkiaSharp decode of a large photo fails rather than being slow.
+    mem_limit: ${MEM_LIMIT:-1g}
 
   caddy:
     image: caddy:2-alpine
@@ -87,5 +129,7 @@ services:
       - no-new-privileges:true
 
 volumes:
+  dlna-data:
+  dlna-logs:
   caddy-data:
   caddy-config:

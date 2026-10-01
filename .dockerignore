@@ -57,4 +57,4 @@ NasBuild.usage.txt
 # Docker's own files.
 Dockerfile
 .dockerignore
-docker-compose*.yml
+deploy/

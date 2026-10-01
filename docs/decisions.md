@@ -1535,7 +1535,7 @@ Decided 2026-09-08, while closing the last of those documents:
 Decided 2026-09-08, during the fix pass for the third `/review-all --full` (section 6i):
 
 22. **`/manage` living on the MEDIA port is deliberate, and the compose overlay's "never publish the
-    media port" advice was describing a control that does not exist.** `docker-compose.yml` mandates
+    media port" advice was describing a control that does not exist.** The compose file mandates
     `network_mode: host` because SSDP needs multicast, and `Program.cs` binds both ports with
     `ListenAnyIP` - so the media port is on every interface and there is nothing to publish or withhold.
     What made that dangerous was `ADMIN_HOSTNAME`: `HostFilteringOptions` is **process-wide**, so
@@ -1745,7 +1745,7 @@ that sat in this list was fixed the same day - section 6h.
   still holds and is not being re-raised - but this is the first endpoint where that decision lets a device
   on the network WRITE to the filesystem rather than read from it. `Upload.Enabled` shipping off, and
   needing a restart to turn on, is the whole control. Worth revisiting if the admin port is ever exposed
-  beyond the LAN, which `docker-compose.admin-remote.yml` exists to do.
+  beyond the LAN, which `deploy/docker-compose/2-admin-remote` exists to do.
 
 **Still owed, and neither is code:**
 

@@ -634,7 +634,7 @@ namespace DlnaServer.Host
             });
 
             // Immediately inside the exception handler, so everything below reads the client's own scheme
-            // and address rather than the proxy's. docker-compose.admin-remote.yml puts Caddy in front of
+            // and address rather than the proxy's. deploy/docker-compose/2-admin-remote puts Caddy in front of
             // the admin port and terminates TLS there, so without this every request behind it looks like
             // plain HTTP from 127.0.0.1 - which would silently reduce the cookie policy below to a no-op
             // in the one deployment that has TLS, and reduce logs/uploadSecurity.log and the

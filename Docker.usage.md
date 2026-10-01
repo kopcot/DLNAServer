@@ -1,10 +1,21 @@
 # Running this server in Docker
 
-Files: `Dockerfile`, `.dockerignore`, `docker-compose.yml`, and for remote admin access
-`docker-compose.admin-remote.yml` + `Caddyfile`.
+Files: `Dockerfile` and `.dockerignore` at the root, and one folder per deployment under
+[`deploy/docker-compose/`](deploy/docker-compose), each with its own README:
+
+| Folder | What it is |
+|---|---|
+| [`1-QNAP-TS464-40GB`](deploy/docker-compose/1-QNAP-TS464-40GB/README.md) | The home NAS. `docker-compose.yml`, host networking, `/share/Media` |
+| [`2-admin-remote`](deploy/docker-compose/2-admin-remote/README.md) | A standalone stack with the admin pages on the internet behind Caddy, TLS and a password |
+| [`3-MikroTik-hAP-be3-Media`](deploy/docker-compose/3-MikroTik-hAP-be3-Media/README.md) | The MikroTik router, media on USB. A RouterOS script, not compose - RouterOS runs neither compose nor a build |
+
+Folders are numbered `<n>-<machine or reason>`; a new target takes the next number. Every compose file builds
+from `https://github.com/kopcot/DLNAServer.git#main`, never from the checkout it sits in, so run it from its
+own folder anywhere:
 
 ```bash
-cp .env.example .env          # then edit MEDIA_PATH, PUID, PGID
+cd deploy/docker-compose/1-QNAP-TS464-40GB
+cp .env.example .env          # then edit PUID, PGID
 docker compose up --build -d
 docker compose logs -f
 ```
@@ -25,7 +36,7 @@ services:
 docker compose pull && docker compose up -d
 ```
 
-As `docker-compose.yml` ships, `image:` is `kopcot/dlnaserver:latest` with a `build:` block beside it, so
+As the compose files ship, `image:` is `kopcot/dlnaserver:latest` with a `build:` block beside it, so
 compose builds from GitHub's `main` and only names the result - that name is **not** the published image,
 and without `build:` it would be looked up on Docker Hub. Each published image is signed keyless with
 cosign; `.github/SECURITY.md` has the command that verifies one.
@@ -43,7 +54,7 @@ forward multicast**, in either direction. On a bridge:
 - the media port answers every request you make by hand,
 - and **no television ever lists the server**.
 
-That looks exactly like a bug in the server and is not one. `docker-compose.yml` uses
+That looks exactly like a bug in the server and is not one. Every compose file uses
 `network_mode: host` for this reason, which also means `ports:` is ignored — the ports come from
 `Dlna.Server.Port` and `Dlna.Server.AdminPort`, and they are already on the host.
 
@@ -55,7 +66,7 @@ Bridge networking is only reasonable if nothing needs to discover the server —
 you are using the admin UI and nothing else.
 
 **On Docker Desktop for Windows or Mac, `network_mode: host` is not the same thing** — the "host" is the
-Linux VM, not your workstation. This compose file is for a Linux host: the NAS, or a Linux box. Testing
+Linux VM, not your workstation. The compose files are for a Linux host: the NAS, or a Linux box. Testing
 on Windows works with published ports, but discovery will not.
 
 ### 2. Why the media mount is not read-only
@@ -85,16 +96,16 @@ docker compose cp dlna:/data/config.json ./config.json
 docker compose cp ./config.json dlna:/data/config.json
 ```
 
-The `Dlna__` environment variables in `docker-compose.yml` **win over the file**. A setting saved on the
+The `Dlna__` environment variables in the compose file **win over the file**. A setting saved on the
 Settings page is written to `config.json`, but if the compose file also sets it, the environment value is
 the one that applies. Remove a variable from the compose file once you want the Settings page to own it.
 
 ### 4. Turn the periodic rescan off if you do not need it
 
-`Dlna__Library__UsePeriodicRescan` ships **on** in `docker-compose.yml`, and that is the only place it
-defaults to on. The reason is that a bind mount or an overlay filesystem usually delivers no inotify
-events for writes made outside the container, so `FileSystemWatcher` stays silent and the library quietly
-stops keeping up.
+`Dlna__Library__UsePeriodicRescan` ships **on** in the compose files and the MikroTik script, and those are
+the only places it defaults to on. The reason is that a bind mount or an overlay filesystem usually
+delivers no inotify events for writes made outside the container, so `FileSystemWatcher` stays silent and
+the library quietly stops keeping up.
 
 It is not free. Each pass enumerates and reconciles every source folder — roughly 51,000 filesystem calls
 on a 25,000-file library. If your media is on a real local filesystem and the watcher works, set it to
@@ -118,6 +129,10 @@ each include `linux-arm64` and `linux-musl-arm64`.
 ```bash
 docker buildx build --platform linux/arm64 -t dlna-server:local --load .
 ```
+
+**Releases publish `linux/arm64` too**, as one multi-arch `ghcr.io/kopcot/dlnaserver`, so an ARM host such as
+the [MikroTik router](deploy/docker-compose/3-MikroTik-hAP-be3-Media/README.md) pulls instead of building.
+The per-push CI build in `docker.yml` stays amd64-only, so an ARM-only break first shows at release.
 
 The SDK stage is pinned to `--platform=$BUILDPLATFORM`, so cross-building from an x64 workstation runs
 the compiler natively and only the small runtime stage is emulated. Without that the whole SDK runs
@@ -152,7 +167,7 @@ Debian's package is signed, and `docker build --pull` updates it.
 The allocator and GC settings from `NasBuild.sh` are baked in: `DOTNET_GCServer=0`,
 `MALLOC_TRIM_THRESHOLD_`, `MALLOC_MMAP_THRESHOLD_`, `MALLOC_ARENA_MAX=2`.
 
-The settings that actually decide the footprint are in `docker-compose.yml`, and the important one is
+The settings that actually decide the footprint are in the compose file's `environment:` block, and the important one is
 `Dlna__Database__CacheSizeInMegabytes`. **It is charged per pooled connection, not per process.** At the
 value the NAS was accidentally running (32), a pool grown to a dozen connections is ~380 MB of native
 memory that nothing reclaims — the pool releases nothing when a connection is returned and prunes only
@@ -170,8 +185,12 @@ either side so you can see what each part gave back.
 
 ## Exposing only the admin pages to the internet
 
+[`deploy/docker-compose/2-admin-remote`](deploy/docker-compose/2-admin-remote/README.md) is a standalone stack
+- the DLNA server and Caddy in one file, with the `Caddyfile` and `.env.example` beside it:
+
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.admin-remote.yml up -d
+cd deploy/docker-compose/2-admin-remote
+docker compose up --build -d
 ```
 
 **Consider a VPN first.** WireGuard on the router or the NAS gives you the admin pages, the media port and
@@ -187,7 +206,7 @@ Verified against the running server: `/manage/database` answers 200 on 26852 and
 publishing the admin port does not publish the management API.
 
 > **"Never publish the media port" used to follow, and it described a control that does not exist.**
-> `docker-compose.yml` mandates `network_mode: host` because SSDP needs multicast, and `Program.cs` binds
+> The compose file mandates `network_mode: host` because SSDP needs multicast, and `Program.cs` binds
 > both ports with `ListenAnyIP` — the media port is already on every interface, so there is nothing to
 > publish or withhold and the **host firewall is the only thing confining it**.
 >
@@ -205,7 +224,7 @@ publishing the admin port does not publish the management API.
 > **The same process-wide reach cuts the other way too, and it costs LAN traffic rather than security.**
 > Naming `ADMIN_HOSTNAME` in `AllowedHosts` is `AllowedHostsDefaults`'s own documented escape hatch —
 > `Apply()` returns early the moment the list is non-wildcard — so its LAN-address auto-detection never
-> runs at all once the overlay is up. A television that reaches this box by its LAN IP or mDNS name
+> runs at all once `ADMIN_HOSTNAME` is set. A television that reaches this box by its LAN IP or mDNS name
 > (`description.xml`, SOAP, streaming — one process, one `AllowedHosts`) gets the identical 400 the
 > hostname guard was built to give a stranger. `LAN_HOSTS` in `.env` is the fix: name the LAN address(es)
 > explicitly rather than falling back to `*`, which would silently drop the DNS-rebinding guard back to
@@ -239,7 +258,7 @@ publishing the admin port does not publish the management API.
 - **A bare 400 from the server, no page, no log entry you would recognise.** `AllowedHostsDefaults`
   replaces the shipped wildcard with loopback, the machine name and its LAN addresses — a DNS-rebinding
   guard, because nothing else separates a hostile page from an unauthenticated same-origin admin UI. A
-  request arriving as `dlna.example.com` matches none of them. The overlay sets `AllowedHosts`
+  request arriving as `dlna.example.com` matches none of them. The stack sets `AllowedHosts`
   explicitly, which is the documented escape hatch; `Apply()` returns early on a non-wildcard list.
 - **Every page renders once, looks right, then does nothing when clicked.** The Blazor circuit is a
   WebSocket. A proxy that does not forward `Upgrade` leaves the UI dead but visually intact. Caddy's
@@ -256,9 +275,9 @@ publishing the admin port does not publish the management API.
 | No previews, no errors | The container user cannot write `.@__thumb` into the media tree — check `PUID`/`PGID` |
 | No durations, resolutions or language filters | ffmpeg missing. `docker compose exec dlna /app/ffmpeg/ffprobe -version` |
 | New files never appear | The watcher gets no inotify events. Set `UsePeriodicRescan=true` |
-| A saved setting does not take effect | The same setting is also a `Dlna__` variable in `docker-compose.yml`, which wins |
+| A saved setting does not take effect | The same setting is also a `Dlna__` variable in the compose file, which wins |
 | Admin page returns 400 remotely | `AllowedHosts` does not include the external name |
-| A renderer on the LAN gets 400 with `docker-compose.admin-remote.yml` up | `LAN_HOSTS` is unset - `ADMIN_HOSTNAME` alone disables the automatic LAN-address detection for the whole process |
+| A renderer on the LAN gets 400 with `2-admin-remote` up | `LAN_HOSTS` is unset - `ADMIN_HOSTNAME` alone disables the automatic LAN-address detection for the whole process |
 | Working set climbs and stays | Press *Empty the memory* on `/admin/cache`; check `CacheSizeInMegabytes` is 2, not 32 |
 
 Useful:

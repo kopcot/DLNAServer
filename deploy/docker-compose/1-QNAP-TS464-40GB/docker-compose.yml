@@ -1,4 +1,5 @@
-# DLNA media server. Read Docker.usage.md before changing the networking.
+# DLNA media server on the QNAP TS-464. Read Docker.usage.md at the repository root before changing the
+# networking. Run from this folder - the build context is the GitHub repository, not this checkout.
 #
 #   docker compose up --build -d
 #   docker compose logs -f

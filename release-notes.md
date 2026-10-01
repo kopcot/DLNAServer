@@ -10,6 +10,10 @@ worth telling you about is added to the version it belongs to.
 
 ## 1.1
 
+**Runs on ARM, including a MikroTik router.** The published image now comes for ARM64 as well as x86, so an ARM machine pulls it instead of building it. There is a ready setup for the MikroTik hAP be3 Media router with your media on a USB disk - see `deploy/docker-compose/3-MikroTik-hAP-be3-Media`. It is written from MikroTik's documentation and has not yet been tried on the router itself.
+
+**The Docker setups moved.** `docker-compose.yml`, the admin-proxy setup and `.env.example` now live in their own folders under `deploy/docker-compose/`, one per machine, each with a README. If you start the server from a copy of the old files, move to the folder for your machine; the admin-proxy setup is now one complete file rather than an add-on to the other.
+
 **Subtitles reach the television.** A subtitle file named like a video - `film.srt`, `film.en.srt`, `film.1.en.srt` next to `film.mkv`, or in a folder just below it such as `Subs` - is now offered with that video, and lyrics (`.lrc`) with a song, with nothing to set up. Copy one in a week after the video and it is picked up the next time the server looks over your folders. Whether your television shows it depends on the television, so if one starts misbehaving, *Offer subtitles to televisions* on Settings turns it all off.
 
 **Choose them yourself on a file's page.** The file's page lists what is linked to it, with the language each one appears to be. You can add one by hand - it must be in the file's folder or one folder below, and not reached through a shortcut (a link) - which then replaces the automatic ones, remove one (it stays removed, whether it was found by name or added by you), or correct its language. A subtitle in a folder you later add to *Excluded folders* is let go of the next time the server looks over your folders, and so is one you added whose file has gone. Until then the page says why it cannot be used. Subtitles you add by hand are forgotten if you use *Rebuild index*; the ones found by name come back by themselves.

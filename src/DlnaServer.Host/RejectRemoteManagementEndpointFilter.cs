@@ -5,7 +5,7 @@ namespace DlnaServer.Host
     /// </summary>
     /// <remarks>
     /// The management endpoints are unauthenticated by design - a LAN appliance with no accounts - and
-    /// that holds only while the LAN is the whole audience. <c>docker-compose.admin-remote.yml</c>
+    /// that holds only while the LAN is the whole audience. <c>deploy/docker-compose/2-admin-remote</c>
     /// deliberately leaves it, and its stated contract is that it exposes <b>only</b> the admin pages.
     /// It does not:
     /// <para>
