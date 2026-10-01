@@ -26,6 +26,21 @@
          the 234 NETSDK1188 warnings SoapCore's WCF dependencies raise about locales .NET does not
          recognise - which is what broke the 0-warning build on the NAS. -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Every restore runs with locked mode (CI, NasBuild.sh, Dockerfile), so the resolved graph is the one
+         committed in each project's packages.lock.json rather than whatever the feed answers that day.
+         After changing Directory.Packages.props, run a plain `dotnet restore` to refresh the lock files. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- The Web and Razor SDKs glob *.json into Content, so without this every lock file is published and
+         Host and Admin collide on the same relative path (NETSDK1152). -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);packages.lock.json</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <!-- The lock files must carry a target for every runtime a locked restore names, or it fails with NU1004:
+       NasBuild.sh restores the Host for the NAS's detected runtime, which flows into every project it
+       references, and release.yml publishes linux-x64. The plural property only adds restore graphs - it
+       changes no build output, and the Dockerfile's RID-free portable publish is unaffected. -->
+  <PropertyGroup Condition="!$(MSBuildProjectName.EndsWith('Tests'))">
+    <RuntimeIdentifiers>linux-x64;linux-arm64;linux-arm;linux-musl-arm64</RuntimeIdentifiers>
   </PropertyGroup>
 
 <!-- NO GC PROPERTY BELONGS IN THIS FILE. The server runs long and hot on a NAS, so GC configuration

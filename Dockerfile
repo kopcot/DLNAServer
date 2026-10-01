@@ -11,18 +11,21 @@
 # Build
 # ---------------------------------------------------------------------------------------------------
 # global.json pins 8.0.414 with rollForward latestPatch, so the 8.0 SDK tag resolves an acceptable
-# 8.0.4xx. Pinned to a digest-free but explicit tag rather than 'latest' for the same reason global.json
-# exists: the .NET 9/10 SDKs would be selected otherwise and this solution targets net8.0.
+# 8.0.4xx. Pinned to an explicit tag rather than 'latest' for the same reason global.json exists: the
+# .NET 9/10 SDKs would be selected otherwise and this solution targets net8.0. Both base images also
+# carry the digest of that tag's multi-arch index, so a rebuild of one commit gets the same image;
+# Dependabot's docker entry moves the digest when Microsoft publishes a patch.
 #
 # --platform=$BUILDPLATFORM pins the SDK stage to the machine doing the building. Without it, a
 # `buildx --platform linux/arm64` from an x64 workstation runs the whole SDK under QEMU emulation, which
 # turns a 90-second build into tens of minutes. The publish below is architecture-neutral, so building
 # on x64 for arm64 is not merely allowed here - it is the fast path.
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0@sha256:78235e09001f52b6592c458ac010775ebac6725422e80cd0c1650590f67b2743 AS build
 WORKDIR /src
 
 # Project files first, so a source-only change does not re-run restore. Every csproj is copied because
-# Directory.Packages.props uses central package management and restore reads the whole graph.
+# Directory.Packages.props uses central package management and restore reads the whole graph. Each
+# lock file comes with it, since the restore is locked and refuses to run without them.
 COPY global.json Directory.Build.props Directory.Packages.props DlnaServer.sln ./
 COPY src/DlnaServer.Host/config.json                            app/
 COPY src/DlnaServer.Core/DlnaServer.Core.csproj                 src/DlnaServer.Core/
@@ -34,8 +37,17 @@ COPY src/DlnaServer.Host/DlnaServer.Host.csproj                 src/DlnaServer.H
 COPY tests/DlnaServer.UnitTests/DlnaServer.UnitTests.csproj                 tests/DlnaServer.UnitTests/
 COPY tests/DlnaServer.IntegrationTests/DlnaServer.IntegrationTests.csproj   tests/DlnaServer.IntegrationTests/
 COPY tests/DlnaServer.ArchitectureTests/DlnaServer.ArchitectureTests.csproj tests/DlnaServer.ArchitectureTests/
+COPY src/DlnaServer.Core/packages.lock.json                     src/DlnaServer.Core/
+COPY src/DlnaServer.Persistence/packages.lock.json              src/DlnaServer.Persistence/
+COPY src/DlnaServer.Media/packages.lock.json                    src/DlnaServer.Media/
+COPY src/DlnaServer.Upnp/packages.lock.json                     src/DlnaServer.Upnp/
+COPY src/DlnaServer.Admin/packages.lock.json                    src/DlnaServer.Admin/
+COPY src/DlnaServer.Host/packages.lock.json                     src/DlnaServer.Host/
+COPY tests/DlnaServer.UnitTests/packages.lock.json                          tests/DlnaServer.UnitTests/
+COPY tests/DlnaServer.IntegrationTests/packages.lock.json                   tests/DlnaServer.IntegrationTests/
+COPY tests/DlnaServer.ArchitectureTests/packages.lock.json                  tests/DlnaServer.ArchitectureTests/
 
-RUN dotnet restore DlnaServer.sln
+RUN dotnet restore DlnaServer.sln --locked-mode
 
 COPY . .
 
@@ -62,7 +74,7 @@ RUN dotnet publish src/DlnaServer.Host/DlnaServer.Host.csproj \
 # ---------------------------------------------------------------------------------------------------
 # Runtime
 # ---------------------------------------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:2f202e1169ec507bdc07007cf68c14d0ff3a098110b17c460a60185e1f36a9d1 AS runtime
 
 # ffmpeg from the distribution, deliberately, so Thumbnails.DownloadFFmpeg can stay OFF. That setting
 # fetches an archive from whatever URL a third-party API names, verifies no hash or signature, and then

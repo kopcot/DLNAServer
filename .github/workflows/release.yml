@@ -48,7 +48,7 @@ jobs:
           global-json-file: global.json
 
       - name: Restore dependencies
-        run: dotnet restore DlnaServer.sln
+        run: dotnet restore DlnaServer.sln --locked-mode
 
       # The release must not ship something the build gate would have rejected.
       - name: Build and test

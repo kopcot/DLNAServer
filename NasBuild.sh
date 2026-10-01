@@ -173,8 +173,13 @@ else
 fi
 
 echo "==> Restoring"
+# Locked to the committed packages.lock.json files. The runtime goes in as a property, not --runtime:
+# --runtime REPLACES the RuntimeIdentifiers set the lock files were written for and locked mode refuses
+# with NU1004, while the property adds to it. A NAS_RUNTIME outside that set (Directory.Build.props)
+# fails here the same way - add it to the list and re-run a plain restore to refresh the lock files.
 dotnet restore "$PROJECT" \
-  --runtime "$RUNTIME" \
+  -p:RuntimeIdentifier="$RUNTIME" \
+  --locked-mode \
   --force \
   -p:PublishAssemblyName="$ASSEMBLY_NAME" \
   -p:PublishReadyToRun="$PUBLISH_R2R"

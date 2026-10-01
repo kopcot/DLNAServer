@@ -48,7 +48,7 @@ jobs:
           global-json-file: global.json
 
       - name: Restore dependencies
-        run: dotnet restore DlnaServer.sln
+        run: dotnet restore DlnaServer.sln --locked-mode
 
       # Analyzers and EnforceCodeStyleInBuild cover the rules the compiler knows about; this covers
       # whitespace, using ordering and the rest of the .editorconfig that only the formatter applies.

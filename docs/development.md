@@ -27,6 +27,12 @@ tested, and the whole set runs again every night; what runs when is in
   included. If an advisory appears in a package nothing here references directly, pin it in
   `Directory.Packages.props` the way `System.Security.Cryptography.Xml` is pinned, and say why.
 
+Every project commits a `packages.lock.json`, and CI, the release, `NasBuild.sh` and the `Dockerfile` all
+restore with `--locked-mode`. After changing `Directory.Packages.props` or a package reference, run a plain
+`dotnet restore DlnaServer.sln` and commit the lock files it rewrites, or the next locked restore fails
+with NU1004. The same goes for a new NAS runtime: add it to `RuntimeIdentifiers` in `Directory.Build.props`
+first, because the lock files only carry targets for the runtimes listed there.
+
 ## Conventions
 
 ### The abstraction threshold
