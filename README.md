@@ -107,7 +107,7 @@ same framework-dependent publish `NasBuild.sh` produces, and the image is publis
 | [docs/troubleshooting.md](docs/troubleshooting.md) | It is not working - start here |
 | [docs/decisions.md](docs/decisions.md) | Why it is built this way: decisions, conventions, traps, open work |
 | [docs/history.md](docs/history.md) | Status, milestones, and the batch-by-batch record |
-| `release-notes.md` | What changed, for whoever runs the server |
+| [release-notes.md](release-notes.md) | What changed, for whoever runs the server |
 | [docs/development.md](docs/development.md) | Build, the two hard rules, versioning, releases |
 | [.github/workflows](.github/workflows/README.md) | CI and releases: what runs on every change, nightly, and on a version bump |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Who contributes, and where to start |
