@@ -290,7 +290,7 @@ docker compose exec dlna curl -s localhost:26852/manage/configuration
 
 ## What was actually verified, and what was not
 
-Built and run on 2026-09-06, Docker 28.3.3. Image is 1.25 GB.
+Built and run on 2026-09-06, Docker 28.3.3. Image is 1.25 GB. Since 2026-10-06 the publish step deletes the `runtimes/` folders of every platform but linux-x64 and linux-arm64, which brings it to about 730 MB (274 MB to download, amd64).
 
 **Verified by running it**, as uid 1000 with a bind-mounted media folder:
 

@@ -61,6 +61,9 @@ COPY . .
 # linux-arm64 and linux-musl-arm64. Pinning a RID here would instead force a separate build per
 # architecture and re-introduce the restore-graph trap NasBuild.sh documents at length.
 #
+# The `runtimes/` folders for every other platform are deleted after publishing: they were 570 MB of the
+# 586 MB app layer on 2026-10-06 (each win-* carries a 95 MB libSkiaSharp.pdb) and nothing here loads them.
+#
 # ReadyToRun is deliberately absent. It only shortens JIT warm-up, it needs a RID and the matching
 # runtime pack, and crossgen2 already crashes on the NAS - NasBuild.sh ships with it off for that reason.
 # An earlier version of this file passed `-p:ReadyToRun=true`, which is not an MSBuild property at all:
@@ -69,7 +72,9 @@ COPY . .
 RUN dotnet publish src/DlnaServer.Host/DlnaServer.Host.csproj \
         --configuration Release \
         --no-restore \
-        --output /publish
+        --output /publish \
+    && find /publish/runtimes -mindepth 1 -maxdepth 1 ! -name linux-x64 ! -name linux-arm64 \
+        -exec rm --recursive --force {} +
 
 # ---------------------------------------------------------------------------------------------------
 # Runtime
