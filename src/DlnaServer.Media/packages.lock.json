@@ -45,17 +45,17 @@
       },
       "Xabe.FFmpeg": {
         "type": "Direct",
-        "requested": "[6.0.2, )",
-        "resolved": "6.0.2",
-        "contentHash": "82rhJD6NRXJ71g+Spk3gLINUmoNK3AGmUDCIUSOqR7wW1Z1JHMpkg3RTxeg4Hw7cEaQvuBePCrz4CvPQeNzjLA=="
+        "requested": "[6.1.1, )",
+        "resolved": "6.1.1",
+        "contentHash": "k3TtUpcoLdzlrc4c8n8RBS8iNFBujMY2YdLVwwKxLoNVEUs3roV5YqPGEqq4KPqPMKXvp6Gq1Zvg3L/wmQvGmQ=="
       },
       "Xabe.FFmpeg.Downloader": {
         "type": "Direct",
-        "requested": "[6.0.2, )",
-        "resolved": "6.0.2",
-        "contentHash": "UIvlf8airHkU4jxmF2jG0wsRXGnXrKn9C+iGC7Mm7PlLmYrXDcWEdCTO6h49A2zPKepSYkWwcSfyptHlfo+v8g==",
+        "requested": "[6.1.1, )",
+        "resolved": "6.1.1",
+        "contentHash": "pZlC+e5fmOBQQFwrcfb3j8HeW3K0PGp0xIfjATpor2RJGpVOlqOdnci6AOFXM/820iui9u9ZaiLn2Reompem8Q==",
         "dependencies": {
-          "Xabe.FFmpeg": "6.0.2"
+          "Xabe.FFmpeg": "6.1.1"
         }
       },
       "SkiaSharp.NativeAssets.macOS": {
