@@ -1312,6 +1312,7 @@ Each has a workflow built around it; `.github/workflows/README.md` describes the
   produces no tag at all, silently. The image tag is `type=raw` from the git tag.
 - **Trivy's default database mirror answered 404** and Trivy failed without falling back, which reads as a
   failed scan but scanned nothing. `docker.yml` sets `TRIVY_DB_REPOSITORY` to the GHCR copy.
+- **The GitHub Actions layer cache froze the runtime image's `apt-get upgrade`** (hit 2026-10-04): the `RUN` line and the pinned base digest never change, so the layer built on 2026-10-01 was reused and Trivy failed nightly on `libpcre2-8-0` deb12u1 while Debian already shipped deb12u2. `docker.yml` sets `no-cache-filters: runtime`; `docker-publish.yml` uses no cache and was never affected.
 - **The Host project carried no `<Version>` before 2026-09-23**, so a history walk that compares versions
   sees an empty one there; `tag-release.yml` skips it, or it would tag `v`.
 - **actionlint and zizmor disagree on `$/...`**, GitHub's July-2026 self-repository syntax: zizmor asks for
