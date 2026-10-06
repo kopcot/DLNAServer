@@ -8,6 +8,10 @@ worth telling you about is added to the version it belongs to.
 
 ---
 
+## 1.2
+
+**A smaller image.** The published Docker image no longer carries files built for Windows, macOS, Android and other platforms it never runs on. It is about half the size on disc, and pulling an update downloads less.
+
 ## 1.1
 
 **Runs on ARM, including a MikroTik router.** The published image now comes for ARM64 as well as x86, so an ARM machine pulls it instead of building it. There is a ready setup for the MikroTik hAP be3 Media router with your media on a USB disk - see `deploy/docker-compose/3-MikroTik-hAP-be3-Media`. It is written from MikroTik's documentation and has not yet been tried on the router itself.

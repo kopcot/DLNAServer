@@ -8,8 +8,8 @@ its own and is bumped only when it changes.
 
 | Version | Supported |
 | ------- | --------- |
-| `1.1.x` | yes       |
-| `< 1.1` | no        |
+| `1.2.x` | yes       |
+| `< 1.2` | no        |
 
 ## Verifying a release
 
