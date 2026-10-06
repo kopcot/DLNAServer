@@ -691,11 +691,13 @@ the per-project numbers belong, and it becomes worth reading for the first time.
 batches on the same day produce the same number for a project whether it changed in both or one. The
 per-project signal is a cross-day signal.
 
+**Changed 2026-10-06, on the maintainer's decision: the Minor bump is due on a schedule, not merely allowed.** Every two weeks it is bumped if at least five commits since the previous Minor bump changed code - a change under `src/` or `tests/`; a commit touching only documentation, workflows or deployment files does not count. Fewer than five, and it waits until the fifth lands. Read `git log` on `src/DlnaServer.Host/DlnaServer.Host.csproj` for the date of the previous Minor bump; the last `MonthDate` alone does not say whether that change was a Minor or a day bump.
+
 | Part | Who may bump it | How often |
 | --- | --- | --- |
-| Major | The maintainer only - by hand or on their explicit request | never on my own initiative |
-| Minor | me | at most once per two weeks - read the last `MonthDate` to tell when the previous bump was |
-| MonthDate | me | daily, and on every change |
+| Major | The maintainer only - by hand or on their explicit request | optional - no schedule, never on my own initiative |
+| Minor | me | every two weeks, once at least five commits since the previous Minor bump changed code |
+| MonthDate | me | daily - the version carries the date of the day's last commit, so several commits on one day bump it once |
 
 Two things to know about the form. The leading zero survives only in the *informational* version:
 `1.0.0915` is stored verbatim there and is what the About page shows, while `AssemblyVersion` and
