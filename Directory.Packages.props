@@ -34,7 +34,7 @@
       carries most of the same advisories, so moving forward is not the fix.
     -->
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="8.0.4" />
-    <PackageVersion Include="Xabe.FFmpeg" Version="6.0.2" />
+    <PackageVersion Include="Xabe.FFmpeg" Version="6.1.1" />
     <PackageVersion Include="Xabe.FFmpeg.Downloader" Version="6.0.2" />
   </ItemGroup>
 
