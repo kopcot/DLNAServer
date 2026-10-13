@@ -25,6 +25,7 @@
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.0" />
     <PackageVersion Include="SoapCore" Version="1.2.1.16" />
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="8.0.2" />
     <!--
       Not referenced by anything here. It arrives transitively as
       SoapCore -> System.ServiceModel.Primitives -> System.Security.Cryptography.Xml, and the version
