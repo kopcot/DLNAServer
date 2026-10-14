@@ -39,9 +39,9 @@
       },
       "SkiaSharp.NativeAssets.Linux.NoDependencies": {
         "type": "Direct",
-        "requested": "[4.153.0, )",
-        "resolved": "4.153.0",
-        "contentHash": "wFHdjGdc6KL6a5TUh73b3UKPmzIZJ6mu1qHvMuamVBvNtuq0VkQsDBv027gyumencJ5qmUfpJJpnqmp25G69CQ=="
+        "requested": "[4.153.1, )",
+        "resolved": "4.153.1",
+        "contentHash": "NrnPjcxjcRau4GMOY0BTpUdMey+MnmLU3jC5AuExEFHPS2NkX1tdkXW0n/c5nQMMHBTAMpHnt7qEOpXs2FNfIQ=="
       },
       "Xabe.FFmpeg": {
         "type": "Direct",
@@ -85,9 +85,9 @@
     "net8.0/linux-arm": {
       "SkiaSharp.NativeAssets.Linux.NoDependencies": {
         "type": "Direct",
-        "requested": "[4.153.0, )",
-        "resolved": "4.153.0",
-        "contentHash": "wFHdjGdc6KL6a5TUh73b3UKPmzIZJ6mu1qHvMuamVBvNtuq0VkQsDBv027gyumencJ5qmUfpJJpnqmp25G69CQ=="
+        "requested": "[4.153.1, )",
+        "resolved": "4.153.1",
+        "contentHash": "NrnPjcxjcRau4GMOY0BTpUdMey+MnmLU3jC5AuExEFHPS2NkX1tdkXW0n/c5nQMMHBTAMpHnt7qEOpXs2FNfIQ=="
       },
       "SkiaSharp.NativeAssets.macOS": {
         "type": "Transitive",
@@ -103,9 +103,9 @@
     "net8.0/linux-arm64": {
       "SkiaSharp.NativeAssets.Linux.NoDependencies": {
         "type": "Direct",
-        "requested": "[4.153.0, )",
-        "resolved": "4.153.0",
-        "contentHash": "wFHdjGdc6KL6a5TUh73b3UKPmzIZJ6mu1qHvMuamVBvNtuq0VkQsDBv027gyumencJ5qmUfpJJpnqmp25G69CQ=="
+        "requested": "[4.153.1, )",
+        "resolved": "4.153.1",
+        "contentHash": "NrnPjcxjcRau4GMOY0BTpUdMey+MnmLU3jC5AuExEFHPS2NkX1tdkXW0n/c5nQMMHBTAMpHnt7qEOpXs2FNfIQ=="
       },
       "SkiaSharp.NativeAssets.macOS": {
         "type": "Transitive",
@@ -121,9 +121,9 @@
     "net8.0/linux-musl-arm64": {
       "SkiaSharp.NativeAssets.Linux.NoDependencies": {
         "type": "Direct",
-        "requested": "[4.153.0, )",
-        "resolved": "4.153.0",
-        "contentHash": "wFHdjGdc6KL6a5TUh73b3UKPmzIZJ6mu1qHvMuamVBvNtuq0VkQsDBv027gyumencJ5qmUfpJJpnqmp25G69CQ=="
+        "requested": "[4.153.1, )",
+        "resolved": "4.153.1",
+        "contentHash": "NrnPjcxjcRau4GMOY0BTpUdMey+MnmLU3jC5AuExEFHPS2NkX1tdkXW0n/c5nQMMHBTAMpHnt7qEOpXs2FNfIQ=="
       },
       "SkiaSharp.NativeAssets.macOS": {
         "type": "Transitive",
@@ -139,9 +139,9 @@
     "net8.0/linux-x64": {
       "SkiaSharp.NativeAssets.Linux.NoDependencies": {
         "type": "Direct",
-        "requested": "[4.153.0, )",
-        "resolved": "4.153.0",
-        "contentHash": "wFHdjGdc6KL6a5TUh73b3UKPmzIZJ6mu1qHvMuamVBvNtuq0VkQsDBv027gyumencJ5qmUfpJJpnqmp25G69CQ=="
+        "requested": "[4.153.1, )",
+        "resolved": "4.153.1",
+        "contentHash": "NrnPjcxjcRau4GMOY0BTpUdMey+MnmLU3jC5AuExEFHPS2NkX1tdkXW0n/c5nQMMHBTAMpHnt7qEOpXs2FNfIQ=="
       },
       "SkiaSharp.NativeAssets.macOS": {
         "type": "Transitive",
