@@ -24,7 +24,7 @@ these packages and, for SkiaSharp, its native library.
 | SkiaSharp.NativeAssets.Linux.NoDependencies | 4.152.1 | MIT |
 | SoapCore | 1.2.1.11 | MIT |
 | SQLitePCLRaw.lib.e_sqlite3 | 3.53.3 | Apache-2.0, declared as a licence file in the package rather than an SPDX expression |
-| System.Security.Cryptography.Xml | 8.0.4 | MIT |
+| System.Security.Cryptography.Xml | 8.0.5 | MIT |
 | Xabe.FFmpeg | 6.0.2 | Custom, by URL - see below |
 | Xabe.FFmpeg.Downloader | 6.0.2 | Custom, by URL - see below |
 

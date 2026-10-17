@@ -12,6 +12,8 @@ worth telling you about is added to the version it belongs to.
 
 **A smaller image.** The published Docker image no longer carries files built for Windows, macOS, Android and other platforms it never runs on. It is about half the size on disc, and pulling an update downloads less.
 
+**Security fixes.** A library the server uses to answer televisions had known security problems, and the published Docker image was built on a .NET runtime with known vulnerabilities of its own. Both are updated. If you run the image, pull this version. If you run the archive or `NasBuild.sh` on the NAS, which uses the .NET 8 runtime installed on the machine, update that runtime to 8.0.32 or later as well.
+
 ## 1.1
 
 **Runs on ARM, including a MikroTik router.** The published image now comes for ARM64 as well as x86, so an ARM machine pulls it instead of building it. There is a ready setup for the MikroTik hAP be3 Media router with your media on a USB disk - see `deploy/docker-compose/3-MikroTik-hAP-be3-Media`. It is written from MikroTik's documentation and has not yet been tried on the router itself.
