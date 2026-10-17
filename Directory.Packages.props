@@ -33,7 +33,7 @@
       Stay in the 8.x band: net8.0 is the target, and the reference implementation's 9.0.16 still
       carries most of the same advisories, so moving forward is not the fix.
     -->
-    <PackageVersion Include="System.Security.Cryptography.Xml" Version="8.0.5" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="9.0.21" />
     <PackageVersion Include="Xabe.FFmpeg" Version="6.0.2" />
     <PackageVersion Include="Xabe.FFmpeg.Downloader" Version="6.0.2" />
   </ItemGroup>
