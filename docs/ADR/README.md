@@ -51,5 +51,6 @@ Every standing decision about this server lives here, one file per decision. Thi
 | [0033](0033-smoke-test-skips-ssdp-discovery.md) | The smoke test does not exercise SSDP discovery | Accepted | 2026-09-30 |
 | [0034](0034-compose-image-name-on-docker-hub.md) | Compose files name the image `kopcot/dlnaserver:latest` | Accepted | 2026-10-26 |
 | [0035](0035-ci-cd-failures-and-their-fixes.md) | CI/CD failures and their fixes | Accepted | 2026-10-26 |
+| [0036](0036-media-port-answers-local-network-only.md) | The media port answers the local network only | Accepted | 2026-10-26 |
 
 0035 is a catalogue rather than a single decision: every CI/CD failure the repository has had, with the run ids, the error, the fix commit and how to keep it from coming back. The decisions it led to are recorded in it and, where they have their own ADR, linked.

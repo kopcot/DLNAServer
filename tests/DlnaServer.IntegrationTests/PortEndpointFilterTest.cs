@@ -1,7 +1,10 @@
+using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Sockets;
 using DlnaServer.Host;
 using DlnaServer.Host.Diagnostics;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace DlnaServer.IntegrationTests
 {
@@ -125,6 +128,7 @@ namespace DlnaServer.IntegrationTests
                     invoked = true;
                     return Task.CompletedTask;
                 },
+                NullLogger<AdminSurfaceMiddleware>.Instance,
                 AdminPort);
 
             var context = CreateContext("/ContentDirectoryService.asmx", AdminPort);
@@ -149,6 +153,7 @@ namespace DlnaServer.IntegrationTests
                     invoked = true;
                     return Task.CompletedTask;
                 },
+                NullLogger<AdminSurfaceMiddleware>.Instance,
                 AdminPort);
 
             var context = CreateContext("/ContentDirectoryService.asmx", MediaPort);
@@ -182,6 +187,7 @@ namespace DlnaServer.IntegrationTests
                     invoked = true;
                     return Task.CompletedTask;
                 },
+                NullLogger<AdminSurfaceMiddleware>.Instance,
                 AdminPort);
 
             var context = CreateContext(path, MediaPort);
@@ -213,6 +219,7 @@ namespace DlnaServer.IntegrationTests
                     invoked = true;
                     return Task.CompletedTask;
                 },
+                NullLogger<AdminSurfaceMiddleware>.Instance,
                 AdminPort);
 
             var context = CreateContext("/", AdminPort);
@@ -250,6 +257,7 @@ namespace DlnaServer.IntegrationTests
                     invoked = true;
                     return Task.CompletedTask;
                 },
+                NullLogger<AdminSurfaceMiddleware>.Instance,
                 AdminPort);
 
             var context = CreateContext("/", MediaPort);
@@ -318,7 +326,7 @@ namespace DlnaServer.IntegrationTests
             // Arrange
             var context = CreateContext("/admin/settings", AdminPort);
             context.Connection.RemoteIpAddress = IPAddress.Loopback;
-            AdminSurfaceMiddleware.RecordConnectionPeer(context: context, adminPort: AdminPort);
+            AdminSurfaceMiddleware.RecordConnectionPeer(context: context);
             context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.7");
 
             // Act
@@ -339,7 +347,7 @@ namespace DlnaServer.IntegrationTests
             // Arrange
             var context = CreateContext("/admin/settings", AdminPort);
             context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.7");
-            AdminSurfaceMiddleware.RecordConnectionPeer(context: context, adminPort: AdminPort);
+            AdminSurfaceMiddleware.RecordConnectionPeer(context: context);
             context.Connection.RemoteIpAddress = IPAddress.Loopback;
 
             // Act
@@ -351,21 +359,137 @@ namespace DlnaServer.IntegrationTests
                 "because a remote socket peer is refused no matter what a later rewrite claims");
         }
 
-        [Test]
-        public async Task AdminSurfaceMiddleware_LeavesTheMediaPortOpenToAnyAddress()
+        /// <summary>
+        /// The media port answers the local network only, like the admin port (ADR 0036).
+        /// </summary>
+        /// <remarks>
+        /// This test used to pin the opposite - the media port open to any address. A review then listed
+        /// and downloaded the whole library from a global IPv6 peer, and the maintainer chose to gate it.
+        /// </remarks>
+        [TestCase("POST", "/ContentDirectoryService.asmx", "203.0.113.7")]
+        [TestCase("POST", "/ContentDirectoryService.asmx", "2a00:1450:4001::5")]
+        [TestCase("GET", "/fileserver/file/7d3f0c4e-2b1a-4c8e-9f00-0a1b2c3d4e5f", "203.0.113.7")]
+        [TestCase("GET", "/fileserver/file/7d3f0c4e-2b1a-4c8e-9f00-0a1b2c3d4e5f", "2a00:1450:4001::5")]
+        [TestCase("SUBSCRIBE", "/event/eventAction/ContentDirectory", "203.0.113.7")]
+        [TestCase("SUBSCRIBE", "/event/eventAction/ContentDirectory", "2a00:1450:4001::5")]
+        [TestCase("GET", "/media/description.xml", "203.0.113.7")]
+        [TestCase("GET", "/media/description.xml", "2a00:1450:4001::5")]
+        [TestCase("GET", "/", "2a00:1450:4001::5")]
+        [TestCase("GET", "/fileserver/file/7d3f0c4e-2b1a-4c8e-9f00-0a1b2c3d4e5f", "::ffff:203.0.113.7")]
+        public async Task AdminSurfaceMiddleware_RefusesTheMediaPortFromOffTheLocalNetwork(
+            string method,
+            string path,
+            string remote)
         {
             // Arrange
-            var context = CreateContext("/fileserver/file/abc", MediaPort);
-            context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.7");
-            AdminSurfaceMiddleware.RecordConnectionPeer(context: context, adminPort: AdminPort);
+            var context = CreateMediaRequest(method: method, path: path, remote: remote);
+
+            // Act
+            var invoked = await InvokeAdminSurfaceAsync(context);
+
+            // Assert
+            invoked.Should().BeFalse(
+                $"because a caller on the internet must not reach {method} {path} - it lists or serves the library");
+            context.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound,
+                "because from off the LAN the media port does not exist either, the same answer /manage gives");
+        }
+
+        [Test]
+        public async Task AdminSurfaceMiddleware_ServesTheMediaPortToTheLocalNetwork(
+            [Values(
+                "POST /ContentDirectoryService.asmx",
+                "GET /fileserver/file/7d3f0c4e-2b1a-4c8e-9f00-0a1b2c3d4e5f",
+                "SUBSCRIBE /event/eventAction/ContentDirectory",
+                "GET /media/description.xml")]
+            string request,
+            [Values(
+                "127.0.0.1",
+                "::1",
+                "192.168.1.20",
+                "10.0.0.5",
+                "172.16.4.4",
+                "169.254.10.10",
+                "100.100.1.2",
+                "fe80::20",
+                "fd12:3456:789a::20",
+                "::ffff:192.168.1.20",
+                "2001:db8:1:2::20")]
+            string remote)
+        {
+            // Arrange
+            var parts = request.Split(' ');
+            var context = CreateMediaRequest(method: parts[0], path: parts[1], remote: remote);
 
             // Act
             var invoked = await InvokeAdminSurfaceAsync(context);
 
             // Assert
             invoked.Should().BeTrue(
-                "because the local-network check is the admin port's alone; the media port's wire "
-                + "behaviour is unchanged");
+                $"because {remote} is on the local network, where every renderer is - including a peer in "
+                + "the server's own IPv6 /64");
+        }
+
+        /// <summary>
+        /// The media port judges the socket's peer too, not the address <c>UseForwardedHeaders</c> wrote later.
+        /// </summary>
+        [Test]
+        public async Task AdminSurfaceMiddleware_RefusesARemoteSocketPeerOnTheMediaPortWhateverTheRemoteAddressBecame()
+        {
+            // Arrange
+            var context = CreateMediaRequest(method: "GET", path: "/fileserver/file/abc", remote: "203.0.113.7");
+            AdminSurfaceMiddleware.RecordConnectionPeer(context: context);
+            context.Connection.RemoteIpAddress = IPAddress.Loopback;
+
+            // Act
+            var invoked = await InvokeAdminSurfaceAsync(context);
+
+            // Assert
+            invoked.Should().BeFalse(
+                "because the connection itself came from the internet, whatever a later rewrite claims");
+            context.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound,
+                "because a refused peer sees the media port as absent");
+        }
+
+        /// <summary>
+        /// One middleware instance serves every connection, so interleaved local and global peers must not
+        /// leak a verdict from one request into another.
+        /// </summary>
+        [Test]
+        public async Task AdminSurfaceMiddleware_ConcurrentMixedPeers_EachGetsItsOwnVerdict()
+        {
+            // Arrange
+            const int RequestCount = 400;
+            var invokedPaths = new ConcurrentBag<string>();
+            var middleware = new AdminSurfaceMiddleware(
+                context =>
+                {
+                    invokedPaths.Add(context.Request.Path.Value!);
+                    return Task.CompletedTask;
+                },
+                NullLogger<AdminSurfaceMiddleware>.Instance,
+                AdminPort);
+
+            var contexts = new DefaultHttpContext[RequestCount];
+
+            for (var i = 0; i < RequestCount; i++)
+            {
+                var remote = (i % 2) == 0 ? "192.168.1.20" : "2a00:1450:4001::5";
+                contexts[i] = CreateMediaRequest(method: "GET", path: $"/fileserver/file/{i}", remote: remote);
+                AdminSurfaceMiddleware.RecordConnectionPeer(context: contexts[i]);
+            }
+
+            // Act
+            await Task.WhenAll(contexts.Select(c => Task.Run(() => middleware.InvokeAsync(c))));
+
+            // Assert
+            invokedPaths.Should().HaveCount(RequestCount / 2,
+                "because exactly the local half of the requests may reach the endpoint");
+            invokedPaths.Select(static p => int.Parse(p["/fileserver/file/".Length..]) % 2).Should().OnlyContain(
+                static r => r == 0,
+                "because every request that got through must be one from the local peer");
+            contexts.Where(static (_, i) => (i % 2) == 1).Should().OnlyContain(
+                static c => c.Response.StatusCode == StatusCodes.Status404NotFound,
+                "because every request from the global peer must be refused with 404");
         }
 
         [Test]
@@ -419,6 +543,19 @@ namespace DlnaServer.IntegrationTests
             return context;
         }
 
+        private static DefaultHttpContext CreateMediaRequest(string method, string path, string remote)
+        {
+            var remoteAddress = IPAddress.Parse(remote);
+            var context = CreateContext(path, MediaPort);
+            context.Request.Method = method;
+            context.Connection.RemoteIpAddress = remoteAddress;
+            context.Connection.LocalIpAddress = remoteAddress.AddressFamily == AddressFamily.InterNetworkV6
+                ? IPAddress.Parse("2001:db8:1:2::10")
+                : IPAddress.Parse("192.168.1.10");
+
+            return context;
+        }
+
         private static async Task<bool> InvokeAdminSurfaceAsync(DefaultHttpContext context)
         {
             var invoked = false;
@@ -428,6 +565,7 @@ namespace DlnaServer.IntegrationTests
                     invoked = true;
                     return Task.CompletedTask;
                 },
+                NullLogger<AdminSurfaceMiddleware>.Instance,
                 AdminPort);
 
             await middleware.InvokeAsync(context);
