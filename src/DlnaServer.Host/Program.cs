@@ -645,11 +645,12 @@ namespace DlnaServer.Host
             // 127.0.0.1 and is trusted, while a device on the LAN is not and cannot spoof either header.
             // Clearing those two collections is the usual way this middleware turns into a vulnerability.
             //
-            // The socket's own peer is recorded first, because the rewrite below replaces it and the admin
-            // port's local-network check has to judge the proxy's connection, not the client it vouches for.
+            // The socket's own peer is recorded first, because the rewrite below replaces it and the
+            // local-network check on both ports has to judge the proxy's connection, not the client it
+            // vouches for.
             _ = app.Use((context, next) =>
             {
-                AdminSurfaceMiddleware.RecordConnectionPeer(context, serverOptions.AdminPort);
+                AdminSurfaceMiddleware.RecordConnectionPeer(context);
 
                 return next(context);
             });
@@ -706,6 +707,8 @@ namespace DlnaServer.Host
             // reaching a controller, and /manage is exempt inside the middleware so a block stays liftable.
             // Also first so nothing on the media port can reach the admin surface - not a page, not the
             // Blazor circuit, not the class library's stylesheet. Before UseStaticFiles for that reason.
+            // And first so a peer off the local network is refused on either port before anything can
+            // answer it - Browse, /fileserver, GENA and description.xml included (ADR 0036).
             _ = app.UseMiddleware<AdminSurfaceMiddleware>(serverOptions.AdminPort);
 
             // Above UseStaticFiles, so a block really does see every request. Below it, static responses

@@ -208,7 +208,7 @@ publishing the admin port does not publish the management API.
 > **"Never publish the media port" used to follow, and it described a control that does not exist.**
 > The compose file mandates `network_mode: host` because SSDP needs multicast, and `Program.cs` binds
 > both ports with `ListenAnyIP` — the media port is already on every interface, so there is nothing to
-> publish or withhold and the **host firewall is the only thing confining it**.
+> publish or withhold, and the **host firewall** is what confines it - since ADR 0036 an address check in the server as well.
 >
 > That mattered because `ADMIN_HOSTNAME` widens `AllowedHosts` for the whole **process** —
 > `HostFilteringOptions` has no per-port form — so setting it for the admin pages also let
@@ -218,8 +218,9 @@ publishing the admin port does not publish the management API.
 > `POST /manage/stop`, entirely past Caddy's password.
 >
 > `RejectRemoteManagementEndpointFilter` now refuses `/manage` from any non-private remote address, which
-> is the real control. **Keep the firewall anyway** — that filter protects `/manage`, not the media
-> streaming endpoints, and this server has no authentication by design.
+> is the real control. **Keep the firewall anyway**: since ADR 0036 the media port as a whole - Browse,
+> streaming, eventing, `description.xml` - answers only the local network too, but that is an address
+> check, not authentication, and this server has none by design.
 >
 > **The same process-wide reach cuts the other way too, and it costs LAN traffic rather than security.**
 > Naming `ADMIN_HOSTNAME` in `AllowedHosts` is `AllowedHostsDefaults`'s own documented escape hatch —

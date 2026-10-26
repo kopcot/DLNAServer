@@ -12,6 +12,7 @@ whoever runs the server.
 | [Operations](operations.md) | Running it, feeding it, and finding out what it is doing |
 | [Performance](performance.md) | The decisions taken for a NAS with mechanical drives and limited memory |
 | [Troubleshooting](troubleshooting.md) | It is not working - start here |
+| [Architecture decision records](ADR/README.md) | Every standing decision, one file each, and the CI/CD failures catalogue - reporting a decision as a defect is a known false positive |
 | [Decisions, conventions and traps](decisions.md) | Why it is built this way, and the rules for changing it |
 | [Status and history](history.md) | What is deployed, and the batch-by-batch record |
 | [Development](development.md) | Building, testing, versioning and releasing |
@@ -29,9 +30,9 @@ its rationale given - never restated as a rule, because a rule written twice is 
 with itself. The dependency directions, the entity and DTO boundary, the pinned wire names and the
 database schema are all in that category.
 
-**`decisions.md` and `history.md` hold the internal record.** A document here says what the server does
-today; `decisions.md` says why, and carries the conventions, the traps and the open work in section 7b;
-`history.md` says how it came to be that way, batch by batch. Both were split out of `PLAN.md` on
+**`ADR/`, `decisions.md` and `history.md` hold the internal record.** A document here says what the server does
+today; `ADR/` holds the standing decisions, one file each (moved out of `decisions.md` section 7b on 2026-10-26); `decisions.md` says why, and carries the conventions, the traps and the open work in section 7b;
+`history.md` says how it came to be that way, batch by batch. `decisions.md` and `history.md` were split out of `PLAN.md` on
 2026-09-23.
 
 **`release-notes.md` is for the operator**, one entry per `Major.Minor`, in their terms. A change they

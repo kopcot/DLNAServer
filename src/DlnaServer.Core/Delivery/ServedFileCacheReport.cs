@@ -43,8 +43,9 @@ namespace DlnaServer.Core.Delivery
         /// <para>
         /// So the disc figure an operator wants is <see cref="Misses"/> minus this. That subtraction is
         /// an <b>upper bound</b> rather than an exact count: a serve that finds neither memory nor the
-        /// database probes the cache twice on its way to the disc - once directly and once inside
-        /// <see cref="IServedFileCache.LoadAsync"/> - so one such read registers two misses.
+        /// database probes the cache at least three times on its way to the disc - once directly, once inside
+        /// <see cref="IServedFileCache.LoadAsync"/> and once more by the shared read before it touches the
+        /// disc - so one such read registers at least three misses.
         /// </para>
         /// </remarks>
         public required long DatabaseHits { get; init; }

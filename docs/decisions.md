@@ -12,7 +12,7 @@ comment still means section 7b - only the file it lives in has changed.
 
 | Need | Section |
 | --- | --- |
-| Why something was decided | 2, and the standing decisions in 7b |
+| Why something was decided | 2, and the standing decisions in [docs/ADR/](ADR/README.md) |
 | The memory budget, and how to measure against it | 3, 3b |
 | How logging compares to the reference | 3c |
 | The conventions and the tooling traps | 7 |
@@ -1398,7 +1398,7 @@ round-1 trap list, which is in section 7b.
 | What replaces the word "renderer" | **"television"** |
 | The folder names in the live config and the logs | **Delete the logs, leave `publishNAS/config.json` alone** |
 
-Earlier standing decisions are listed in section 7b. **Reporting one of those as a defect is a false
+Earlier standing decisions are in [docs/ADR/](ADR/README.md). **Reporting one of those as a defect is a false
 positive.**
 
 ### 24 previews that have permanently given up - STILL OPEN
@@ -1422,181 +1422,14 @@ encode failures now log separately - so the next attempt names its own reason.
 Server-side **p50 7.6 ms, p90 11.4 ms, p99 31.4 ms**, 1 call over 50 ms in 272 - against the
 reference's **p50 16.8 / p90 123.3** measured the same way.
 
-## 7b. Standing decisions, open work and traps
+## 7b. Open work and traps
+
+**The standing decisions moved to [docs/ADR/](ADR/README.md) on 2026-10-26** - one file each, numbered as they were here, so standing decision *N* is ADR *N*, padded to four digits, and reporting one of them as a defect is still a known false positive.
 
 Originally the live remainder of the review documents deleted on 2026-09-08 - the whole of `docs/`, both
 `REVIEW-*-FIXES.md` worklists and both session records. Their *history* was the point of deleting them
-and is not reproduced; what survived is here, and nothing else points at those files any more.
-
-**It has since become the standing list for the project rather than an archive of those documents.**
-Decisions 22-27 and the second traps list come from the 2026-09-08 fix pass (section 6i), not from
-anything deleted. Anything decided in future belongs here too - the value of the section is that it is
-one place, and that reporting something in it as a defect is a known false positive.
-
-### Standing decisions — reporting one of these as a defect is a FALSE POSITIVE
-
-From the round-2 fact sheet, decided by the maintainer with reasons:
-
-1. **No authentication anywhere.** LAN appliance, by design. Do not propose adding auth.
-2. **`appsettings.json` reads `"AllowedHosts": "*"` on purpose.** That value is the SIGNAL that makes
-   `AllowedHostsDefaults` generate the real allowlist at startup. It is not an unfixed wildcard.
-3. **The media byte-cache machinery is deliberately INERT, not dead.** `MediaCacheBacklog`,
-   `MediaCacheFillHostedService` and `CachedContentClass`'s Media arm are kept although the shipped
-   32 MB per-file limit admits no film. Chosen over the review's recommendation to delete them.
-4. **`Thumbnails.CacheDirectory` and the central-cache branch are unreachable and kept**, marked as such.
-5. **`!= null` inside an EF projection or predicate is CORRECT** — `is null` is a compile error there.
-6. **Block-scoped namespaces are required**; public protocol contracts carry XML docs on properties.
-7. **The first-fill index-date rule is deliberately not gated on `UseFileCreationDateTime`.**
-8. **`Max Pool Size` was tried and reverted** — not a valid `Microsoft.Data.Sqlite` keyword (trap 12).
-9. **`IsSourceRoot`'s index is kept** — it is used, as the filter in `GetSourceRootsAsync`.
-10. **The admin listings page the DATA** rather than using `Virtualize ItemsProvider`.
-11. **The byte cache on this NAS stays at 5120 / 512, by choice.** 512 MB per file re-admits films, which
-    is the 5,073 MB mechanism — that is understood and intended *there*, while the shipped default stays
-    256 / 32. It has been "corrected" twice already, both times wrongly. Do not raise it as drift.
-
-Decided 2026-09-03, and previously in a section of the round-1 record that had already been lost:
-
-12. **Whole-file buffering in the byte cache survives, with shipped limits that admit no film.** The open
-    question was whether it should survive at all; the review wanted the machinery deleted. See 3 above.
-13. **The code defaults match the shipped `config.json`.** They were 1024 / 512 against a shipped
-    256 / 32, so every deployment arriving without a config file silently ran the configuration measured
-    at 5,073 MB.
-
-Decided 2026-09-08, while closing the last of those documents:
-
-14. **The live NAS `config.json` runs `Database.MemoryMapLimitInMegabytes: 64` and
-    `CacheSizeInMegabytes: 8`, by the operator's choice**, where the tree ships `0` and `2`. Section 4
-    credits `mmap 128 → 0` and `cache 32 → 2` with the 563.4 → 177.7 MB drop, so this reads like drift
-    and is not. The sibling of decision 11, and the same instruction: do not raise it, and do not
-    "correct" the live file.
-15. **`transferMode.dlna.org` follows the flags, not the other way round.** `ContentFeaturesFor` sends
-    the reference's `Image ? Interactive : Streaming` and **must not be narrowed** -
-    `BrowseItemMapper.GetResourceProtocolInfo` asks exactly that one question, and these values are
-    matched literally by televisions validated against them. It was `ResolveTransferMode` that moved, so
-    `Subtitle` and `Unknown` now echo `Streaming`, which is what their own flags always claimed. Both
-    sides read `DlnaProtocolInfo.IsStreamed` now, so they cannot disagree again.
-16. **Scanning infers a MIME from the built-in catalog when configuration names no mapping**, and the
-    fallback admits **video, audio and images only** (`DlnaMimeCatalog.IsPresentableMedia`). Subtitles are
-    deliberately excluded: the catalog knows `.srt`, `.vtt`, `.sub` and `.ttml`, and indexing them would
-    put every sidecar beside the films as a `Generic` item on the television. `ConnectionManager`'s
-    `Source` list widened to match, deliberately over-approximating - under-claiming a MIME costs
-    playback, over-claiming costs nothing. Configuration still wins outright, which is what keeps
-    `.mp3 → audio/mp4` working.
-
-    **Know the size of this before the next scan: 137 extensions become media that were not.** Against
-    the shipped 14, the catalog adds 137 video/audio/image extensions - and most of them are the point
-    (`.wav`, `.flac`, `.ogg`, `.m4a`, `.aac`, `.webm`, `.ts`, `.mka`, `.gif`, `.bmp`, `.tif`, `.webp`,
-    `.mid` were all silently not media before, on a real library). A handful are not media in any useful
-    sense and will appear on a television if the library holds them: **`.m3u`** (a playlist, classified
-    Audio), **`.svg` / `.ico` / `.wmf`** (icons and vector art - `.wmf` is classified *Video*),
-    **`.dwg` / `.dxf` / `.svf`** (CAD drawings, classified Image), and the ambiguous **`.pm`**, **`.la`**
-    and **`.ts`**, which are also a Perl module, a libtool archive and a TypeScript file. Nothing has
-    been narrowed to exclude them, because that list is a judgment call rather than a defect - if any of
-    them shows up in a listing, `Library.ExcludeFolders` does not help and the right lever is a deny-list
-    beside `IsPresentableMedia`. **The first scan after deploying this will insert a lot of rows.**
-17. **`IsUnderFirstFillRoot` comparing `StringComparison.Ordinal` is CORRECT.** The dedup pass reported it
-    as a defect; it is not. Source folders are compared ordinally on purpose in
-    `NormaliseSourceFolders` and `IsInsideAnySourceFolder`, and `MediaDirectoryEntityConfiguration` makes
-    `FullPath` case-sensitive for the same reason - production is Linux, where two paths differing only in
-    case are two directories. The case-insensitive rule belongs to *exclusion entries*, which are a
-    different thing.
-18. **`IMediaFileRepository.AddRangeAsync` is kept although no production path calls it** (W6). It is how
-    a test seeds rows and then reads back the identifiers the database assigned, which around thirty
-    fixtures rely on; retiring it buys nothing at runtime and costs a rewrite of all of them. Its doc says
-    so now. Anything that ships uses `AddRangeReturningCountAsync`.
-19. **The SQL exclusion predicate stays as it is** (W10). Its per-row `replace()` and two concats were
-    never measured as a cost, and the proposed replacement adds a subquery to the browse path where
-    `ExcludeWithoutVisibleMedia` depends on a covering-index range seek. Evidence for leaving it: the NAS
-    browse baseline is p50 7.6 ms / p99 31.4 ms, `SlowQueryInterceptor` is registered at a 50 ms
-    threshold, and a full day of live logs over 25,532 files holds **zero** "Slow database command"
-    entries. Re-open it only with a measurement that contradicts that.
-20. **`.avi` maps to `video/x-msvideo` and that is CORRECT - do not "fix" it.** Investigated 2026-09-08
-    because an AVI would not play in the admin preview and a wrong MIME was the obvious suspect. It is
-    not wrong, and no MIME could be: **Chrome ignores the declared `Content-Type` for media and sniffs
-    the bytes.** Proved with a natural experiment already in the library - the LG workaround maps
-    `.mp3 → AudioMp4`, so a real MP3 (`ID3` header) is served as `audio/mp4`, and it plays to
-    `readyState 4` with a 2356 s duration. Meanwhile every spelling of the AVI type returns `""` from
-    `canPlayType`: `video/x-msvideo`, `video/avi`, `video/vnd.avi`, `video/msvideo`. Chrome has no AVI
-    demuxer, and the error is `DEMUXER_ERROR_COULD_NOT_OPEN: FFmpegDemuxer: open context failed`.
-    Also ruled out by measurement, not reasoning: delivery (206, correct `Content-Range` over
-    734,457,166 bytes, intact `RIFF....AVI` payload, and an MP4 loading through the same endpoint on the
-    same page seconds later), file size (105 MB to 2.64 GB all fail), non-ASCII filenames, the byte cache
-    (warmed a 105 MB AVI into memory and confirmed it in `/manage/filecache` - identical failure), and
-    mislabelled containers (44 of 45 sampled `.avi` files are genuine `RIFF....AVI`).
-    **The reference ships the same value** (`ServerConfig.cs:100`), which is what televisions were
-    validated against; IANA registers `video/vnd.avi` and `video/x-msvideo` is the unregistered
-    conventional alias that Apache and nginx ship. Changing it gains nothing and risks the one path that
-    works. `DLNA.ORG_PN=MSVIDEO` is likewise not a real DLNA profile - the spec has none for AVI, the
-    reference used the string anyway, and sets play AVI on their own codec support. **If a television
-    ever refuses an AVI**, blanking `ProfileName` for `.avi` is the lever (6f: a blank and a null profile
-    are identical on the wire). Televisions are unaffected by any of this - it is a browser limit.
-21. **`ovecka.shaun.3.avi` is corrupt on disc, not mishandled.** 733 MB, and its first bytes are
-    `d8ddb2ce72e5718c` - no known container signature. ffprobe reported `608x352 mpeg4` but
-    `duration 00:00:00` and `bitrate 0`. Its sibling `ovecka.shaun.4.avi` is already in the
-    "24 previews that have permanently given up" table. Nothing to fix in the server.
-
-Decided 2026-09-08, during the fix pass for the third `/review-all --full` (section 6i):
-
-22. **`/manage` living on the MEDIA port is deliberate, and the compose overlay's "never publish the
-    media port" advice was describing a control that does not exist.** The compose file mandates
-    `network_mode: host` because SSDP needs multicast, and `Program.cs` binds both ports with
-    `ListenAnyIP` - so the media port is on every interface and there is nothing to publish or withhold.
-    What made that dangerous was `ADMIN_HOSTNAME`: `HostFilteringOptions` is **process-wide**, so
-    widening `AllowedHosts` for the admin pages widened it for `/manage` too, and the hostname is in the
-    public Certificate Transparency logs. `RejectRemoteManagementEndpointFilter` is the control now.
-    Both documents were corrected. **Do not re-raise the absence of authentication** - decision 1 still
-    holds; this was about a specific documented setup contradicting itself.
-23. **`ServerOptions` has no bind address, and is not getting one.** Considered as the fix for the above
-    and rejected: binding one LAN address breaks discovery on a multi-homed box, and it adds a setting
-    the validator and the Settings page both have to learn. The endpoint filter costs neither.
-24. **A private or internal `async` helper here takes a REQUIRED `CancellationToken`.** See section 7.
-    Roughly forty of them; every one is already called with a real token.
-25. **The `DLNA.ORG_OP` flag-bit naming is CORRECT - a review reported it as inverted and was wrong.**
-    `Format` renders `((short)operation).ToString("B2")` and the wire form is `<byte-seek><time-seek>`,
-    so `TimeSeekSupported = 1 << 0` renders `01` (time-seek, correct) and `ByteSeekSupported = 1 << 1`
-    renders `10` (byte-seek, correct). **Renaming them would introduce the inversion the finding claimed
-    to fix.** Raised by a reviewer running without semantic analysis; verified against the emitted value
-    before it was rejected.
-26. **A file moved INTO an excluded folder has its row REMOVED, and that is not the same rule as
-    decision-by-configuration hiding.** When a folder already indexed becomes excluded by a config
-    change its rows survive, so un-hiding is free - `IndexAsync_LeavesAnExcludedFoldersRowsInPlace`
-    pins that. When a file *moves* into an already-excluded folder the destination is never enumerated,
-    so nothing can re-point the row and reconciliation finds the old path definitely absent. Removing it
-    is right: the operator deleted the file. A consequence worth knowing is that a round trip out again
-    produces a **new `PublicId`**, unlike a move within the library. Three tests in `LibraryIndexerTest`
-    cover the three cases.
-27. **`GeneratedThumbnail.Content` stays a `byte[]`, exempted by name in `ContractImmutabilityTest`.**
-    The array check was added because init-only stops the reference being replaced and not the contents;
-    this one instance is allowed because moving the contract to `ReadOnlyMemory<byte>` would add a full
-    copy of every generated thumbnail at the persistence boundary, where EF wants an array - in the one
-    project whose hard constraint is memory. A **new** array on a DTO still fails the test.
-28. **Accepted limit: subtitle and media delivery check the path, then open it again** (maintainer ruling
-    2026-09-26, `docs/history.md` 6t). `SubtitlePath.TryLocate` refuses a symlinked file and a symlinked
-    sub-folder, but `PhysicalFile` opens the path afresh. So a file swapped for a link between the two is still
-    served. A FIFO, socket or hard link on the share also passes, and `GetFile` has no link check at all.
-    Every one of these needs write access to the media share, which on this deployment is already full control
-    of the library. Closing it would need an open-then-verify helper, for example reading `/proc/self/fd` on
-    Linux, shared by both endpoints. **Reporting this as a new finding is a false positive** unless the threat
-    model changes.
-29. **The admin port answers the local network only, and that is not authentication** (`docs/history.md`
-    6u). `AdminSurfaceMiddleware` refuses an admin-port request whose socket peer is not local per
-    `LocalNetworkAddress` - private and link-local ranges, loopback, CGNAT (for Tailscale), and a global IPv6
-    peer in the server's own /64. The peer is recorded **before** `UseForwardedHeaders` rewrites it, which is
-    what keeps the Caddy overlay working without trusting a client-sent header. Decision 1 still stands; do
-    not read this as a step towards auth, and do not "simplify" it to read `RemoteIpAddress` after the
-    forwarder - that locks out the proxy's users or, the other way round, admits a forged header.
-30. **Kestrel's request-header limits stay at their defaults** (6u). They already bound a header flood; a
-    tighter limit turns a dev box's `localhost` cookie jar, which browsers do not scope by port, into 431s.
-    **Reporting the defaults as a finding is a false positive.**
-31. **Stop is refused while a database reset is pending** (6u). `/manage/stop` answers 409 and the page
-    says why. Clearing the restart flag would lose the reset; keeping it would turn Stop into a restart.
-32. **Release tags are created by `tag-release.yml`, never by hand on a workstation** (6y). Since
-    2026-10-01 it tags the pushed head with its version, not the version left behind - the workflow token
-    cannot tag an older commit once a workflow file has changed after it, which failed `v1.1.0928`. A missing local
-    `git tag` step in a change is therefore not an omission. The `./` reusable-workflow calls with a zizmor
-    `self-repository` ignore are deliberate too, until actionlint accepts the `$/` form.
-33. **The smoke test does not exercise SSDP discovery** (6x). A runner has no television on its network,
-    so it checks the HTTP half only. **Reporting the missing discovery test as a gap is a false positive.**
+and is not reproduced; what survived is here, and nothing else points at those files any more. The
+second traps list comes from the 2026-09-08 fix pass (section 6i), not from anything deleted.
 
 ### Open work from the 2026-09-23 batches (6p to 6s)
 
@@ -1745,7 +1578,7 @@ that sat in this list was fixed the same day - section 6h.
   Everything else in that batch was driven through the browser.
 - **Nothing caps a batch.** `Upload.MaxSizeInMegabytes` bounds one file; ten thousand small ones bound
   nothing but the disc.
-- **Uploading is as unauthenticated as the rest of the admin surface.** Standing decision 1 (trusted LAN)
+- **Uploading is as unauthenticated as the rest of the admin surface.** Standing decision 1 ([ADR 0001](ADR/0001-no-authentication.md), trusted LAN)
   still holds and is not being re-raised - but this is the first endpoint where that decision lets a device
   on the network WRITE to the filesystem rather than read from it. `Upload.Enabled` shipping off, and
   needing a restart to turn on, is the whole control. Worth revisiting if the admin port is ever exposed
@@ -1755,7 +1588,7 @@ that sat in this list was fixed the same day - section 6h.
 
 - **A quiet memory reading.** The live figures on 2026-09-08 were taken *during* a metadata pass, so they
   are a loaded reading (section 3b). No restart is needed for the next one - the live byte-cache and
-  database values are by choice, per standing decisions 11 and 14.
+  database values are by choice, per standing decisions 11 and 14 ([ADR 0011](ADR/0011-nas-byte-cache-limits-by-choice.md), [ADR 0014](ADR/0014-nas-database-memory-settings-by-choice.md)).
 - **The four DIDL fields on a real television.** They are on the wire: a SOAP Browse against the running
   server on 2026-09-08 returned `nrAudioChannels="2"`, `sampleFrequency="48000"`,
   `<upnp:videoCodec>h264</upnp:videoCodec>` and `<upnp:audioCodec>aac</upnp:audioCodec>`. What is unproven
@@ -1836,7 +1669,7 @@ Traps 0, 0b, 1, 9, 13 and 14 of that list are already covered in section 7 above
 - **An agent finding can be confidently wrong about the thing it is naming.** The `DLNA.ORG_OP` bits were
   reported as inverted against the spec; they are correct, and renaming them would have introduced the
   inversion. Verify a finding against the emitted value before acting on it, especially when the reviewer
-  that raised it had no semantic analysis available. See standing decision 25.
+  that raised it had no semantic analysis available. See standing decision 25 ([ADR 0025](ADR/0025-dlna-org-op-bit-naming-is-correct.md)).
 - **A stale number in a doc comment is not harmless.** `FileCacheOptions`' remark still described the
   pre-fix 512/1024 defaults, and a reviewer read it during the audit and reported the cache budget
   reverting to 1 GB - a claim that then had to be chased down and disproved against source. The remark
@@ -1860,7 +1693,7 @@ This file is written to be the only context needed. Work through it in order.
    An incremental build skipped a project and hid a real `CS1570` during the section 6i pass, and a
    whole review ran against a tree that did not compile because nobody built it at all.
    If the build fails with `CS1504` or file locks, see section 7 "Tooling traps" first.
-4. **Read section 7b, then "Where things stand" at the end of this section.** The milestones are no
+4. **Read [docs/ADR/](ADR/README.md) and section 7b, then "Where things stand" at the end of this section.** The milestones are no
    longer the whole picture: the server is deployed and running, and as of 2026-09-08 the review
    backlog is closed apart from W9 and the four items section 6i records as deliberately not applied.
    **Section 6s is the newest work and none of 6n onwards is deployed.** What is left needs a television, a quiet
@@ -1873,8 +1706,8 @@ This file is written to be the only context needed. Work through it in order.
    see section 7, recurring check 2.
 7. **Measure memory** (section 3b) and append the row.
 8. **Update `history.md`** - its section 4 status table, a new section 6 entry for the batch, and the
-   "Last updated" line. Anything durable the batch decided or any trap it cost goes in THIS file
-   instead, in section 7 or 7b.
+   "Last updated" line. A decision the batch took goes in [docs/ADR/](ADR/README.md); any trap it cost goes in THIS file,
+   in section 7 or 7b.
 
 ### Where things stand
 

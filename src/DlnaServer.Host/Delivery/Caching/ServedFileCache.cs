@@ -398,6 +398,13 @@ namespace DlnaServer.Host.Delivery.Caching
 
         private async Task<ReadOnlyMemory<byte>> ReadAndStoreAsync(string filePath, CachedContentClass contentClass)
         {
+            // A read that finished between this caller's TryGet and its GetOrAdd has already stored the
+            // payload and retired its marker, so without this re-check the same file was read a second time.
+            if (TryGet(filePath, out var cached))
+            {
+                return cached;
+            }
+
             var maximumFileSize = ResolveMaximumFileSizeInBytes(_options.CurrentValue.FileCache);
 
             try

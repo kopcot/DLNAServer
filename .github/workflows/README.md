@@ -4,7 +4,7 @@ What runs on GitHub Actions, when, and why - the one place CI and releases are d
 links here. Every workflow starts with `contents: read` and elevates only the job that needs more; every
 checkout sets `persist-credentials: false`; every action is pinned to a commit with its version in a
 comment, and Dependabot keeps those pins current. The traps that shaped them are in
-[docs/decisions.md](../../docs/decisions.md) section 7, "CI and release traps".
+[docs/decisions.md](../../docs/decisions.md) section 7, "CI and release traps", and every failed run so far, with its cause and its fix, is in [docs/ADR/0035](../../docs/ADR/0035-ci-cd-failures-and-their-fixes.md).
 
 ## At a glance
 

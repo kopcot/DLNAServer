@@ -8,6 +8,10 @@ worth telling you about is added to the version it belongs to.
 
 ---
 
+## 1.3
+
+**The library only answers your own network.** On a NAS with an internet-reachable IPv6 address, the part of the server televisions use - browsing, playing and downloading files - could be reached from outside if the router let it through, so anyone who found the address could list and download the whole library. It now answers only devices on the local network or a Tailscale address, like the admin pages already did. Televisions on your network are not affected. A device reaching the server from anywhere else - over a VPN that hands out public addresses, or over a public IPv6 address from another network - now gets *not found*.
+
 ## 1.2
 
 **A smaller image.** The published Docker image no longer carries files built for Windows, macOS, Android and other platforms it never runs on. It is about half the size on disc, and pulling an update downloads less.
