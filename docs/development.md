@@ -102,7 +102,7 @@ headings, its trap entries, `release-notes.md`'s section headings - is a **histo
 correct as written. Do not sweep those; rewriting history to match the present is how a decision record
 stops being one.
 
-A release is a `v`-prefixed tag on the host's version (`v1.2.1017`); pushing it builds, tests and
+A release is a `v`-prefixed tag on the host's version (`v1.2.1026`); pushing it builds, tests and
 attaches the linux-x64 archive, and publishes the container image to `ghcr.io/kopcot/dlnaserver` under that tag and `latest`, signed with cosign.
 
 Every product version gets its tag, set **on the push that carries it**: `tag-release.yml` tags the head of a push
