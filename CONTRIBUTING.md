@@ -12,5 +12,5 @@ There are no other contributors so far.
 ## Where to start
 
 - **Building, testing, versioning and releasing** - [`docs/development.md`](docs/development.md).
-- **Why it is built the way it is** - [`docs/decisions.md`](docs/decisions.md), and section 7b for the open work.
+- **Why it is built the way it is** - [`docs/ADR/`](docs/ADR/README.md) for the standing decisions, [`docs/decisions.md`](docs/decisions.md) for the conventions and traps, and its section 7b for the open work.
 - **Reporting a vulnerability** - privately, as [`.github/SECURITY.md`](.github/SECURITY.md) describes, never in a public issue.

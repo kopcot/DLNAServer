@@ -3,8 +3,8 @@
 What has been built, what is deployed, and the batch-by-batch record of every change with its reasoning.
 Append-only in practice: an entry here describes the moment it was written.
 
-Its sibling is [decisions.md](decisions.md), which carries the conventions, the standing decisions and
-the traps - read that one before working. Split out of `PLAN.md` on 2026-09-23.
+Its sibling is [decisions.md](decisions.md), which carries the conventions and the traps, and the standing
+decisions are in [ADR/](ADR/README.md) - read those before working. Split out of `PLAN.md` on 2026-09-23.
 
 **Section numbers are unchanged from `PLAN.md`** on purpose, so a reference to "section 6n" still
 resolves.
