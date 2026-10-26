@@ -21,6 +21,8 @@ on. If it arrives and the response is rejected, that is a wire-format problem an
 [DLNA compatibility](dlna-compatibility.md) - VLC tolerates malformed DIDL-Lite that televisions reject,
 so a library that plays in VLC proves nothing here.
 
+**A 404 for everything, from a device that is not on the local network, is by design** ([ADR 0036](ADR/0036-media-port-answers-local-network-only.md)). Both ports answer only loopback, the private and link-local ranges, IPv6 unique-local addresses, `100.64.0.0/10` (Tailscale) and a global IPv6 address inside the server's own /64. A renderer reaching the server over a routed VPN with public addresses, or over a public IPv6 address from another network, is refused, and nothing reaches `logs/app.log` unless `Server.DebugMode` is on - then each refusal is a `Refused a request on port ... from ...` line.
+
 ## Video plays but seeking does not work
 
 Seeking is byte ranges. A renderer seeks by asking for a range, and anything that breaks the

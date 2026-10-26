@@ -28,9 +28,9 @@ tested, and the whole set runs again every night; what runs when is in
   `Directory.Packages.props` the way `System.Security.Cryptography.Xml` is pinned, and say why.
 
 Every project commits a `packages.lock.json`, and CI, the release, `NasBuild.sh` and the `Dockerfile` all
-restore with `--locked-mode`. After changing `Directory.Packages.props` or a package reference, run a plain
-`dotnet restore DlnaServer.sln` and commit the lock files it rewrites, or the next locked restore fails
-with NU1004. The same goes for a new NAS runtime: add it to `RuntimeIdentifiers` in `Directory.Build.props`
+restore with `--locked-mode`. After changing `Directory.Packages.props` or a package reference, run
+`dotnet restore DlnaServer.sln --force-evaluate` and commit every lock file it rewrites, or the next locked restore fails
+with NU1004. A plain `dotnet restore` is not enough: a project that reaches the package only transitively keeps a `CentralTransitive` entry naming the old version, which is how the Dependabot pull requests in [ADR 0035](ADR/0035-ci-cd-failures-and-their-fixes.md) entry 15 failed. The same goes for a new NAS runtime: add it to `RuntimeIdentifiers` in `Directory.Build.props`
 first, because the lock files only carry targets for the runtimes listed there.
 
 ## Conventions
@@ -64,8 +64,7 @@ persistence assembly, reads projected straight into DTOs. Read it before the fir
 architecture tests in `tests/DlnaServer.ArchitectureTests` fail the build if the layering is broken,
 so several of those conventions are enforced rather than merely documented.
 
-`docs/decisions.md` is the decision record. If a change comes out of a decision, or if it cost time because of
-a trap worth remembering, that is where it goes.
+`docs/ADR/` is the decision record: a change that comes out of a decision adds an ADR there, under the next free number, as [its index](ADR/README.md) describes. A trap worth remembering goes in `docs/decisions.md`, and a CI/CD failure in [ADR 0035](ADR/0035-ci-cd-failures-and-their-fixes.md).
 
 ## Tests
 
@@ -102,7 +101,7 @@ headings, its trap entries, `release-notes.md`'s section headings - is a **histo
 correct as written. Do not sweep those; rewriting history to match the present is how a decision record
 stops being one.
 
-A release is a `v`-prefixed tag on the host's version (`v1.2.1026`); pushing it builds, tests and
+A release is a `v`-prefixed tag on the host's version (`v1.3.1026`); pushing it builds, tests and
 attaches the linux-x64 archive, and publishes the container image to `ghcr.io/kopcot/dlnaserver` under that tag and `latest`, signed with cosign.
 
 Every product version gets its tag, set **on the push that carries it**: `tag-release.yml` tags the head of a push

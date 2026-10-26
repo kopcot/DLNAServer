@@ -19,4 +19,4 @@
 
 - [ ] `<Version>` bumped in every project this changes (`DlnaServer.Host` is the product version)
 - [ ] `release-notes.md` updated, if an operator would notice this
-- [ ] `docs/decisions.md` updated, if a decision or a trap came out of it, and `docs/history.md` for the batch itself
+- [ ] an ADR added under `docs/ADR/` if a decision came out of it, `docs/decisions.md` if a trap did, and `docs/history.md` for the batch itself

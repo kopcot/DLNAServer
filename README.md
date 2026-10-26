@@ -18,7 +18,7 @@ today keep working. The internals are new.
 > 177.7 MB was taken 255 s after a restart — and confirmation on a real television of the four DIDL
 > fields added on 2026-09-06.
 >
-> **Version `1.2.1026`.** It is `Major.Minor.MonthDate`, and each project carries its own, so a number
+> **Version `1.3.1026`.** It is `Major.Minor.MonthDate`, and each project carries its own, so a number
 > says which assembly changed. The one on the About page is the host's, which is the product version;
 > the assembly table on that page lists the rest. `release-notes.md` says what changed for whoever runs the server,
 > one entry per `Major.Minor`; `docs/` holds everything internal. `release-notes.md` and `LICENSE` are
@@ -26,7 +26,7 @@ today keep working. The internals are new.
 >
 > **Licence: [MIT](LICENSE).** Free to use, change and pass on, with no warranty.
 >
-> **`docs/decisions.md` carries the conventions, the standing decisions and the traps**, and its section 7b
+> **`docs/ADR/` carries the standing decisions**, one file each. **`docs/decisions.md` carries the conventions and the traps**, and its section 7b
 > is the open-work list. `docs/history.md` is the batch-by-batch record of what changed and when.
 
 ## What it does
@@ -105,6 +105,7 @@ same framework-dependent publish `NasBuild.sh` produces, and the image is publis
 | [docs/operations.md](docs/operations.md) | Running it, uploading, rebuilding, the admin UI, the management endpoints |
 | [docs/performance.md](docs/performance.md) | The served-bytes cache and what it costs |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | It is not working - start here |
+| [docs/ADR/](docs/ADR/README.md) | The standing decisions, and the CI/CD failures catalogue |
 | [docs/decisions.md](docs/decisions.md) | Why it is built this way: decisions, conventions, traps, open work |
 | [docs/history.md](docs/history.md) | Status, milestones, and the batch-by-batch record |
 | [release-notes.md](release-notes.md) | What changed, for whoever runs the server |

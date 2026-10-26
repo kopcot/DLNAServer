@@ -17,8 +17,7 @@ question needs settling, and write nothing into it.
 `README.md` is the landing page and was cut to that on 2026-09-23; the detail moved to `docs/` -
 `architecture.md`, `dlna-compatibility.md` (the behaviours that intentionally differ from that server),
 `configuration.md`, `operations.md`, `performance.md` and `troubleshooting.md`, indexed by
-`docs/README.md`. There is deliberately no `docs/decisions/` ADR tree: `docs/decisions.md` section 7b is the
-decision record and running two of them is how they drift apart. `docs/development.md` covers the build, the two hard rules and the release flow (it was `CONTRIBUTING.md` until 2026-09-26, which is now a short page naming the contributors);
+`docs/README.md`. `docs/ADR/` is the decision record, one file per standing decision, indexed by `docs/ADR/README.md`; the standing decisions moved there from `docs/decisions.md` section 7b on 2026-10-26, so there is still exactly one record - running two of them is how they drift apart. `docs/development.md` covers the build, the two hard rules and the release flow (it was `CONTRIBUTING.md` until 2026-09-26, which is now a short page naming the contributors);
 `.github/SECURITY.md` covers reporting.
 
 ## The server
@@ -28,18 +27,18 @@ decision record and running two of them is how they drift apart. `docs/developme
 > milestone status and checklists, the conventions and tooling traps that have cost time, and how to
 > resume. Read it before doing any work here, and update it as work completes.
 >
-> **Version `1.2.1026`.** Every change bumps the assembly version - the rule, and who may bump which part,
+> **Version `1.3.1026`.** Every change bumps the assembly version - the rule, and who may bump which part,
 > is in `docs/decisions.md` section 7 under "Assembly version". Each project carries its **own** `<Version>` -
 > under `src/` since 2026-09-23, the test projects too since 2026-09-26 - so bump only the projects the change
 > touched; `DlnaServer.Host` is the product version, and no other project tracks it. **`release-notes.md` is updated
 > in the same change** - operator-facing release notes, one entry per `Major.Minor`, in their terms, never
 > a build log; a change they would not notice adds nothing to it.
 >
-> **Its section 7b is the one to read first.** On 2026-09-08 the review history (`docs/`), both
+> **`docs/ADR/` is the one to read first**, then section 7b of `docs/decisions.md`. On 2026-09-08 the review history (`docs/`), both
 > `REVIEW-*-FIXES.md` worklists and both session records were deleted. Everything from them that was
-> still live was folded into that section: the **standing decisions** (reporting one of those as a defect
+> still live was folded into section 7b: the **standing decisions** (reporting one of those as a defect
 > is a false positive), the **open work**, and the **traps**. Their history was the point of deleting
-> them and is gone.
+> them and is gone. On 2026-10-26 the standing decisions moved again, one file each, into `docs/ADR/` - numbered as they were, so standing decision *N* is ADR *N*, padded to four digits, - and section 7b keeps the open work and the traps.
 >
 > **State.** Running on the NAS, working set 563.4 MB → **177.7 MB** after the memory pass, a television
 > plays from it, **1,111 tests at 0 warnings**, no vulnerable packages. **The NAS runs the current product
