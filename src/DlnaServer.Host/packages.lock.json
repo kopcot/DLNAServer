@@ -47,9 +47,9 @@
       },
       "SoapCore": {
         "type": "Direct",
-        "requested": "[1.2.1.16, )",
-        "resolved": "1.2.1.16",
-        "contentHash": "P1W+P3hmefn7uqDiM8t8ADtD/tKWd31FL8QUiLPoWGmCQInq0UHcPXdmKiLnIVPAVcNbqBJHFVb1YLeHImq+6A==",
+        "requested": "[1.2.1.18, )",
+        "resolved": "1.2.1.18",
+        "contentHash": "yW6NAkIWNj/oii+uIwN7T1TzPguDzxh4IMV/dYJnOYxKgMrnnGOy2SoLpwaQtz/xtpzqonQwUSurRqOqmp6K6w==",
         "dependencies": {
           "System.CodeDom": "9.0.2",
           "System.ServiceModel.Http": "8.1.1"
@@ -411,7 +411,7 @@
         "type": "Project",
         "dependencies": {
           "DlnaServer.Core": "[1.1.1026, )",
-          "SoapCore": "[1.2.1.16, )"
+          "SoapCore": "[1.2.1.18, )"
         }
       },
       "MetadataExtractor": {
