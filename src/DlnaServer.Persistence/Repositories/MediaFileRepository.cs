@@ -1450,8 +1450,16 @@ namespace DlnaServer.Persistence.Repositories
 
             // Counted afterwards rather than taken from the update, which counts only the rows it changed:
             // a file already waiting to be read - just after a previous rebuild - was left out, and the page
-            // reported "0 file(s)" while every file was in fact about to be read.
-            var awaitingRead = await _dbContext.Files.CountAsync(static f => f.MetadataStamp == null, cancellationToken);
+            // reported "0 file(s)". Excluded folders are left out the way the processing queue leaves them.
+            var awaiting = _dbContext.Files.Where(static f => f.MetadataStamp == null);
+            var excludeFolders = _options.CurrentValue.Library.ExcludeFolders;
+
+            if (excludeFolders is { Count: > 0 })
+            {
+                awaiting = HiddenPathQuery.ExcludeHiddenFiles(awaiting, excludeFolders);
+            }
+
+            var awaitingRead = await awaiting.CountAsync(cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
 

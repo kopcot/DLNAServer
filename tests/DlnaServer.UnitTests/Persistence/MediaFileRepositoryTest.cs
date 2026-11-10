@@ -3068,6 +3068,26 @@ namespace DlnaServer.UnitTests.Persistence
         }
 
         [Test]
+        public async Task RecreateAllTagsAsync_ForAFileInAnExcludedFolder_DoesNotCountIt()
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var repository = CreateRepository(context, "Retired");
+
+            _ = await repository.AddRangeAsync(
+                files: [CreateFile("/media/music/Kept.mp3"), CreateFile("/media/Retired/Gone.mp3")],
+                cancellationToken: CancellationToken.None);
+
+            // Act
+            var requeued = await repository.RecreateAllTagsAsync(cancellationToken: CancellationToken.None);
+
+            // Assert
+            requeued.Should().Be(1,
+                "because the processing queue never reads a file under ExcludeFolders, so the page must not "
+                + "count it among the files that will be read again");
+        }
+
+        [Test]
         public async Task RecreateAllTagsAsync_ForAFileAlreadyWaitingToBeRead_StillCountsIt()
         {
             // Arrange

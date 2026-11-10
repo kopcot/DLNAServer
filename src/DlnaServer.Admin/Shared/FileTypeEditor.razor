@@ -70,6 +70,9 @@
     public EventCallback OnCompleted { get; set; }
 
     private DlnaMime _mime;
+
+    // The type the select showed before its latest change - @bind:after runs once _mime already holds the new one.
+    private DlnaMime _previousMime;
     private string? _profileName;
     private string? _message;
     private bool _busy;
@@ -88,32 +91,44 @@
 
         _seededFileId = File.PublicId;
         _mime = File.Mime;
+        _previousMime = File.Mime;
         _profileName = File.DlnaProfileName;
         _message = null;
     }
 
     /// <remarks>
-    /// A profile belongs to a type: one left over from the old type would be saved with the new one, and
-    /// a television filtering on the pair refuses the file. So a profile the new type does not offer is
-    /// cleared - empty is the standard profile for the type - and one it does offer is kept.
+    /// A catalogue profile belongs to its type: one left over from the old type would be saved with the new
+    /// one, and a television filtering on the pair refuses the file. So a profile the OLD type offered and
+    /// the new one does not is cleared - empty is the standard profile for the type. A name the operator
+    /// typed that no type offers is theirs, and is kept whatever the order of the two edits.
     /// </remarks>
     private void OnMimeChanged()
     {
-        if (string.IsNullOrWhiteSpace(_profileName))
+        var previous = _previousMime;
+        _previousMime = _mime;
+
+        if (string.IsNullOrWhiteSpace(_profileName)
+            || !Offers(previous, _profileName)
+            || Offers(_mime, _profileName))
         {
             return;
         }
 
-        foreach (var profile in _mime.ToProfileNames())
+        LogProfileCleared(Logger, _profileName, previous, _mime);
+        _profileName = null;
+    }
+
+    private static bool Offers(DlnaMime mime, string profileName)
+    {
+        foreach (var profile in mime.ToProfileNames())
         {
-            if (string.Equals(profile, _profileName, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(profile, profileName, StringComparison.OrdinalIgnoreCase))
             {
-                return;
+                return true;
             }
         }
 
-        LogProfileCleared(Logger, _profileName, _mime);
-        _profileName = null;
+        return false;
     }
 
     private async Task SaveAsync()

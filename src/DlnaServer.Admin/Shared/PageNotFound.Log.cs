@@ -10,7 +10,7 @@ namespace DlnaServer.Admin.Shared
     {
         [LoggerMessage(
             EventId = 1,
-            Level = LogLevel.Information,
+            Level = LogLevel.Debug,
             Message = "Admin address {Path} answered 404: {Title}")]
         private static partial void LogNotFound(ILogger logger, string? path, string title);
     }

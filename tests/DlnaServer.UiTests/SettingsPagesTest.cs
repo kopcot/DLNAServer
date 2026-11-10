@@ -31,21 +31,14 @@ namespace DlnaServer.UiTests
             }
             finally
             {
-                Browser.Open(path: "/admin/settings/temporary");
-                if (Browser.IsPresent(by: _hideHidden))
+                // Each restore in its own finally, so a failure putting one back cannot leave the other set.
+                try
                 {
-                    Browser.ActUntil(
-                        action: () => Browser.Driver.FindElement(_hideHidden).Click(),
-                        done: () => !Browser.IsPresent(by: _hideHidden),
-                        because: "the hidden folders are hidden again for the tests that follow");
+                    Restore(button: _hideHidden, because: "the hidden folders are hidden again for the tests that follow");
                 }
-
-                if (Browser.IsPresent(by: _unblock))
+                finally
                 {
-                    Browser.ActUntil(
-                        action: () => Browser.Driver.FindElement(_unblock).Click(),
-                        done: () => !Browser.IsPresent(by: _unblock),
-                        because: "televisions are answered again for the tests that follow");
+                    Restore(button: _unblock, because: "televisions are answered again for the tests that follow");
                 }
             }
         }
@@ -124,6 +117,19 @@ namespace DlnaServer.UiTests
                 done: () => Browser.IsDisplayed(by: _block) && !Browser.IsPresent(by: _unblock)
                     && !Browser.IsPresent(by: blockedUntil),
                 because: "unblocking answers televisions again and puts the panel back in its starting state");
+        }
+
+        private static void Restore(By button, string because)
+        {
+            Browser.Open(path: "/admin/settings/temporary");
+
+            if (Browser.IsPresent(by: button))
+            {
+                Browser.ActUntil(
+                    action: () => Browser.Driver.FindElement(button).Click(),
+                    done: () => !Browser.IsPresent(by: button),
+                    because: because);
+            }
         }
     }
 }
