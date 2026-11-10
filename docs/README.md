@@ -10,6 +10,7 @@ whoever runs the server.
 | [DLNA compatibility](dlna-compatibility.md) | What goes on the wire, and every place it differs from the reference |
 | [Configuration](configuration.md) | Every setting, where it is read from, and which need a restart |
 | [Operations](operations.md) | Running it, feeding it, and finding out what it is doing |
+| [Admin UI components](admin-components.md) | Every admin page, the shared Blazor components it is built from, and the markup the UI tests hold on to - check it before writing admin markup |
 | [Performance](performance.md) | The decisions taken for a NAS with mechanical drives and limited memory |
 | [Troubleshooting](troubleshooting.md) | It is not working - start here |
 | [Architecture decision records](ADR/README.md) | Every standing decision, one file each, and the CI/CD failures catalogue - reporting a decision as a defect is a known false positive |
