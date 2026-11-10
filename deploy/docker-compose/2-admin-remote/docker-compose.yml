@@ -39,6 +39,9 @@ services:
     build:
       context: https://github.com/kopcot/DLNAServer.git#main
       dockerfile: Dockerfile
+      # The Dockerfile names its base images by tag, so without this a rebuild reuses the cached copy and
+      # keeps an old .NET patch - see docs/ADR/0037.
+      pull: true
     image: kopcot/dlnaserver:latest
     container_name: dlna-server
     restart: unless-stopped

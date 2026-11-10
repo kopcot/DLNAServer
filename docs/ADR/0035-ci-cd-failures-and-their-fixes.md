@@ -17,7 +17,7 @@ The durable rules these failures produced, each recorded where it lives:
 
 | Rule | From entry | Where it is kept |
 | --- | --- | --- |
-| A framework move is a deliberate change, never a Dependabot bump - major versions of the .NET base images are ignored | 3 | `.github/dependabot.yml` |
+| A framework move is a deliberate change, never a Dependabot bump - the Dockerfile names the `8.0` tags and Dependabot no longer watches the base images | 3, 21 | `Dockerfile`, [0037](0037-base-images-by-tag-not-digest.md) |
 | Every change is built and tested on Linux **and** Windows | 4, 6 | `dotnet.yml`, [workflows README](../../.github/workflows/README.md) |
 | `SkiaSharp` and its native Linux package arrive in one Dependabot group | 6 | `.github/dependabot.yml` |
 | A one-off red concurrency test is a defect report, not noise | 7, 8 | this file |
@@ -27,6 +27,7 @@ The durable rules these failures produced, each recorded where it lives:
 | After any package change, `dotnet restore DlnaServer.sln --force-evaluate` and commit every lock file it rewrites | 15 | [development.md](../development.md) |
 | A transitive advisory is fixed by pinning the package by hand, never by merging a Dependabot pin across a major version | 16, 17 | [development.md](../development.md), "The two hard rules" |
 | Every SHA-pinned action carries its exact `# vX.Y.Z` comment | 18 | the workflows themselves |
+| The base images are named by tag, never by digest, so a .NET runtime patch reaches the next build without a commit | 21 | [0037](0037-base-images-by-tag-not-digest.md) |
 
 ## Consequences
 
@@ -227,7 +228,16 @@ Each is recorded in [decisions.md](../decisions.md) section 7, *CI and release t
 - **Fix:** none applied yet. Checking the affected files out again, so the working tree matches the attributes, should clear it - delete them and `git checkout -- <files>`; the index needs no change. That has not been run. CI is unaffected, because a Linux checkout is LF.
 - **Prevent / detect:** `git ls-files --eol | grep w/crlf` lists the stragglers.
 
-## Run index - 57 failed runs
+### 21. Trivy failed nightly on the .NET runtime - a digest-pinned base image and a weekly Dependabot with a cooldown
+
+- **Workflow / job:** `Full test suite` (`full-suite.yml`) -> `Container / Container build`, `Scan the image` step
+- **Runs:** first 2026-11-04, run 41813144859; then every nightly to 2026-11-09 - 42008531399, 42201125787, 42359966301, 42468555375, 42603452612. All six built the same commit, `352649b`; the nightly on it was green up to 2026-11-03 (41618766696), so no merge broke it.
+- **Error:** `Total: 1 (HIGH: 1, CRITICAL: 0)` - `Microsoft.NETCore.App.Runtime.linux-x64 | GHSA-p3jp-9v83-76w9 | HIGH | fixed | 8.0.32 | 8.0.33, 9.0.22, 10.0.14, ...` (`Microsoft Security Advisory CVE-2026-111497 - .NET Brotli Decoder Out-of-bounds write`)
+- **Root cause:** `Dockerfile` pinned `aspnet:8.0` by digest (`e8a5b9d`, last moved in `cd5f3fe` to 8.0.32). Microsoft shipped 8.0.33 on the same tag, a new advisory made 8.0.32 a fixable HIGH, and Trivy's `ignore-unfixed` correctly failed the scan. Nothing moved the digest: in the 40 days it was pinned, Dependabot's docker entry (weekly, 7-day cooldown) opened no digest pull request - both moves were by hand, `e8a5b9d` and `cd5f3fe` - and GitHub never raises a security update for a base image.
+- **Fix:** 2026-11-10 - both base images are named by tag, without a digest, and the Dependabot docker entry is removed; the compose files that build set `pull: true`. Host 1.3.1110, so `tag-release.yml` releases an image on 8.0.33. Recorded as [0037](0037-base-images-by-tag-not-digest.md), which reverses the pin.
+- **Prevent / detect:** the unpinned tag - the next build takes Microsoft's patch with no commit. Trivy in every image build stays the detector; a recurrence on the .NET runtime now means Microsoft has not shipped the fix yet, or a cached base was used where `--pull` was missing. The scan still fails, correctly, on a fixable advisory in a NuGet package the app ships, which needs a pin or a Dependabot merge (entries 16 and 17).
+
+## Run index - 63 failed runs
 
 | Entry | Runs |
 | --- | --- |
@@ -247,5 +257,6 @@ Each is recorded in [decisions.md](../decisions.md) section 7, *CI and release t
 | 16 | 38463561268, 38463561446, 38464811699, 38464811846, 39008788116, 39008788144 |
 | 17 | 38534069416, 38614114837, 38614888627, 38701898636, 38869429641 |
 | 18 | 38614114898 |
+| 21 | 41813144859, 42008531399, 42201125787, 42359966301, 42468555375, 42603452612 |
 
 Entries 11, 19 and 20 have no failed run. Run 35789559743 failed on two causes and is counted under both 3 and 7.
