@@ -11,8 +11,6 @@
     settings file. The server forgets them when it restarts.
 </PageHeader>
 
-<Notice IsBad="false" Message="@_message" />
-
 <Panel Heading="Show temporarily hidden folders">
     <p class="muted">
         The folders listed under <em>Temporarily hidden folders</em> on the Settings page are indexed and
@@ -38,6 +36,7 @@
             <button class="primary" @onclick="Show">Show now</button>
         </div>
     }
+    <Notice Message="@MessageIn(HiddenFoldersArea)" />
 
     <p class="muted">
         A television already looking at a folder will not notice either way until it browses again &mdash;
@@ -72,6 +71,7 @@
             <button class="primary" @onclick="ShowTooltips">Show now</button>
         </div>
     }
+    <Notice Message="@MessageIn(TooltipsArea)" />
 
     <p class="muted">
         A page already open picks this up the next time it draws something. Reload it if nothing changes.
@@ -102,6 +102,7 @@
             <button @onclick="Block">Block</button>
         </div>
     }
+    <Notice Message="@MessageIn(TrafficArea)" />
 
     <p class="muted">
         While blocked, a television asking for a folder or a file is told the server is unavailable. The
@@ -133,6 +134,13 @@
     private int _blockHours = DefaultBlockHours;
     private string? _message;
 
+    // Which panel's buttons _message answers, so it is drawn beside them; every message here is an action's.
+    private const string HiddenFoldersArea = "hidden";
+    private const string TooltipsArea = "tooltips";
+    private const string TrafficArea = "traffic";
+
+    private string? _messageArea;
+
     /// <remarks>
     /// Straight to the singleton, never through <c>ISettingsWriter</c>. That writer serialises the whole
     /// options graph, so a setting held anywhere under <c>DlnaOptions</c> reaches <c>config.json</c> on the
@@ -144,13 +152,13 @@
         _minutes = minutes;
 
         Visibility.ShowFor(TimeSpan.FromMinutes(minutes));
-        _message = $"Temporarily hidden folders are showing for {minutes} minute(s).";
+        Report(HiddenFoldersArea, $"Temporarily hidden folders are showing for {minutes} minute(s).");
     }
 
     private void Hide()
     {
         Visibility.Hide();
-        _message = "Temporarily hidden folders are hidden again.";
+        Report(HiddenFoldersArea, "Temporarily hidden folders are hidden again.");
     }
 
     private void ShowTooltips()
@@ -159,13 +167,13 @@
         _tooltipMinutes = minutes;
 
         Tooltips.EnableFor(TimeSpan.FromMinutes(minutes));
-        _message = $"Values show where they come from for {minutes} minute(s).";
+        Report(TooltipsArea, $"Values show where they come from for {minutes} minute(s).");
     }
 
     private void HideTooltips()
     {
         Tooltips.Disable();
-        _message = "Values no longer show where they come from.";
+        Report(TooltipsArea, "Values no longer show where they come from.");
     }
 
     private void Block()
@@ -182,13 +190,26 @@
 
         Blocker.Block(TimeSpan.FromHours(hours), $"Paused for {hours} hour(s) from these pages");
         LogTelevisionsBlocked(Logger, hours, Blocker.BlockedUntilUtc);
-        _message = $"Televisions are paused for {hours} hour(s).";
+        Report(TrafficArea, $"Televisions are paused for {hours} hour(s).");
     }
 
     private void Unblock()
     {
         Blocker.Release();
         LogTelevisionsUnblocked(Logger);
-        _message = "Televisions are being answered again.";
+        Report(TrafficArea, "Televisions are being answered again.");
+    }
+
+    private void Report(string area, string message)
+    {
+        _messageArea = area;
+        _message = message;
+    }
+
+    private string? MessageIn(string area)
+    {
+        return string.Equals(_messageArea, area, StringComparison.Ordinal)
+            ? _message
+            : null;
     }
 }

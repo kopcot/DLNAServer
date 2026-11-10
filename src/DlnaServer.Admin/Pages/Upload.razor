@@ -21,6 +21,49 @@
     Copy media from this device into one of your library folders.
 </PageHeader>
 
+@* At the top, straight under the heading: the browser comes back here after every upload, and a report
+   below the form was off the screen on a phone - it looked as though nothing had happened. *@
+@if (_report?.Refusal is { } refusal)
+{
+    <Notice IsBad="true">The upload was refused: @refusal</Notice>
+}
+
+@if (_report is { Files.Count: > 0 })
+{
+    <Panel>
+        <HeadingContent>
+            What was uploaded<span class="muted"> &middot; @_report.Files.Count file(s)@(_report.Destination.Length > 0 ? $" into {_report.Destination}" : null)</span>
+        </HeadingContent>
+        <ChildContent>
+            @* A native details, like the assembly list on About: this page is statically rendered, and a
+               fold that lived in server state would cost it a circuit. *@
+            <details class="tagdump" open>
+                <summary>Show every file and what happened to it</summary>
+                <DataTable>
+                    <Columns>
+                        <th>File</th><th class="num">Size</th><th>What happened</th><th>Why</th>
+                    </Columns>
+                    <ChildContent>
+                        @foreach (var file in _report.Files)
+                        {
+                            <tr>
+                                <td>@file.FileName</td>
+                                <td class="num">@Fmt.Megabytes(file.SizeInBytes)</td>
+                                <td>@Describe(file.Outcome)</td>
+                                <td class="tagvalue">@file.Reason</td>
+                            </tr>
+                        }
+                    </ChildContent>
+                </DataTable>
+            </details>
+            <p class="muted">
+                Every one of these is also written to <code>logs/uploadSecurity.log</code>, which keeps the
+                record after this page is gone.
+            </p>
+        </ChildContent>
+    </Panel>
+}
+
 @if (!Availability.IsAcceptingUploads)
 {
     <Notice IsBad="true">
@@ -127,42 +170,6 @@ else
             Nothing appears in the library until the files have finished arriving and the server has
             looked through the folder, which it is asked to do as soon as the upload ends.
         </p>
-    </Panel>
-}
-
-@if (_report is not null)
-{
-    <Panel>
-        <HeadingContent>
-            What was uploaded<span class="muted"> &middot; @_report.Files.Count file(s) into @_report.Destination</span>
-        </HeadingContent>
-        <ChildContent>
-            @* A native details, like the assembly list on About: this page is statically rendered, and a
-               fold that lived in server state would cost it a circuit. *@
-            <details class="tagdump" open>
-                <summary>Show every file and what happened to it</summary>
-                <DataTable>
-                    <Columns>
-                        <th>File</th><th class="num">Size</th><th>What happened</th><th>Why</th>
-                    </Columns>
-                    <ChildContent>
-                        @foreach (var file in _report.Files)
-                        {
-                            <tr>
-                                <td>@file.FileName</td>
-                                <td class="num">@Fmt.Megabytes(file.SizeInBytes)</td>
-                                <td>@Describe(file.Outcome)</td>
-                                <td class="tagvalue">@file.Reason</td>
-                            </tr>
-                        }
-                    </ChildContent>
-                </DataTable>
-            </details>
-            <p class="muted">
-                Every one of these is also written to <code>logs/uploadSecurity.log</code>, which keeps the
-                record after this page is gone.
-            </p>
-        </ChildContent>
     </Panel>
 }
 

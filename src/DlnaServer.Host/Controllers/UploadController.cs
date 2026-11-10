@@ -133,15 +133,18 @@ namespace DlnaServer.Host.Controllers
         /// </summary>
         /// <remarks>
         /// A redirect rather than a rendered page, so that reloading the result does not post the files a
-        /// second time.
+        /// second time. A refused upload redirects to a report as well, carrying the reason: it used to be
+        /// a bare 400 whose text the browser showed on a blank page outside the admin UI.
         /// </remarks>
         [HttpPost]
         [DisableFormValueModelBinding]
         public async Task<IActionResult> Upload(CancellationToken cancellationToken)
         {
+            var files = new List<UploadedFile>();
+
             if (!MultipartRequestBoundary.TryRead(Request.ContentType, out var boundary))
             {
-                return BadRequest("Expected a file upload.");
+                return Refused("Expected a file upload.", destination: null, files);
             }
 
             // Kestrel caps every request body at 256 KB, which is right for a SOAP Browse and impossible
@@ -158,7 +161,6 @@ namespace DlnaServer.Host.Controllers
             var maxFileSizeInBytes = options.Upload.MaxSizeInMegabytes * 1024L * 1024L;
 
             var sender = ReadSender();
-            var files = new List<UploadedFile>();
 
             string? root = null;
             string? subFolder = null;
@@ -196,7 +198,7 @@ namespace DlnaServer.Host.Controllers
                     if (destination is null
                         && !UploadDestination.TryResolve(options, root, subFolder, out destination, out var problem))
                     {
-                        return BadRequest(problem);
+                        return Refused(problem, destination: null, files);
                     }
 
                     var file = await ReceiveAsync(
@@ -258,13 +260,13 @@ namespace DlnaServer.Host.Controllers
 
             if (stoppedBecause is not null && written == 0)
             {
-                return BadRequest(stoppedBecause);
+                return Refused(stoppedBecause, destination, files);
             }
 
             if (destination is null
                 && !UploadDestination.TryResolve(options, root, subFolder, out destination, out var unresolved))
             {
-                return BadRequest(unresolved);
+                return Refused(unresolved, destination: null, files);
             }
 
             // Files before the refused part are already in place, so they are reported, scanned and remembered
@@ -654,6 +656,31 @@ namespace DlnaServer.Host.Controllers
                 // Framework, and an architecture test fails the build if the host reaches for one.
                 LogDeviceNotRemembered(sender.Fingerprint, exception);
             }
+        }
+
+        /// <summary>
+        /// Reports an upload refused as a whole, and sends the browser back to the upload page to say why.
+        /// </summary>
+        /// <remarks>
+        /// Nothing more is written once this is reached; any file the report lists was decided, and recorded
+        /// in the security log, before the refusal.
+        /// </remarks>
+        private StatusCodeResult Refused(string reason, string? destination, List<UploadedFile> files)
+        {
+            var report = new UploadReport
+            {
+                Id = Guid.NewGuid(),
+                CompletedUtc = _timeProvider.GetUtcNow(),
+                Destination = destination ?? string.Empty,
+                Files = files,
+                Refusal = reason,
+            };
+
+            _reports.Add(report);
+
+            LogRefused(reason, HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown", files.Count);
+
+            return SeeOther(report.Id);
         }
 
         /// <summary>

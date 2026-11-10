@@ -19,5 +19,11 @@ namespace DlnaServer.Host.Controllers
             Level = LogLevel.Warning,
             Message = "The destination for device {Fingerprint} was not recorded; the files were written")]
         private partial void LogDeviceNotRemembered(string fingerprint, Exception exception);
+
+        [LoggerMessage(
+            EventId = 4,
+            Level = LogLevel.Warning,
+            Message = "Upload from {RemoteAddress} refused after {FileCount} file(s): {Reason}")]
+        private partial void LogRefused(string reason, string remoteAddress, int fileCount);
     }
 }

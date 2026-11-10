@@ -52,12 +52,12 @@ Render mode: **I** = `InteractiveServer` (a SignalR circuit), **S** = static ser
 | `/admin/library/search/files`, `/admin/library/search` | `SearchFiles` | I | APB | Search files | (SearchPanel) | FieldPair, FileList, FormField, PageHeader, SearchPanel |
 | `/admin/preview/{FileId}`, `/admin/preview/{DirectoryId}/{FileId}` | `Preview` | I | APB | the file's title | Video; Subtitles; facts and actions panels from the components | DataTable, FileTypeEditor, MediaFileFacts, MetaList, MetaRow, Notice, PageHeader, Panel, ProcessingActions, SubtitleEditor |
 | `/admin/photo/{FileId}`, `/admin/photo/{DirectoryId}/{FileId}` | `Photo` | S | APB | Photo | - | PageHeader, Panel |
-| `/admin/upload` | `Upload` | S | - | Add files | Choose the files | DataTable, FormField, Notice, PageHeader, Panel |
+| `/admin/upload` | `Upload` | S | - | Add files | What was uploaded (after an upload, above the form, with a bad Notice when it was refused); Choose the files | DataTable, FormField, Notice, PageHeader, Panel |
 | `/admin/cache` | `FileCache` | I | APB | Recently served files | (pinned stats); Files in memory (N) | Notice, PageHeader, Panel, Scroller, StatGrid, StatTile |
 | `/admin/settings` | `Settings` | I | - | Settings | Server; Library; Uploads; Previews; File types (c); Subtitle types (c); Recently served files (c); Compatibility (c); Database (c) | CheckField, CollapsiblePanel, ExtensionMapEditor, FormField, Notice, PageHeader, Panel, SubtitleTypeEditor |
 | `/admin/settings/temporary` | `TemporarySettings` | I | - | Temporary settings | Show temporarily hidden folders; Show where each value comes from; Television traffic | Notice, PageHeader, Panel |
 | `/admin/maintenance` | `Maintenance` | I | APB | Maintenance | Look for changes now; Rebuild details and previews; All metadata read from files; Subscriptions; Rebuild from scratch; Server | ConfirmActionPair, DataTable, MetaList, MetaRow, Notice, PageHeader, Panel, Provenance |
-| `/admin/help` | `Help` | S | - | Help | twelve topic panels, from *What this server is* to *Where things are kept* | PageHeader, Panel |
+| `/admin/help` | `Help` | S | - | Help | thirteen topic panels, from *What this server is* to *Where things are kept* | PageHeader, Panel |
 | `/admin/about` | `About` | S | - | About | This server; What your televisions are told; Copyright; Getting started | DataTable, MetaList, MetaRow, PageHeader, Panel |
 
 (c) = a `CollapsiblePanel`; the others are `Panel`s. Page files live in `src/DlnaServer.Admin/Pages/`.
@@ -87,7 +87,7 @@ Files = how many pages and components use it. Required parameters are in **bold*
 |---|---|---|---|---|---|
 | `<Panel>` | Bordered section with an optional `h2` heading | Heading, HeadingContent, Class (`pinned`, `player`), ChildContent | `div.panel` > `h2` | 14 | About, Dashboard, FileCache, Help, Library, Maintenance, Photo, Preview, Settings, TemporarySettings, Upload, FileList, MediaFileFacts, SubtitleEditor |
 | `<PageHeader>` | Page title and standfirst; its `h1` is the navigation focus target | **Title**, ChildContent | `h1` + `p.lede` | 13 | every page |
-| `<Notice>` | One-line result message; renders nothing when empty | IsBad, Message, ChildContent | `div.notice.ok` / `div.notice.bad` | 12 | Dashboard, FileCache, Library, Maintenance, Preview, Settings, TemporarySettings, Upload, FileTypeEditor, MainLayout, ProcessingActions, SubtitleEditor |
+| `<Notice>` | One-line result message; renders nothing when empty. An action's result goes directly under the buttons that caused it, in their panel; only a failure while the page loads goes at the top | IsBad, Message, ChildContent | `div.notice.ok` / `div.notice.bad` | 12 | Dashboard, FileCache, Library, Maintenance, Preview, Settings, TemporarySettings, Upload, FileTypeEditor, MainLayout, ProcessingActions, SubtitleEditor |
 | `<DataTable>` | Table with a header row; caller supplies the `th` cells and the `tr` rows | **Columns**, ChildContent | `table` > `thead` + `tbody` | 7 | About, Maintenance, Preview, Upload, ExtensionMapEditor, SubtitleEditor, SubtitleTypeEditor |
 | `<FormField>` | One labelled control in fixed order: label, control, error, hint, restart note | **Label**, For, ChildContent, Error, Hint, Restart | `div.field` > `label` … `.error` | 6 | SearchFiles, SearchFolders, Settings, Upload, FileTypeEditor, SubtitleEditor |
 | `<CollapsiblePanel>` | Panel whose body folds away behind a heading button | **Heading**, ChildContent, Footer, Summary, Pinned, StartCollapsed | `div.panel.collapsible[.pinned][.is-collapsed]` > `h2` > `button.collapse-toggle[aria-expanded]` (`.chevron`, `.collapse-summary`) | 5 | Library, Settings, FileTypeEditor, ProcessingActions, SearchPanel |

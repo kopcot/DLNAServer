@@ -10,8 +10,6 @@
     a restart say so.
 </PageHeader>
 
-<Notice IsBad="_failed" Message="@_message" />
-
 <Panel Heading="Server">
     <FormField Label="Media port" For="port">
         <ChildContent>
@@ -565,9 +563,16 @@
 </CollapsiblePanel>
 
 
-<div class="actions">
-    <button class="primary" @onclick="SaveAsync" disabled="@_saving">Save</button>
-    <button @onclick="Reload" disabled="@_saving">Discard changes</button>
+@* Beside the Save button rather than at the top of the page, where a save - or a refused one - reported
+   itself far off the screen of an operator who had just scrolled down to press it. The bar sticks to the
+   foot of the screen, because a refused save reopens the advanced panels above it and would otherwise
+   push both the button and its message thousands of pixels down. *@
+<div class="savebar">
+    <div class="actions">
+        <button class="primary" @onclick="SaveAsync" disabled="@_saving">Save</button>
+        <button @onclick="Reload" disabled="@_saving">Discard changes</button>
+    </div>
+    <Notice IsBad="_failed" Message="@_message" />
 </div>
 
 @code {

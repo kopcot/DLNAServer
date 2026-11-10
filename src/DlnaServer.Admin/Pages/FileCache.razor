@@ -11,8 +11,6 @@
     up to read the same file twice.
 </PageHeader>
 
-<Notice Message="@Message" />
-
 <Panel Class="pinned">
     <StatGrid>
         <StatTile Label="In use" Source="ServedFileCacheReport.BytesHeld (MB)">@Fmt.Megabytes(_report.BytesHeld)</StatTile>
@@ -31,6 +29,8 @@
         <button @onclick="Refresh" disabled="@_busy">Refresh</button>
         <button class="danger" @onclick="ClearAsync" disabled="@_busy">Empty the memory</button>
     </div>
+    @* Beside the buttons: every message on this page answers one of them. *@
+    <Notice Message="@Message" />
     <p class="muted">
         Emptying it also asks the system to hand the memory back straight away, rather than releasing it
         whenever it next gets round to it. This covers the memory the server keeps for looking things up

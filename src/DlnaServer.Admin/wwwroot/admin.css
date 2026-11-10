@@ -530,6 +530,20 @@ td input[type=text], td select, .actions input[type=number] {
 /* Tinted with its own colour at 8%, so the message reads as a state rather than as one more card. */
 .notice.ok { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
 .notice.bad { border-color: var(--warn); color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, var(--panel)); }
+/* An action's result sits directly under the buttons that caused it, so it needs a gap from them - and
+   none below when it is the last thing in its card. */
+.actions + .notice { margin-top: 12px; }
+.panel > .notice:last-child, .savebar > .notice { margin-bottom: 0; }
+
+/* Settings' Save bar and its message, held at the foot of the screen - see the comment in Settings.razor. */
+.savebar {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    padding: 12px 0;
+    background: var(--ground);
+    border-top: 1px solid var(--line);
+}
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
 

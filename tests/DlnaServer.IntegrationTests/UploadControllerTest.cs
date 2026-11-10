@@ -52,9 +52,11 @@ namespace DlnaServer.IntegrationTests
             var result = await controller.Upload(cancellationToken: CancellationToken.None);
 
             // Assert
-            result.Should().BeOfType<BadRequestObjectResult>(
-                "because the request body is uncapped for the files, so a field has to be bounded while it is "
-                + "read or one huge field is read into memory whole");
+            AssertRefused(result: result, controller: controller,
+                because: "the request body is uncapped for the files, so a field has to be bounded while it is "
+                    + "read or one huge field is read into memory whole");
+            File.Exists(Path.Combine(_destination, "film.mp4")).Should().BeFalse(
+                "because nothing after the refused field is read, so the file is never written");
         }
 
         [Test]
@@ -100,8 +102,36 @@ namespace DlnaServer.IntegrationTests
             var result = await controller.Upload(cancellationToken: CancellationToken.None);
 
             // Assert
-            result.Should().BeOfType<BadRequestObjectResult>(
-                "because every part costs memory even when it is empty, so the count per post is capped");
+            AssertRefused(result: result, controller: controller,
+                because: "every part costs memory even when it is empty, so the count per post is capped");
+        }
+
+        [Test]
+        public async Task Upload_IntoAFolderOutsideTheSourceFolders_IsRefusedWithAReport()
+        {
+            // Arrange
+            var outside = Directory.CreateTempSubdirectory("dlna-upload-outside-").FullName;
+
+            try
+            {
+                var body = Body(
+                    Field(name: "root", value: outside),
+                    FilePart(fileName: "film.mp4", content: new byte[] { 1, 2, 3 }));
+                var controller = CreateController(body: new MemoryStream(body), devices: new FakeUploadDeviceRepository());
+
+                // Act
+                var result = await controller.Upload(cancellationToken: CancellationToken.None);
+
+                // Assert
+                AssertRefused(result: result, controller: controller,
+                    because: "the destination is re-derived from configuration and a folder outside it is refused");
+                File.Exists(Path.Combine(outside, "film.mp4")).Should().BeFalse(
+                    "because a refused destination is never written to");
+            }
+            finally
+            {
+                Directory.Delete(outside, recursive: true);
+            }
         }
 
         [Test]
@@ -345,6 +375,14 @@ namespace DlnaServer.IntegrationTests
             devices.Recorded.Should().ContainSingle(
                     "because the destination is remembered for a post that wrote something")
                 .Which.FileCount.Should().Be(1, "because one file was written");
+        }
+
+        // A post refused as a whole goes back to the upload page with the reason, never to a bare 400.
+        private void AssertRefused(IActionResult result, UploadController controller, string because)
+        {
+            result.Should().BeOfType<StatusCodeResult>().Which.StatusCode.Should().Be(StatusCodes.Status303SeeOther,
+                "because a refused upload redirects to the upload page rather than leaving the admin UI");
+            ReportFor(controller).Refusal.Should().NotBeNullOrWhiteSpace($"because {because}");
         }
 
         private UploadReport ReportFor(UploadController controller)

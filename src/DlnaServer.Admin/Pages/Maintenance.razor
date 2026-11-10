@@ -19,7 +19,9 @@
     trust.
 </PageHeader>
 
-<Notice Message="@Message" />
+@* Only a failure while the page loads lands up here. An action's result is shown beside the buttons that
+   caused it, in that panel - up here it was off the screen for every panel below the first. *@
+<Notice Message="@MessageIn(null)" />
 
 <Panel Heading="Look for changes now">
     <p class="muted">
@@ -30,6 +32,7 @@
     <div class="actions">
         <button @onclick="RequestScan">Look for new, changed and removed files</button>
     </div>
+    <Notice Message="@MessageIn(ScanArea)" />
     @if (_periodicRescan)
     {
         <p class="muted">
@@ -59,6 +62,7 @@
         <button @onclick="ClearThumbnailsAsync" disabled="@_busy">Rebuild all previews</button>
         <button @onclick="RecreateAllAsync" disabled="@_busy">Rebuild everything</button>
     </div>
+    <Notice Message="@MessageIn(DetailsArea)" />
     <p class="muted">
         Clearing previews leaves the preview pictures on disc, so they are picked up again quickly rather
         than being made from scratch.
@@ -75,6 +79,7 @@
         <button @onclick="PurgeTagsAsync" disabled="@_busy">Purge all metadata</button>
         <button @onclick="RecreateTagsAsync" disabled="@_busy">Rebuild all metadata</button>
     </div>
+    <Notice Message="@MessageIn(TagsArea)" />
     <p class="muted">
         <strong>Purge</strong> deletes what is stored and reads nothing back, which is what you want after
         turning the setting off. <strong>Rebuild</strong> deletes it and reads every file again &mdash;
@@ -122,6 +127,7 @@
     <ConfirmActionPair FirstLabel="Rebuild index" FirstConfirmLabel="Confirm rebuild" OnFirst="RebuildIndexAsync"
                        SecondLabel="Recreate database" SecondConfirmLabel="Confirm recreate" OnSecond="RecreateDatabase"
                        Disabled="_busy" OnArmed="ClearMessage" />
+    <Notice Message="@MessageIn(ScratchArea)" />
 
     <MetaList>
         <MetaRow Label="Rebuild index">
@@ -150,9 +156,18 @@
     <ConfirmActionPair FirstLabel="Restart server" FirstConfirmLabel="Confirm restart" OnFirst="Restart"
                        SecondLabel="Stop server" SecondConfirmLabel="Confirm stop" OnSecond="Stop"
                        OnArmed="ClearMessage" />
+    <Notice Message="@MessageIn(ServerArea)" />
 </Panel>
 
 @code {
+    // Which panel's buttons Message answers, so it is drawn there; null is the top of the page.
+    private const string ScanArea = "scan";
+    private const string DetailsArea = "details";
+    private const string TagsArea = "tags";
+    private const string ScratchArea = "scratch";
+    private const string ServerArea = "server";
+
+    private string? _messageArea;
     private IReadOnlyList<EventSubscription> _subscriptions = [];
     private bool _busy;
     private int _directoryCount;
@@ -181,9 +196,10 @@
     /// The guarding itself - gate, cancellation, and reporting a <c>DbException</c> rather than losing
     /// the circuit to it - is on <see cref="AdminPageBase"/>.
     /// </remarks>
-    private async Task RunBusyAsync(Func<CancellationToken, Task> action, string failureMessage)
+    private async Task RunBusyAsync(string area, Func<CancellationToken, Task> action, string failureMessage)
     {
         _busy = true;
+        _messageArea = area;
 
         try
         {
@@ -200,6 +216,13 @@
         Message = null;
     }
 
+    private string? MessageIn(string? area)
+    {
+        return string.Equals(_messageArea, area, StringComparison.Ordinal)
+            ? Message
+            : null;
+    }
+
     /// <remarks>
     /// Asked for, never awaited, and deliberately not behind <c>_busy</c>. A pass over a large library
     /// takes minutes; the request itself collapses into any pass already pending, so a second press
@@ -209,6 +232,7 @@
     {
         ScanSignal.RequestScan();
 
+        _messageArea = ScanArea;
         Message = "Looking through your folders now. Anything new appears as it is found.";
     }
 
@@ -223,6 +247,7 @@
         // and the VACUUM running into a background scan that is already mid-pass - the foreign-key
         // abort the indexer's gate was added to prevent, and VACUUM needs the file to itself.
         return RunBusyAsync(
+            ScratchArea,
             token => IndexLock.RunAsync(
                 async lockedToken =>
                 {
@@ -258,6 +283,7 @@
     private Task ClearMetadataAsync()
     {
         return RunBusyAsync(
+            DetailsArea,
             async token =>
             {
                 var affected = await Files.ClearAllMetadataAsync(token);
@@ -269,6 +295,7 @@
     private Task PurgeTagsAsync()
     {
         return RunBusyAsync(
+            TagsArea,
             async token =>
             {
                 var affected = await Files.PurgeAllTagsAsync(token);
@@ -280,6 +307,7 @@
     private Task RecreateTagsAsync()
     {
         return RunBusyAsync(
+            TagsArea,
             async token =>
             {
                 var affected = await Files.RecreateAllTagsAsync(token);
@@ -292,6 +320,7 @@
     private Task ClearThumbnailsAsync()
     {
         return RunBusyAsync(
+            DetailsArea,
             async token =>
             {
                 var affected = await Files.ClearAllThumbnailsAsync(token);
@@ -303,6 +332,7 @@
     private Task RecreateAllAsync()
     {
         return RunBusyAsync(
+            DetailsArea,
             async token =>
             {
                 var thumbnails = await Files.ClearAllThumbnailsAsync(token);
@@ -315,6 +345,7 @@
 
     private void Restart()
     {
+        _messageArea = ServerArea;
         Message = "Restarting. This page reconnects once the server is back.";
 
         // Same pair as /manage/restart: the signal is what makes the host loop rebuild rather than exit,
@@ -325,6 +356,8 @@
 
     private void Stop()
     {
+        _messageArea = ServerArea;
+
         // Refused exactly as /manage/stop refuses it: a pending recreate lives only in this process and runs
         // on the restart it asked for, so clearing the signal below would drop it without a word.
         if (DatabaseResetSignal.IsResetRequested)
