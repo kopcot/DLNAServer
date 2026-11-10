@@ -1,0 +1,14 @@
+@* Every /admin address no page claims, malformed identifiers included - "/admin/library/abc" does not
+   satisfy the :guid constraint, so it lands here as well. Without it endpoint routing found nothing and
+   answered an empty 404, and the router's own NotFound content was never reached: that only renders for
+   an interactive router, and this one is static (see App.razor). A catch-all ranks below every literal
+   and constrained route, so no real page or controller action is shadowed. *@
+
+@page "/admin/{*path}"
+
+<PageNotFound>There is no admin page at this address.</PageNotFound>
+
+@code {
+    [Parameter]
+    public string? Path { get; set; }
+}

@@ -1446,11 +1446,16 @@ namespace DlnaServer.Persistence.Repositories
             // every file for it; suppression is lifted for the same reason ClearAllMetadataAsync lifts
             // it, since a file an operator had cleared individually would otherwise stay tagless and
             // look like a failure.
-            var requeued = await ClearAllMetadataAsync(cancellationToken);
+            _ = await ClearAllMetadataAsync(cancellationToken);
+
+            // Counted afterwards rather than taken from the update, which counts only the rows it changed:
+            // a file already waiting to be read - just after a previous rebuild - was left out, and the page
+            // reported "0 file(s)" while every file was in fact about to be read.
+            var awaitingRead = await _dbContext.Files.CountAsync(static f => f.MetadataStamp == null, cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
 
-            return requeued;
+            return awaitingRead;
         }
 
         public async Task<int> ClearAllThumbnailsAsync(CancellationToken cancellationToken = default)

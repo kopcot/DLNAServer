@@ -315,8 +315,8 @@ namespace DlnaServer.Persistence.Repositories
         /// <remarks>
         /// Tags can only be obtained by probing the file, and the probe that obtains them is the metadata
         /// pass - so this necessarily rebuilds the typed metadata too, and costs the same as
-        /// <see cref="ClearAllMetadataAsync"/> over the whole library. Returns the number of files
-        /// re-queued, not the number of tags removed.
+        /// <see cref="ClearAllMetadataAsync"/> over the whole library. Returns the number of files that
+        /// will be read again - including any already waiting to be - not the number of tags removed.
         /// </remarks>
         Task<int> RecreateAllTagsAsync(CancellationToken cancellationToken = default);
 

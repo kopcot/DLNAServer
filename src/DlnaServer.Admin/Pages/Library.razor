@@ -7,7 +7,14 @@
 @inject IOptionsMonitor<DlnaOptions> Options
 @inject IAdminUrls Urls
 
-@if (_directory is null)
+@if (_missing)
+{
+    <PageNotFound Title="Folder not found">
+        That folder is not in your library - it may have been removed or renamed since the link was made.
+        <a href="@Urls.LibraryRoot">Back to the source folders</a>
+    </PageNotFound>
+}
+else if (_directory is null)
 {
     <PageHeader Title="Library">The configured source folders.</PageHeader>
 }
@@ -101,7 +108,7 @@ else
     </CollapsiblePanel>
 }
 
-@if (_folders.Count == 0 && _files.Count == 0 && _recent.Count == 0)
+@if (!_missing && _folders.Count == 0 && _files.Count == 0 && _recent.Count == 0)
 {
     <Panel>Nothing here yet.</Panel>
 }
@@ -156,6 +163,10 @@ else
     private int _fileTotal;
     private bool _loading;
     private PeriodicTimer? _timer;
+
+    // Set by the load, never derived from the parameter: a render runs with the new DirectoryId while the
+    // load is still awaiting, and deriving it then would declare a perfectly good folder missing.
+    private bool _missing;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -265,11 +276,13 @@ else
 
             _trail = await BuildTrailAsync(_directory, cancellationToken);
             _recent = [];
+            _missing = _directory is null;
         }
         else
         {
             _directory = null;
             _trail = [];
+            _missing = false;
 
             // Source roots are the configured folders - a handful, never a page's worth.
             _folders = [.. await Directories.GetSourceRootsAsync(cancellationToken)];

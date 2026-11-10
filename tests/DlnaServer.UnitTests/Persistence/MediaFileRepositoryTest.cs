@@ -3067,6 +3067,27 @@ namespace DlnaServer.UnitTests.Persistence
                 + "be obtained by probing it again");
         }
 
+        [Test]
+        public async Task RecreateAllTagsAsync_ForAFileAlreadyWaitingToBeRead_StillCountsIt()
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var repository = CreateRepository(context);
+
+            _ = await repository.AddRangeAsync(
+                files: [CreateFile("/media/music/Waiting.mp3")],
+                cancellationToken: CancellationToken.None);
+
+            // Act
+            // Never read, so its stamp is already clear and the update changes nothing about it.
+            var requeued = await repository.RecreateAllTagsAsync(cancellationToken: CancellationToken.None);
+
+            // Assert
+            requeued.Should().Be(1,
+                "because the page says how many files will be read again, and a file already waiting is one "
+                + "of them - counting only changed rows reported 0 straight after an earlier rebuild");
+        }
+
 
         [Test]
         public async Task ClearTagsAsync_ForOneFile_RemovesOnlyThatFilesTags()

@@ -1,6 +1,6 @@
 # Admin UI components - what exists and where it is used
 
-**Last refreshed: 2026-11-10**, by reading `src/DlnaServer.Admin` and `tests/DlnaServer.UiTests` after the 2.0 restyle (on top of `b29ccdb`).
+**Last refreshed: 2026-11-10**, by reading `src/DlnaServer.Admin` and `tests/DlnaServer.UiTests` after the 2.0 restyle and its fixes (history section 6zb).
 
 **Stale check:** on every read, compare the date above with today. More than 14 days old, or older than
 the newest commit touching `src/DlnaServer.Admin` (`git log -1 --format=%cs -- src/DlnaServer.Admin`) →
@@ -34,12 +34,12 @@ with `@rendermode InteractiveServer` (see `App.razor` for why the whole router i
 | Piece | File | What it does |
 |---|---|---|
 | Document | `App.razor` | `<html>` head: `admin.css` linked as `_content/DlnaServer.Admin/admin.css`, favicon from `/admin/favicon.ico`, `blazor.web.js`; `div#components-reconnect-modal`, Blazor's reconnect banner, supplied so the stylesheet draws it (`.reconnect-show` / `.reconnect-failed` / `.reconnect-rejected`) |
-| Router | `Routes.razor` | Default layout `MainLayout`; `FocusOnNavigate` focuses the page's `h1`; an unknown `/admin` address renders "Not found" inside the layout |
+| Router | `Routes.razor` | Default layout `MainLayout`; `FocusOnNavigate` focuses the page's `h1`; its `NotFound` renders `PageNotFound`, though a static router never reaches it - unknown addresses are `UnknownAddress`'s |
 | Layout | `Shared/MainLayout.razor` | `div.layout` → `nav.sidebar` (brand bar - the device icon `/admin/icon/large.png` and the name, `NavMenu`, `div.sitefoot` copyright) + `main.content` wrapping `@Body` in an `ErrorBoundary` whose error content is a bad `Notice` linking to Settings |
 | Phone menu | `Shared/MainLayout.razor` | `details.menubutton` > `summary` in the brand bar - an empty disclosure whose `[open]` shows `.nav` (`.sidebar:has(...)`), so the menu opens and closes without JavaScript and is announced as expanded or collapsed; hidden on a wide screen |
 | Navigation | `Shared/NavMenu.razor` | `ul.nav` of `NavLink`s; `li.sub` marks the indented sub-items; *Add files* appears only while uploads are accepted |
 
-## Pages (13)
+## Pages (13, and the catch-all)
 
 Render mode: **I** = `InteractiveServer` (a SignalR circuit), **S** = static server rendering. Base:
 **APB** = `AdminPageBase` (cancellation, the database gate and the `Message` shown by `Notice`).
@@ -47,7 +47,7 @@ Render mode: **I** = `InteractiveServer` (a SignalR circuit), **S** = static ser
 | Route | File | Mode | Base | `h1` (PageHeader title) | Panel headings | Shared components used |
 |---|---|---|---|---|---|---|
 | `/admin` | `Dashboard` | I | APB | Dashboard | Server; Memory; Recently served files; Library | Notice, PageHeader, Panel, StatGrid, StatTile |
-| `/admin/library`, `/admin/library/{DirectoryId}` | `Library` | I | APB | Library | Folders (c); Files (c); Recently added (c) | CheckField, CollapsiblePanel, FileList, FolderList, Notice, PageHeader, Panel, ProcessingActions, ShowMore |
+| `/admin/library`, `/admin/library/{DirectoryId}` | `Library` | I | APB | Library (*Folder not found* for an unknown folder, answering 404) | Folders (c); Files (c); Recently added (c) | CheckField, CollapsiblePanel, FileList, FolderList, Notice, PageHeader, PageNotFound, Panel, ProcessingActions, ShowMore |
 | `/admin/library/search/folders` | `SearchFolders` | I | APB | Search folders | (SearchPanel) | FolderList, FormField, PageHeader, SearchPanel |
 | `/admin/library/search/files`, `/admin/library/search` | `SearchFiles` | I | APB | Search files | (SearchPanel) | FieldPair, FileList, FormField, PageHeader, SearchPanel |
 | `/admin/preview/{FileId}`, `/admin/preview/{DirectoryId}/{FileId}` | `Preview` | I | APB | the file's title | Video; Subtitles; facts and actions panels from the components | DataTable, FileTypeEditor, MediaFileFacts, MetaList, MetaRow, Notice, PageHeader, Panel, ProcessingActions, SubtitleEditor |
@@ -59,6 +59,7 @@ Render mode: **I** = `InteractiveServer` (a SignalR circuit), **S** = static ser
 | `/admin/maintenance` | `Maintenance` | I | APB | Maintenance | Look for changes now; Rebuild details and previews; All metadata read from files; Subscriptions; Rebuild from scratch; Server | ConfirmActionPair, DataTable, MetaList, MetaRow, Notice, PageHeader, Panel, Provenance |
 | `/admin/help` | `Help` | S | - | Help | thirteen topic panels, from *What this server is* to *Where things are kept* | PageHeader, Panel |
 | `/admin/about` | `About` | S | - | About | This server; What your televisions are told; Copyright; Getting started | DataTable, MetaList, MetaRow, PageHeader, Panel |
+| `/admin/{*path}` - every other admin address, malformed ids included | `UnknownAddress` | S | - | Not found (404) | - | PageNotFound |
 
 (c) = a `CollapsiblePanel`; the others are `Panel`s. Page files live in `src/DlnaServer.Admin/Pages/`.
 
@@ -72,21 +73,21 @@ directly:
 | Photo | `.photopage`, `nav.crumbs`, one `img` |
 | SearchFiles | `.searchform`, nine `select`s (`select.multi` for the language lists), `.empty` |
 | SearchFolders | `.searchform` |
-| Settings | three `textarea`s, `.checks` / `.checkrow` / `.verdict` for the folder checks, `.advanced-heading`, `button.primary` |
+| Settings | three `textarea`s, `.checks` / `.checkrow` / `.verdict` for the folder checks, `.advanced-heading`, `button.primary`, `.savebar` (Save, Discard and the result, stuck to the foot of the screen) |
 | Upload | the one plain `<form method="post" enctype="multipart/form-data">`, radio buttons, `input#files[type=file]`, `.checks`, `.tagdump` |
 | FileCache | `Virtualize` over the served paths, `button.danger` |
 | Maintenance | `.paths` |
 | TemporarySettings | two `input[type=number]` minute boxes and the `input#blockHours` hours box, each inside `.actions` |
 | About | `.tagdump` / `.tagvalue` |
 
-## Shared components (`Shared/`, 28)
+## Shared components (`Shared/`, 29)
 
 Files = how many pages and components use it. Required parameters are in **bold**.
 
 | Tag | Description | Parameters | Root markup | Files | Used by |
 |---|---|---|---|---|---|
-| `<Panel>` | Bordered section with an optional `h2` heading | Heading, HeadingContent, Class (`pinned`, `player`), ChildContent | `div.panel` > `h2` | 14 | About, Dashboard, FileCache, Help, Library, Maintenance, Photo, Preview, Settings, TemporarySettings, Upload, FileList, MediaFileFacts, SubtitleEditor |
-| `<PageHeader>` | Page title and standfirst; its `h1` is the navigation focus target | **Title**, ChildContent | `h1` + `p.lede` | 13 | every page |
+| `<Panel>` | Bordered section with an optional `h2` heading | Heading, HeadingContent, Class (`pinned`, `player`), ChildContent | `div.panel` > `h2` | 15 | About, Dashboard, FileCache, Help, Library, Maintenance, Photo, Preview, Settings, TemporarySettings, Upload, FileList, MediaFileFacts, PageNotFound, SubtitleEditor |
+| `<PageHeader>` | Page title and standfirst; its `h1` is the navigation focus target | **Title**, ChildContent | `h1` + `p.lede` | 14 | every page, PageNotFound |
 | `<Notice>` | One-line result message; renders nothing when empty. An action's result goes directly under the buttons that caused it, in their panel; only a failure while the page loads goes at the top | IsBad, Message, ChildContent | `div.notice.ok` / `div.notice.bad` | 12 | Dashboard, FileCache, Library, Maintenance, Preview, Settings, TemporarySettings, Upload, FileTypeEditor, MainLayout, ProcessingActions, SubtitleEditor |
 | `<DataTable>` | Table with a header row; caller supplies the `th` cells and the `tr` rows | **Columns**, ChildContent | `table` > `thead` + `tbody` | 7 | About, Maintenance, Preview, Upload, ExtensionMapEditor, SubtitleEditor, SubtitleTypeEditor |
 | `<FormField>` | One labelled control in fixed order: label, control, error, hint, restart note | **Label**, For, ChildContent, Error, Hint, Restart | `div.field` > `label` … `.error` | 6 | SearchFiles, SearchFolders, Settings, Upload, FileTypeEditor, SubtitleEditor |
@@ -110,6 +111,7 @@ Files = how many pages and components use it. Required parameters are in **bold*
 | `<FileTypeEditor>` | Corrects one file's MIME type and compatibility profile | **File**, OnCompleted | CollapsiblePanel, `button.primary` | 1 | Preview |
 | `<MediaTile>` | Thumbnail card for one media file | **File**, **Href** | `a.tile` (`.kindbadge`, `.kindicon`, `.subbadge`, `.noimg`, `.caption`) | 1 | FileList |
 | `<NavMenu>` | The sidebar navigation | - | `ul.nav` | 1 | MainLayout |
+| `<PageNotFound>` | An address that leads nowhere, inside the layout; sets 404 while prerendering and logs it | Title (default *Not found*), **ChildContent** | PageHeader + Panel | 3 | Library, UnknownAddress, Routes |
 | `<ShowMore>` | "Showing N of M" and the button fetching the next page; nothing once all are shown | **Shown**, **Total**, **Noun**, Source, Disabled, OnMore | `p.muted` + button | 1 | Library |
 | `<SubtitleEditor>` | The subtitle and lyrics files linked to one media file, and how to change them | **File**, OnCompleted | Panel, `.checks` / `.checkrow`, `.verdict`, `.missing` | 1 | Preview |
 | `<SubtitleTypeEditor>` | The subtitle types, one editable row per extension | **Rows** | DataTable rows, `.checkrow`, `button.stop` | 1 | Settings |

@@ -12,6 +12,7 @@
 @inject IMediaFileRepository Files
 @inject IAdminOperationGate Gate
 @inject ILibraryChangeSignal Changes
+@inject ILogger<FileTypeEditor> Logger
 
 @* Shut to begin with. The facts above it are what the panel is for; this is the rarely-wanted correction
    underneath them, and open by default it would put a form between them and everything below. *@
@@ -23,7 +24,7 @@
 
     <FormField Label="File type" For="fileTypeMime">
         <ChildContent>
-            <select id="fileTypeMime" @bind="_mime">
+            <select id="fileTypeMime" @bind="_mime" @bind:after="OnMimeChanged">
                 @* Servable, not All: the catalogue also holds subtitle types, which would collapse the
                    item to a bare object.item, and types the server advertises no extension for, which a
                    renderer filtering on SourceProtocolInfo then drops. *@
@@ -91,6 +92,30 @@
         _message = null;
     }
 
+    /// <remarks>
+    /// A profile belongs to a type: one left over from the old type would be saved with the new one, and
+    /// a television filtering on the pair refuses the file. So a profile the new type does not offer is
+    /// cleared - empty is the standard profile for the type - and one it does offer is kept.
+    /// </remarks>
+    private void OnMimeChanged()
+    {
+        if (string.IsNullOrWhiteSpace(_profileName))
+        {
+            return;
+        }
+
+        foreach (var profile in _mime.ToProfileNames())
+        {
+            if (string.Equals(profile, _profileName, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+
+        LogProfileCleared(Logger, _profileName, _mime);
+        _profileName = null;
+    }
+
     private async Task SaveAsync()
     {
         _busy = true;
@@ -103,6 +128,8 @@
             var stored = await Gate.RunAsync(
                 token => Files.UpdateDlnaMappingAsync(File.PublicId, _mime, _profileName, token),
                 CancellationToken.None);
+
+            LogMappingSaved(Logger, File.PublicId, _mime, _profileName, stored);
 
             // A new type can move the file to another kind, and the Dashboard counts by kind.
             if (stored)

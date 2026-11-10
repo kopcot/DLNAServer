@@ -1,0 +1,42 @@
+@* What an admin address that leads nowhere renders - an unknown page, a malformed identifier, a folder that
+   is no longer in the library - inside the layout, with the menu still there, and answering 404.
+
+   The status can only be set while the response is being prerendered: that is when HttpContext is present
+   and nothing has been sent yet. A page that renders this again once its circuit attaches gets no context,
+   and leaves the status - and the log line - to that first pass. *@
+
+@using Microsoft.AspNetCore.Http
+@inject ILogger<PageNotFound> Logger
+
+<PageHeader Title="@Title" />
+<Panel>@ChildContent</Panel>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "Not found";
+
+    /// <summary>
+    /// What is missing, in a sentence.
+    /// </summary>
+    [Parameter]
+    [EditorRequired]
+    public RenderFragment ChildContent { get; set; } = null!;
+
+    protected override void OnInitialized()
+    {
+        if (HttpContext is null)
+        {
+            return;
+        }
+
+        if (!HttpContext.Response.HasStarted)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+
+        LogNotFound(Logger, HttpContext.Request.Path.Value, Title);
+    }
+}

@@ -4,6 +4,7 @@
 @rendermode InteractiveServer
 @inherits AdminPageBase
 @inject IMediaFileRepository Files
+@inject ILogger<SearchFiles> Logger
 
 <PageHeader Title="Search files">
     Every filter is optional and they combine. Names ignore capitals.
@@ -49,18 +50,20 @@
             </FieldPair>
 
             <FieldPair>
-                <FormField Label="Size from (MB)" For="minSize">
-                    <input id="minSize" type="number" min="0" @bind="_criteria.MinSizeMb" />
+                @* Bound as text and parsed here: bound to an int, a decimal like 1.5 failed to parse and was
+                   dropped without a word, and the search ran with no size filter at all. *@
+                <FormField Label="Size from (MB)" For="minSize" Error="@WholeNumberError(_criteria.MinSizeText)">
+                    <input id="minSize" type="number" min="0" step="1" @bind="_criteria.MinSizeText" />
                 </FormField>
 
-                <FormField Label="Size to (MB)" For="maxSize">
-                    <input id="maxSize" type="number" min="0" @bind="_criteria.MaxSizeMb" />
+                <FormField Label="Size to (MB)" For="maxSize" Error="@WholeNumberError(_criteria.MaxSizeText)">
+                    <input id="maxSize" type="number" min="0" step="1" @bind="_criteria.MaxSizeText" />
                 </FormField>
             </FieldPair>
 
-            <FormField Label="Video at least this wide (pixels)" For="minWidth">
+            <FormField Label="Video at least this wide (pixels)" For="minWidth" Error="@WholeNumberError(_criteria.MinWidthText)">
                 <ChildContent>
-                    <input id="minWidth" type="number" min="0" @bind="_criteria.MinWidth" />
+                    <input id="minWidth" type="number" min="0" step="1" @bind="_criteria.MinWidthText" />
                 </ChildContent>
                 <Hint>Only finds files whose details have already been read.</Hint>
             </FormField>
@@ -319,6 +322,15 @@
             return;
         }
 
+        // Refused rather than run without the filter: the field already says what is wrong with it, and
+        // the panel stays open on it.
+        if (!_criteria.HasValidNumbers)
+        {
+            LogSearchRefused(Logger, _criteria.MinSizeText, _criteria.MaxSizeText, _criteria.MinWidthText);
+
+            return;
+        }
+
         _running = true;
 
         try
@@ -356,6 +368,39 @@
     /// <c>@bind</c> parses a numeric string into any number, named or not, and an unnamed one used to
     /// reach a switch that threw and ended the circuit.
     /// </remarks>
+    internal static string? WholeNumberError(string? text)
+    {
+        return string.IsNullOrWhiteSpace(text) || TryParseWholeNumber(text, out _)
+            ? null
+            : "Whole numbers only - 2, not 1.5. Nothing is searched until this is fixed.";
+    }
+
+    /// <summary>
+    /// A non-negative whole number in plain digits, or nothing when the box is empty.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="NumberStyles.None"/>: no sign, no decimal point, no exponent - a number box still
+    /// accepts <c>1.5</c> and <c>1e3</c>, and either must be refused rather than read as something else.
+    /// </remarks>
+    internal static bool TryParseWholeNumber(string? text, out int? value)
+    {
+        value = null;
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return true;
+        }
+
+        if (!int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return false;
+        }
+
+        value = parsed;
+
+        return true;
+    }
+
     internal static SubtitlePresence? DefinedOrAny(SubtitlePresence? value)
     {
         return value is { } presence && Enum.IsDefined(presence)
@@ -400,11 +445,28 @@
 
         public DateTime? To { get; set; }
 
-        public int? MinSizeMb { get; set; }
+        // The three number boxes, as typed. See TryParseWholeNumber for why they are not bound as numbers.
+        public string? MinSizeText { get; set; }
 
-        public int? MaxSizeMb { get; set; }
+        public string? MaxSizeText { get; set; }
 
-        public int? MinWidth { get; set; }
+        public string? MinWidthText { get; set; }
+
+        public int? MinSizeMb => TryParseWholeNumber(MinSizeText, out var value)
+            ? value
+            : null;
+
+        public int? MaxSizeMb => TryParseWholeNumber(MaxSizeText, out var value)
+            ? value
+            : null;
+
+        public int? MinWidth => TryParseWholeNumber(MinWidthText, out var value)
+            ? value
+            : null;
+
+        public bool HasValidNumbers => TryParseWholeNumber(MinSizeText, out _)
+            && TryParseWholeNumber(MaxSizeText, out _)
+            && TryParseWholeNumber(MinWidthText, out _);
 
         public string? Codec { get; set; }
 
