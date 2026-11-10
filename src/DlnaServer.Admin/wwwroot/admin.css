@@ -1,39 +1,59 @@
 /*
-    Palette sampled from the server's own device icon (Resources/images/icons/large.png), so the admin UI
-    and the icon a television shows for this server are recognisably the same product. The icon is
-    overwhelmingly #b9e1fa - a light blue - with #9cd4f9 as its saturated edge and #f9f8f6 as its warm
-    white. Those three are the whole basis of what follows.
+    Every colour and shape here is taken from the server's own icons, so the admin UI and the icon a
+    television shows for this server are recognisably the same product. ADR 0039 records which token comes
+    from which icon, the contrast each pair reaches, and the rule: a new colour comes from the icons too.
+    The device icon (Resources/images/icons/large.png) is light blue #b9e1fa bands with a darker blue edge on a
+    slate side face; the media-kind icons are amber #fec409 outlined in navy #112b35. The pastels cannot
+    carry text on white, so where a colour has to be read it stays in the icon's hue family and is darkened.
 */
 :root {
     color-scheme: light dark;
 
     --sky: #b9e1fa;
-    --sky-deep: #9cd4f9;
+    --amber: #fec409;
 
-    --ink: #17303d;
-    --muted: #5a7688;
-    --line: #cde5f4;
+    --ink: #112b35;
+    --muted: #52707a;
+    --line: #e1eaed;
+    /* A control's boundary - inputs, outlined buttons - which WCAG 1.4.11 wants at 3:1; --line is for dividers. */
+    --edge: #638e9c;
     --panel: #ffffff;
-    --ground: #eef6fc;
-    --accent: #1a7fbe;
-    --warn: #a4520c;
+    --ground: #f4f7f8;
+    --accent: #1c6b9c;
+    --on-accent: #ffffff;
+    /* The current page in the menu: one of the icon's bands. */
+    --band: var(--sky);
+    --band-ink: var(--ink);
+    --warn: #8f6400;
 
     /* Go and stop, for a pair of buttons where one commits to something irreversible and one backs out. */
     --go: #1f7a3d;
     --stop: #b3261e;
+
+    /* The icon's own cast shadow: soft, downward, tinted with the navy rather than grey. */
+    --shadow: 0 1px 2px rgb(17 43 53 / 6%), 0 4px 14px -4px rgb(17 43 53 / 10%);
+    --radius: 12px;
+    --radius-control: 8px;
 }
 
 @media (prefers-color-scheme: dark) {
     :root {
-        --ink: #dfeaf2;
-        --muted: #8ba3b4;
-        --line: #24333f;
-        --panel: #151e26;
-        --ground: #0e151b;
+        --ink: #e3edf1;
+        --muted: #93abb5;
+        --line: #28343a;
+        --edge: #58757e;
+        --panel: #172024;
+        --ground: #0f1619;
 
-        /* The icon's own light blue becomes the accent here: on a dark ground it is the readable one. */
-        --accent: var(--sky-deep);
-        --warn: #e2954f;
+        /* The icon's own light blue and amber become the accent and the warning here: on a dark ground
+           they are the readable ones. */
+        --accent: var(--sky);
+        --on-accent: #112b35;
+        --band: color-mix(in srgb, var(--sky) 16%, var(--panel));
+        --band-ink: var(--sky);
+        --warn: var(--amber);
+
+        --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 14px -4px rgb(0 0 0 / 40%);
     }
 }
 
@@ -43,7 +63,22 @@ body {
     margin: 0;
     background: var(--ground);
     color: var(--ink);
+    accent-color: var(--accent);
     font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+/* Links in running text take the accent too; without it they were the browser's blue, and purple once visited. */
+a { color: var(--accent); }
+
+/* One focus ring for everything a keyboard can reach, drawn in the accent so it is never the browser's
+   default on one control and something else on the next. :focus-visible, so a mouse click draws none. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Inside a scrolling box an outside ring is clipped by the box's own edges, so it is drawn inside there. */
+.scroller :focus-visible { outline-offset: -2px; }
+
+/* Colour changes on hover are the only motion here, and they stay off for anyone who asked for less. */
+@media (prefers-reduced-motion: no-preference) {
+    a, button, .button, .tile { transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s; }
 }
 
 .layout { display: flex; min-height: 100vh; }
@@ -75,40 +110,39 @@ body {
 }
 
 .brand {
-    font-weight: 600;
-    padding: 0 20px 16px;
-    letter-spacing: .02em;
-    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 650;
+    font-size: 16px;
+    padding: 0 20px 18px;
+    color: var(--ink);
+}
+
+/* The device icon itself, as a television's source list shows it - rounded like the icon's own corners. */
+.brand img {
+    flex: 0 0 auto;
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow);
 }
 
 /* The phone layout's menu button and the checkbox it toggles, neither of which a wide screen needs - and
    display:none keeps the checkbox out of the keyboard's tab order there. */
 .menutoggle, .menubutton { display: none; }
 
-.brand::before {
-    content: "";
-    display: inline-block;
-    width: 10px;
-    height: 10px;
-    margin-right: 8px;
-    border-radius: 2px;
-    background: var(--sky);
-    box-shadow: 0 3px 0 var(--sky-deep);
-    vertical-align: baseline;
-}
-
 /* flex:1 is what pushes .sitefoot down: the menu claims the column's spare height rather than the footer
    sitting directly under the last item halfway up the screen. */
 .nav { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; }
 .nav a {
     display: block;
-    padding: 9px 20px;
+    margin: 1px 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius-control);
     color: var(--ink);
     text-decoration: none;
-    border-left: 3px solid transparent;
 }
 .nav a:hover { background: var(--ground); }
-.nav li.sub a { padding-left: 36px; font-size: 14px; color: var(--muted); }
+.nav li.sub a { padding-left: 28px; font-size: 14px; color: var(--muted); }
 .nav li.sub a:hover { color: var(--accent); }
 
 /* The copyright line at the foot of the sidebar. flex-shrink:0 so a menu longer than the viewport pushes
@@ -122,29 +156,42 @@ body {
     font-size: 12px;
 }
 
-.nav a.active {
-    border-left-color: var(--accent);
-    color: var(--accent);
+/* The page you are on is one of the icon's bands - the stripe the eye looks for to say "you are here". */
+.nav a.active,
+.nav li.sub a.active {
+    color: var(--band-ink);
     font-weight: 600;
-    background: color-mix(in srgb, var(--sky) 28%, transparent);
+    background: var(--band);
 }
 
-.content { flex: 1 1 auto; padding: 28px 32px; max-width: 1100px; }
+.content { flex: 1 1 auto; padding: 32px; max-width: 1160px; }
 
-h1 { font-size: 22px; margin: 0 0 4px; }
-h2 { font-size: 17px; margin: 28px 0 10px; }
-.lede { color: var(--muted); margin: 0 0 24px; }
+h1 { font-size: 26px; font-weight: 650; letter-spacing: -.01em; line-height: 1.25; margin: 0 0 6px; }
+h2 { font-size: 17px; font-weight: 650; margin: 28px 0 12px; }
+.lede { color: var(--muted); margin: 0 0 28px; max-width: 75ch; }
 
 .panel {
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 18px 20px;
-    margin-bottom: 18px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px 24px;
+    margin-bottom: 20px;
 
     /* A table or a tile grid wider than the panel scrolls inside it rather than widening the page. */
     overflow-x: auto;
 }
+
+/* A heading that opens a card sits on the card's own padding, not on the gap meant for a heading mid-page. */
+.panel > h2:first-child { margin-top: 0; }
+
+/* A card inside a card - Change file type under a file's facts - is already lifted by its parent, so it
+   drops the shadow, and it keeps a gap from whatever ends above it. */
+.panel .panel { box-shadow: none; }
+.panel * + .panel { margin-top: 14px; }
+
+/* The browser's own placeholder grey falls short of 4.5:1 on the field ground in both themes. */
+::placeholder { color: var(--muted); opacity: 1; }
 
 /*
     Four fixed columns, so the figures of every panel on a page line up under one another. auto-fit
@@ -202,7 +249,7 @@ h2 { font-size: 17px; margin: 28px 0 10px; }
     max-width: 320px;
     padding: 6px 9px;
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     background: var(--panel);
     color: var(--ink);
     font-size: 12px;
@@ -213,7 +260,7 @@ h2 { font-size: 17px; margin: 28px 0 10px; }
     text-align: left;
     text-transform: none;
     white-space: normal;
-    box-shadow: 0 2px 10px rgb(0 0 0 / 22%);
+    box-shadow: var(--shadow);
 }
 
 .tech:hover::after,
@@ -222,22 +269,23 @@ h2 { font-size: 17px; margin: 28px 0 10px; }
 /* A column whose figure sits at the foot, so a label that wraps onto two lines does not push its figure
    below the figures of the tiles beside it. */
 .stat { display: flex; flex-direction: column; }
-.stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
-.stat .value { margin-top: auto; font-size: 24px; font-variant-numeric: tabular-nums; }
+.stat .label { color: var(--muted); font-size: 13px; }
+.stat .value { margin-top: auto; padding-top: 2px; font-size: 26px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
 .stat .value.over { color: var(--warn); }
 
 
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
-th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+th { color: var(--muted); font-size: 13px; font-weight: 600; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 tr:last-child td { border-bottom: none; }
 
 button, .button {
     font: inherit;
-    padding: 7px 14px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
+    font-weight: 500;
+    padding: 7px 16px;
+    border: 1px solid var(--edge);
+    border-radius: var(--radius-control);
     background: var(--panel);
     color: var(--ink);
     cursor: pointer;
@@ -245,7 +293,7 @@ button, .button {
     display: inline-block;
 }
 button:hover, .button:hover { border-color: var(--accent); color: var(--accent); }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .tile img, .tile .noimg { border-bottom: 1px solid var(--line); }
 button.danger:hover { border-color: var(--warn); color: var(--warn); }
 
@@ -256,7 +304,8 @@ button.danger:hover { border-color: var(--warn); color: var(--warn); }
 button.go { background: var(--go); border-color: var(--go); color: #fff; }
 button.stop { background: var(--stop); border-color: var(--stop); color: #fff; }
 /* The three filled buttons darken identically on hover; outlined buttons recolour their border instead. */
-button.primary:hover, button.go:hover, button.stop:hover { opacity: .9; color: #fff; }
+button.go:hover, button.stop:hover { opacity: .9; color: #fff; }
+button.primary:hover { opacity: .9; color: var(--on-accent); }
 button:disabled { opacity: .5; cursor: default; }
 
 .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
@@ -282,14 +331,26 @@ button:disabled { opacity: .5; cursor: default; }
 .field input[type=text], .field input[type=number], .field input[type=date], .field textarea, .field select {
     font: inherit;
     padding: 6px 9px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
+    border: 1px solid var(--edge);
+    border-radius: var(--radius-control);
     background: var(--ground);
     color: var(--ink);
     width: min(320px, 100%);
 }
 
 .field textarea { width: 100%; }
+
+/* The controls that sit in an editable table row or a row of buttons rather than in a FormField - the
+   subtitle languages, the two type maps, the minute and hour boxes on Temporary settings and Maintenance - get the same box, or they arrive as
+   the browser's own and are the only thing on the page that does not match. */
+td input[type=text], td select, .actions input[type=number] {
+    font: inherit;
+    padding: 4px 8px;
+    border: 1px solid var(--edge);
+    border-radius: var(--radius-control);
+    background: var(--ground);
+    color: var(--ink);
+}
 
 /*
     A file input is two controls in one - the browser's own button and the "no file chosen" text beside it
@@ -302,8 +363,8 @@ button:disabled { opacity: .5; cursor: default; }
 .field input[type=file] {
     font: inherit;
     padding: 6px 9px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
+    border: 1px solid var(--edge);
+    border-radius: var(--radius-control);
     background: var(--ground);
     color: var(--ink);
     width: 100%;
@@ -314,8 +375,8 @@ button:disabled { opacity: .5; cursor: default; }
     font: inherit;
     margin: 0 10px 0 0;
     padding: 5px 12px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
+    border: 1px solid var(--edge);
+    border-radius: var(--radius-control);
     background: var(--panel);
     color: var(--ink);
     cursor: pointer;
@@ -325,8 +386,8 @@ button:disabled { opacity: .5; cursor: default; }
     font: inherit;
     margin: 0 10px 0 0;
     padding: 5px 12px;
-    border: 1px solid var(--line);
-    border-radius: 6px;
+    border: 1px solid var(--edge);
+    border-radius: var(--radius-control);
     background: var(--panel);
     color: var(--ink);
     cursor: pointer;
@@ -432,9 +493,10 @@ button:disabled { opacity: .5; cursor: default; }
 .checks li.ok .verdict { color: var(--accent); }
 .missing { color: var(--warn); }
 
-.notice { padding: 10px 14px; border-radius: 6px; border: 1px solid var(--line); margin-bottom: 16px; }
-.notice.ok { border-color: var(--accent); color: var(--accent); }
-.notice.bad { border-color: var(--warn); color: var(--warn); }
+.notice { padding: 10px 14px; border-radius: var(--radius-control); border: 1px solid var(--line); margin-bottom: 16px; }
+/* Tinted with its own colour at 8%, so the message reads as a state rather than as one more card. */
+.notice.ok { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+.notice.bad { border-color: var(--warn); color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, var(--panel)); }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
 
@@ -462,7 +524,8 @@ button:disabled { opacity: .5; cursor: default; }
 .tile {
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
     overflow: hidden;
     text-decoration: none;
     color: var(--ink);
@@ -765,7 +828,7 @@ dl.meta dd { margin: 0; word-break: break-all; }
         right: 0;
         background: var(--panel);
         border-bottom: 1px solid var(--line);
-        box-shadow: 0 2px 10px rgb(0 0 0 / 22%);
+        box-shadow: var(--shadow);
         max-height: calc(100vh - 60px);
         max-height: calc(100dvh - 60px);
         overflow-y: auto;
@@ -784,7 +847,7 @@ dl.meta dd { margin: 0; word-break: break-all; }
     h1 { font-size: 19px; }
     h2 { font-size: 16px; margin-top: 22px; }
 
-    .panel { padding: 14px; border-radius: 6px; }
+    .panel { padding: 14px; border-radius: 10px; }
 
     .grid { gap: 10px; }
     .grid + .grid { margin-top: 10px; }

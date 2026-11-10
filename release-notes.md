@@ -8,6 +8,12 @@ worth telling you about is added to the version it belongs to.
 
 ---
 
+## 2.0
+
+**The admin pages have a new look.** They now share the colours and shapes of the server's own icon - the one your television shows in its list of sources and your browser shows on the tab - and that icon sits beside the server's name at the top of the menu, so the pages and the server are easy to recognise as the same thing. Sections are soft cards on a quiet grey page, the page you are on is marked in the icon's light blue, and the pages follow your device's light or dark setting. Text, links and buttons are easier to read in both, and a keyboard now shows clearly where it is on every page.
+
+Nothing else changed: every page, button and setting is where it was, televisions see the same server, and upgrading costs nothing.
+
 ## 1.3
 
 **The library only answers your own network.** On a NAS with an internet-reachable IPv6 address, the part of the server televisions use - browsing, playing and downloading files - could be reached from outside if the router let it through, so anyone who found the address could list and download the whole library. It now answers only devices on the local network or a Tailscale address, like the admin pages already did. Televisions on your network are not affected. A device reaching the server from anywhere else - over a VPN that hands out public addresses, or over a public IPv6 address from another network - now gets *not found*.

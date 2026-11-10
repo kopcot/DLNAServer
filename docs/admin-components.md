@@ -1,6 +1,6 @@
 # Admin UI components - what exists and where it is used
 
-**Last refreshed: 2026-11-10**, by reading `src/DlnaServer.Admin` at `ccb5c86` and `tests/DlnaServer.UiTests` after that day's review fixes.
+**Last refreshed: 2026-11-10**, by reading `src/DlnaServer.Admin` and `tests/DlnaServer.UiTests` after the 2.0 restyle (on top of `b29ccdb`).
 
 **Stale check:** on every read, compare the date above with today. More than 14 days old, or older than
 the newest commit touching `src/DlnaServer.Admin` (`git log -1 --format=%cs -- src/DlnaServer.Admin`) →
@@ -35,7 +35,7 @@ with `@rendermode InteractiveServer` (see `App.razor` for why the whole router i
 |---|---|---|
 | Document | `App.razor` | `<html>` head: `admin.css` linked as `_content/DlnaServer.Admin/admin.css`, favicon from `/admin/favicon.ico`, `blazor.web.js` |
 | Router | `Routes.razor` | Default layout `MainLayout`; `FocusOnNavigate` focuses the page's `h1`; an unknown `/admin` address renders "Not found" inside the layout |
-| Layout | `Shared/MainLayout.razor` | `div.layout` → `nav.sidebar` (brand bar, `NavMenu`, `div.sitefoot` copyright) + `main.content` wrapping `@Body` in an `ErrorBoundary` whose error content is a bad `Notice` linking to Settings |
+| Layout | `Shared/MainLayout.razor` | `div.layout` → `nav.sidebar` (brand bar - the device icon `/admin/icon/large.png` and the name, `NavMenu`, `div.sitefoot` copyright) + `main.content` wrapping `@Body` in an `ErrorBoundary` whose error content is a bad `Notice` linking to Settings |
 | Phone menu | `Shared/MainLayout.razor` | `input#menutoggle.menutoggle` checkbox + `label.menubutton` - the menu opens and closes without JavaScript; both hidden on a wide screen |
 | Navigation | `Shared/NavMenu.razor` | `ul.nav` of `NavLink`s; `li.sub` marks the indented sub-items; *Add files* appears only while uploads are accepted |
 
@@ -76,6 +76,7 @@ directly:
 | Upload | the one plain `<form method="post" enctype="multipart/form-data">`, radio buttons, `input#files[type=file]`, `.checks`, `.tagdump` |
 | FileCache | `Virtualize` over the served paths, `button.danger` |
 | Maintenance | `input[type=number]`, `.paths` |
+| TemporarySettings | two `input[type=number]` minute boxes inside `.actions` |
 | About | `.tagdump` / `.tagvalue` |
 
 ## Shared components (`Shared/`, 28)
@@ -150,9 +151,6 @@ and structure, never on a styling class, so a reskin is free to change classes -
 
 ## The stylesheet
 
-`wwwroot/admin.css` is the only stylesheet. Colours are tokens on `:root` (`--sky`, `--ink`, `--muted`,
-`--line`, `--panel`, `--ground`, `--accent`, `--warn`, `--go`, `--stop`, …), redefined under
-`@media (prefers-color-scheme: dark)`. Breakpoints: `max-width: 760px` is the phone layout (sidebar becomes
-a top bar, `.sitefoot` hidden, menu behind `#menutoggle`), `min-width: 761px` the wide one, and
-`max-width: 1200px` narrows the statistics grids. `Virtualize` positions rows by a fixed `ItemSize`, so the
-row heights `FolderList` and FileCache pass must match what the stylesheet draws.
+`wwwroot/admin.css` is the only stylesheet. Every colour is a token on `:root`, taken from the server's own icons and redefined under `@media (prefers-color-scheme: dark)` - which icon each comes from, and the contrast each pair reaches, is [ADR 0039](ADR/0039-admin-colours-and-shape-come-from-the-device-icon.md). Colour tokens: `--sky`, `--amber` (the icons' own colours), `--ink`, `--muted`, `--line` (hairlines), `--edge` (control borders, 3:1), `--panel`, `--ground`, `--accent`, `--on-accent`, `--band` / `--band-ink` (the current menu item), `--warn`, `--go`, `--stop`. Shape tokens: `--radius` (cards and tiles, 12px), `--radius-control` (buttons, inputs, menu items, 8px), `--shadow` (the one card shadow). A new colour comes from the icons and is added to the ADR's table. `:focus-visible` draws one accent outline everywhere, and the hover colour transitions run only under `prefers-reduced-motion: no-preference`.
+
+Breakpoints: `max-width: 760px` is the phone layout (sidebar becomes a top bar, `.sitefoot` hidden, menu behind `#menutoggle`), `min-width: 761px` the wide one, and `max-width: 1200px` narrows the statistics grids. `Virtualize` positions rows by a fixed `ItemSize`, so the row heights `FolderList` and FileCache pass must match what the stylesheet draws - `.folders a` (padding, border, the body's 15px/1.5) and `th, td` padding with `.paths` decide them; measured after the restyle at 41.5 (Library folder) and 59.5 (folder search), unchanged.

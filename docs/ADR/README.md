@@ -54,5 +54,6 @@ Every standing decision about this server lives here, one file per decision. Thi
 | [0036](0036-media-port-answers-local-network-only.md) | The media port answers the local network only | Accepted | 2026-10-26 |
 | [0037](0037-base-images-by-tag-not-digest.md) | The Dockerfile names its base images by tag, not by digest | Accepted | 2026-11-10 |
 | [0038](0038-admin-ui-tests-drive-the-real-host.md) | Admin UI tests drive the real host with Selenium, Linux CI only | Accepted | 2026-11-10 |
+| [0039](0039-admin-colours-and-shape-come-from-the-device-icon.md) | The admin UI takes its colours and shapes from the server's own icon | Accepted | 2026-11-10 |
 
 0035 is a catalogue rather than a single decision: every CI/CD failure the repository has had, with the run ids, the error, the fix commit and how to keep it from coming back. The decisions it led to are recorded in it and, where they have their own ADR, linked.

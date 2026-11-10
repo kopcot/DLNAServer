@@ -10,7 +10,8 @@
         @* autocomplete off: Firefox otherwise restores it ticked on a reload or a back-forward restore. *@
         <input type="checkbox" id="menutoggle" class="menutoggle" autocomplete="off" />
         <div class="brandbar">
-            <div class="brand">ZEN DLNA Server</div>
+            @* The device icon a television shows for this server, so the page and the icon read as one product - ADR 0039. *@
+            <div class="brand"><img src="/admin/icon/large.png" alt="" width="32" height="32" />ZEN DLNA Server</div>
             <label for="menutoggle" class="menubutton" title="Menu" aria-label="Menu">&#9776;</label>
         </div>
         <NavMenu />

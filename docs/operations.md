@@ -144,9 +144,7 @@ persists the change and applies it. The previous file is copied aside first. Set
 effect until a restart (the two ports, and the cache's total budget) say so on the page rather than
 implying otherwise.
 
-The palette is sampled from the server's own device icon (`Resources/images/icons/large.png`), which is
-overwhelmingly `#b9e1fa` with `#9cd4f9` as its saturated edge — so the admin pages and the icon a
-television shows for this server read as the same product.
+Every colour and shape on the admin pages is taken from the server's own icons - the device icon a television shows for this server, which is also the browser tab icon and sits beside the name in the menu, and the media-kind icons on a tile with no preview - so the pages and the icon read as the same product. The pages follow the device's light or dark setting. Which colour comes from where, and the contrast each pair reaches, is in [ADR 0039](ADR/0039-admin-colours-and-shape-come-from-the-device-icon.md).
 
 ## Management endpoints
 
