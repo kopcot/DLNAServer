@@ -78,7 +78,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # runtime is never served from cache: its apt-get upgrade is what pulls Debian security fixes
-          # into a digest-pinned base, and a cached layer froze it at the day it was first built.
+          # into the base image, and a cached layer froze it at the day it was first built.
           no-cache-filters: runtime
 
       # Host networking, as deploy/docker-compose/ runs it. No media is mounted, so the server serves its own

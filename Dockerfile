@@ -12,15 +12,15 @@
 # ---------------------------------------------------------------------------------------------------
 # global.json pins 8.0.414 with rollForward latestPatch, so the 8.0 SDK tag resolves an acceptable
 # 8.0.4xx. Pinned to an explicit tag rather than 'latest' for the same reason global.json exists: the
-# .NET 9/10 SDKs would be selected otherwise and this solution targets net8.0. Both base images also
-# carry the digest of that tag's multi-arch index, so a rebuild of one commit gets the same image;
-# Dependabot's docker entry moves the digest when Microsoft publishes a patch.
+# .NET 9/10 SDKs would be selected otherwise and this solution targets net8.0. Both base images are
+# named by tag only, deliberately without a digest, so every build takes Microsoft's current 8.0 patch -
+# a pinned digest kept a .NET runtime with a known HIGH vulnerability in the image for a week (ADR 0037).
 #
 # --platform=$BUILDPLATFORM pins the SDK stage to the machine doing the building. Without it, a
 # `buildx --platform linux/arm64` from an x64 workstation runs the whole SDK under QEMU emulation, which
 # turns a 90-second build into tens of minutes. The publish below is architecture-neutral, so building
 # on x64 for arm64 is not merely allowed here - it is the fast path.
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0@sha256:f7e28a0a3f6f9235929ec19274fd0ddf8534e9159f99fac602ac73304f1ce99f AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 # Project files first, so a source-only change does not re-run restore. Every csproj is copied because
@@ -79,7 +79,7 @@ RUN dotnet publish src/DlnaServer.Host/DlnaServer.Host.csproj \
 # ---------------------------------------------------------------------------------------------------
 # Runtime
 # ---------------------------------------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:1601380775673021a23ea5985669f1daf03719faaa684f839da1752fb48cfc7f AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 
 # ffmpeg from the distribution, deliberately, so Thumbnails.DownloadFFmpeg can stay OFF. That setting
 # fetches an archive from whatever URL a third-party API names, verifies no hash or signature, and then
@@ -88,8 +88,8 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0@sha256:1601380775673021a23ea5985669f1da
 #
 # curl is for the HEALTHCHECK below and for reaching /manage from inside the container.
 #
-# upgrade first: the base image is pinned by digest and Microsoft rebuilds it on its own schedule, so a
-# Debian security fix (libexpat1 deb12u4, 2026-10-01) would otherwise stay out of the image until then.
+# upgrade first: Microsoft rebuilds the base image on its own schedule, so a Debian security fix
+# (libexpat1 deb12u4, 2026-10-01) would otherwise stay out of the image until then.
 RUN apt-get update \
     && apt-get upgrade --yes \
     && apt-get install --yes --no-install-recommends ffmpeg curl \

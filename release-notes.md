@@ -12,6 +12,8 @@ worth telling you about is added to the version it belongs to.
 
 **The library only answers your own network.** On a NAS with an internet-reachable IPv6 address, the part of the server televisions use - browsing, playing and downloading files - could be reached from outside if the router let it through, so anyone who found the address could list and download the whole library. It now answers only devices on the local network or a Tailscale address, like the admin pages already did. Televisions on your network are not affected. A device reaching the server from anywhere else - over a VPN that hands out public addresses, or over a public IPv6 address from another network - now gets *not found*.
 
+**Security fix.** The published Docker image was built on a .NET runtime with a known high-severity vulnerability in how it unpacks compressed data. The image now carries the fixed runtime. If you run the image, pull this version. If you run the archive or `NasBuild.sh` on the NAS, which uses the .NET 8 runtime installed on the machine, update that runtime to 8.0.33 or later as well.
+
 ## 1.2
 
 **A smaller image.** The published Docker image no longer carries files built for Windows, macOS, Android and other platforms it never runs on. It is about half the size on disc, and pulling an update downloads less.
