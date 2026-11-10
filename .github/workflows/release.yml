@@ -32,6 +32,8 @@ jobs:
   build:
     name: Build, test and publish the artifact
     runs-on: ubuntu-latest
+    # As in dotnet.yml: a hung UI test fails the job instead of holding the runner for six hours.
+    timeout-minutes: 30
 
     steps:
       # persist-credentials: false - checkout otherwise leaves the token in .git/config for the rest of

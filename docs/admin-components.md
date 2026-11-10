@@ -1,6 +1,6 @@
 # Admin UI components - what exists and where it is used
 
-**Last refreshed: 2026-11-10**, by reading `src/DlnaServer.Admin` and `tests/DlnaServer.UiTests` at `ccb5c86`.
+**Last refreshed: 2026-11-10**, by reading `src/DlnaServer.Admin` at `ccb5c86` and `tests/DlnaServer.UiTests` after that day's review fixes.
 
 **Stale check:** on every read, compare the date above with today. More than 14 days old, or older than
 the newest commit touching `src/DlnaServer.Admin` (`git log -1 --format=%cs -- src/DlnaServer.Admin`) →
@@ -135,8 +135,8 @@ and structure, never on a styling class, so a reskin is free to change classes -
 |---|---|---|
 | The page's first `h1` carries the title in the *Pages* table | every page | `AdminPagesTest`, `LibraryPagesTest` |
 | `link[rel='stylesheet']` resolves on the admin port | `App.razor` | `AdminPagesTest` |
-| `nav a` lists exactly the menu routes; no `/admin/upload` while uploads are off | `NavMenu` | `AdminPagesTest` |
-| Links inside `main` keep their `href` prefix (`/admin/library/`, `/admin/preview/`, `/admin/photo/`) and the folder or file name as their text | `FolderList`, `MediaTile`, Preview | `LibraryPagesTest`, `SearchPagesTest` |
+| Every menu route has a displayed `nav a[href=…]`, and the *Search folders* one opens that page; no `/admin/upload` while uploads are off | `NavMenu` | `AdminPagesTest` |
+| Links inside `main` keep their `href` prefix (`/admin/library/`, `/admin/preview/`, `/admin/photo/`) and the folder or file name as their text, and are displayed | `FolderList`, `MediaTile`, Preview | `LibraryPagesTest`, `SearchPagesTest` |
 | Folder link text is the folder name as its own text node (`normalize-space(text())`) | `FolderList` | `SearchPagesTest` |
 | `a` with the text *Back to folder* and *Download* | Preview | `LibraryPagesTest` |
 | `input#name`, `button` *Search* and *Reset* inside `main` | SearchFiles, SearchFolders (`SearchPanel`) | `SearchPagesTest` |
@@ -146,6 +146,7 @@ and structure, never on a styling class, so a reskin is free to change classes -
 | *Server* panel: *Restart server* → *Confirm restart* / *Cancel* | Maintenance (`ConfirmActionPair`) | `MaintenancePageTest` |
 | *Show temporarily hidden folders* panel: *Show now* / *Hide now* | TemporarySettings | `SettingsPagesTest` |
 | "Uploading is switched off" in `main` and no `input[type='file']` while uploads are off | Upload | `UploadPageTest` |
+| No error in the browser console; an interactive page logs `blazor.web.js`'s *WebSocket connected* once its circuit attaches | every page; `App.razor` loads `blazor.web.js` | every fixture's tear-down; `AdminPagesTest`, `LibraryPagesTest` wait for the circuit |
 
 ## The stylesheet
 

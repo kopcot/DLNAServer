@@ -5,12 +5,35 @@ namespace DlnaServer.UiTests
     [TestFixture]
     internal sealed class SettingsPagesTest
     {
+        private const string HiddenFoldersPanel = "//h2[normalize-space()='Show temporarily hidden folders']/..";
+
+        private static readonly By _showHidden = By.XPath($"{HiddenFoldersPanel}//button[normalize-space()='Show now']");
+        private static readonly By _hideHidden = By.XPath($"{HiddenFoldersPanel}//button[normalize-space()='Hide now']");
+
         private static AdminBrowser Browser => UiTestSetup.Browser;
 
+        /// <remarks>
+        /// The hidden-folder switch is process-wide, so it is put back whatever the test did - a failure half
+        /// way through would otherwise leave every later listing showing the hidden folders.
+        /// </remarks>
         [TearDown]
         public void TearDown()
         {
-            Browser.AttachScreenshotOnFailure();
+            try
+            {
+                Browser.CheckAfterTest();
+            }
+            finally
+            {
+                Browser.Open(path: "/admin/settings/temporary");
+                if (Browser.IsPresent(by: _hideHidden))
+                {
+                    Browser.ActUntil(
+                        action: () => Browser.Driver.FindElement(_hideHidden).Click(),
+                        done: () => !Browser.IsPresent(by: _hideHidden),
+                        because: "the hidden folders are hidden again for the tests that follow");
+                }
+            }
         }
 
         /// <remarks>
@@ -23,7 +46,7 @@ namespace DlnaServer.UiTests
             // Arrange
             const string modelName = "UiTest model";
             var modelInput = By.Id("modelName");
-            Browser.Open("/admin/settings");
+            Browser.Open(path: "/admin/settings");
 
             // Act
             // The input is read back as well: a save racing the circuit's first render saves the old value.
@@ -36,11 +59,12 @@ namespace DlnaServer.UiTests
                     Browser.Driver.FindElement(By.XPath("//main//button[normalize-space()='Save']")).Click();
                 },
                 done: () => Browser.Driver.PageSource.Contains("Saved.", StringComparison.Ordinal)
-                    && Browser.Driver.FindElement(modelInput).GetDomProperty("value") == modelName);
-            Browser.Open("/admin/settings");
-            var reloaded = Browser.Read(d => d.FindElement(modelInput).GetDomProperty("value"));
-            Browser.Open("/admin/about");
-            var shown = Browser.TextOf(By.XPath("//dt[normalize-space()='Model']/following-sibling::dd[1]"));
+                    && Browser.Driver.FindElement(modelInput).GetDomProperty("value") == modelName,
+                because: "Save reports that it saved the value typed");
+            Browser.Open(path: "/admin/settings");
+            var reloaded = Browser.Read(read: d => d.FindElement(modelInput).GetDomProperty("value"));
+            Browser.Open(path: "/admin/about");
+            var shown = Browser.TextOf(by: By.XPath("//dt[normalize-space()='Model']/following-sibling::dd[1]"));
 
             // Assert
             reloaded.Should().Be(modelName,
@@ -53,18 +77,18 @@ namespace DlnaServer.UiTests
         public void ShowHiddenFolders_ThenHide_TogglesBack()
         {
             // Arrange
-            const string panel = "//h2[normalize-space()='Show temporarily hidden folders']/..";
-            var show = By.XPath($"{panel}//button[normalize-space()='Show now']");
-            var hide = By.XPath($"{panel}//button[normalize-space()='Hide now']");
-            Browser.Open("/admin/settings/temporary");
+            Browser.Open(path: "/admin/settings/temporary");
+            Browser.ActUntil(
+                action: () => Browser.Driver.FindElement(_showHidden).Click(),
+                done: () => Browser.IsDisplayed(by: _hideHidden) && !Browser.IsPresent(by: _showHidden),
+                because: "Show now swaps itself for Hide now while the hidden folders are shown");
 
             // Act
-            Browser.ActUntil(action: () => Browser.Driver.FindElement(show).Click(), done: () => Browser.IsPresent(hide));
-            Browser.ActUntil(action: () => Browser.Driver.FindElement(hide).Click(), done: () => Browser.IsPresent(show));
-
             // Assert
-            Browser.IsPresent(hide).Should().BeFalse(
-                "because hiding the folders again puts the panel back in its starting state");
+            Browser.ActUntil(
+                action: () => Browser.Driver.FindElement(_hideHidden).Click(),
+                done: () => Browser.IsDisplayed(by: _showHidden) && !Browser.IsPresent(by: _hideHidden),
+                because: "hiding the folders again puts the panel back in its starting state");
         }
     }
 }

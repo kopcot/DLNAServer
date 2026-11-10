@@ -14,7 +14,7 @@ namespace DlnaServer.UiTests
         [TearDown]
         public void TearDown()
         {
-            Browser.AttachScreenshotOnFailure();
+            Browser.CheckAfterTest();
         }
 
         [Test]
@@ -22,13 +22,13 @@ namespace DlnaServer.UiTests
         {
             // Arrange
             // Act
-            Browser.Open("/admin/upload");
-            var notice = Browser.TextOf(By.TagName("main"));
+            Browser.Open(path: "/admin/upload");
+            var notice = Browser.TextOf(by: By.TagName("main"));
 
             // Assert
             notice.Should().Contain("Uploading is switched off",
                 "because the page says why nothing can be uploaded");
-            Browser.IsPresent(By.CssSelector("input[type='file']")).Should().BeFalse(
+            Browser.IsPresent(by: By.CssSelector("input[type='file']")).Should().BeFalse(
                 "because with uploading off there is no endpoint a picked file could be sent to");
         }
     }

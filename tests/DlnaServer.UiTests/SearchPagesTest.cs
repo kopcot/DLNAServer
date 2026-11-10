@@ -15,27 +15,27 @@ namespace DlnaServer.UiTests
         [TearDown]
         public void TearDown()
         {
-            Browser.AttachScreenshotOnFailure();
+            Browser.CheckAfterTest();
         }
 
         [Test]
         public void Search_FileByName_FindsOnlyThatFileThenResetClearsIt()
         {
             // Arrange
-            var small = By.XPath("//main//a[starts-with(@href,'/admin/preview/') and contains(normalize-space(),'small')]");
-            var large = By.XPath("//main//a[starts-with(@href,'/admin/preview/') and contains(normalize-space(),'large')]");
-            Browser.Open("/admin/library/search/files");
-
-            // Act
+            var small = AdminBrowser.PreviewLink(name: "small");
+            var large = AdminBrowser.PreviewLink(name: "large");
+            Browser.Open(path: "/admin/library/search/files");
             Browser.ActUntil(
                 action: () => Search(name: "small"),
-                done: () => Browser.IsPresent(small) && !Browser.IsPresent(large));
-            Browser.WaitFor(_resetButton).Click();
-            var isCleared = Browser.Read(_ => !Browser.IsPresent(_anyPreviewLink));
+                done: () => Browser.IsDisplayed(by: small) && !Browser.IsPresent(by: large),
+                because: "a file search by name lists the files with that name and leaves the others out");
 
+            // Act
             // Assert
-            isCleared.Should().BeTrue(
-                "because Reset forgets the criteria and the results they found");
+            Browser.ActUntil(
+                action: () => Browser.Driver.FindElement(_resetButton).Click(),
+                done: () => !Browser.IsPresent(by: _anyPreviewLink),
+                because: "Reset forgets the criteria and the results they found");
         }
 
         [Test]
@@ -45,16 +45,14 @@ namespace DlnaServer.UiTests
             var holiday = By.XPath($"//main//a[starts-with(@href,'/admin/library/') and contains(.,'{AdminHost.SubfolderName}')]");
             var sourceFolder = By.XPath(
                 $"//main//a[starts-with(@href,'/admin/library/') and normalize-space(text())='{AdminHost.SourceFolderName}']");
-            Browser.Open("/admin/library/search/folders");
+            Browser.Open(path: "/admin/library/search/folders");
 
             // Act
+            // Assert
             Browser.ActUntil(
                 action: () => Search(name: AdminHost.SubfolderName),
-                done: () => Browser.IsPresent(holiday) && !Browser.IsPresent(sourceFolder));
-
-            // Assert
-            Browser.IsPresent(holiday).Should().BeTrue(
-                "because a folder search by name links the matching folder's listing");
+                done: () => Browser.IsDisplayed(by: holiday) && !Browser.IsPresent(by: sourceFolder),
+                because: "a folder search by name links the matching folder's listing and leaves the others out");
         }
 
         /// <remarks>

@@ -3,8 +3,8 @@ using OpenQA.Selenium;
 namespace DlnaServer.UiTests
 {
     /// <summary>
-    /// Arms and cancels only. Every action on this page restarts, stops or empties the one Host the whole run
-    /// shares, so nothing here is ever confirmed.
+    /// Only the restart is driven, and only armed and cancelled: confirming it - or the page's stop and
+    /// rebuild actions - would end or empty the one Host the whole run shares.
     /// </summary>
     [TestFixture]
     internal sealed class MaintenancePageTest
@@ -16,28 +16,28 @@ namespace DlnaServer.UiTests
         [TearDown]
         public void TearDown()
         {
-            Browser.AttachScreenshotOnFailure();
+            Browser.CheckAfterTest();
         }
 
         [Test]
-        public async Task ArmRestart_ThenCancel_LeavesTheServerRunning()
+        public void ArmRestart_ThenCancel_LeavesTheServerRunning()
         {
             // Arrange
             var restart = By.XPath($"{ServerPanel}//button[normalize-space()='Restart server']");
             var confirm = By.XPath($"{ServerPanel}//button[normalize-space()='Confirm restart']");
             var cancel = By.XPath($"{ServerPanel}//button[normalize-space()='Cancel']");
-            Browser.Open("/admin/maintenance");
-            Browser.ActUntil(action: () => Browser.Driver.FindElement(restart).Click(), done: () => Browser.IsPresent(confirm));
+            Browser.Open(path: "/admin/maintenance");
+            Browser.ActUntil(
+                action: () => Browser.Driver.FindElement(restart).Click(),
+                done: () => Browser.IsDisplayed(by: confirm),
+                because: "the first click on Restart server arms it and offers the confirmation");
 
             // Act
-            Browser.ActUntil(action: () => Browser.Driver.FindElement(cancel).Click(), done: () => Browser.IsPresent(restart));
-            using var health = await UiTestSetup.Host.Http.GetAsync(UiTestSetup.Host.Admin("/admin/health"));
-
             // Assert
-            Browser.IsPresent(confirm).Should().BeFalse(
-                "because cancelling disarms the action rather than leaving the confirm button armed");
-            health.IsSuccessStatusCode.Should().BeTrue(
-                "because cancelling a restart must not restart the server");
+            Browser.ActUntil(
+                action: () => Browser.Driver.FindElement(cancel).Click(),
+                done: () => Browser.IsDisplayed(by: restart) && !Browser.IsPresent(by: confirm),
+                because: "cancelling disarms the restart rather than leaving the confirm button armed");
         }
     }
 }

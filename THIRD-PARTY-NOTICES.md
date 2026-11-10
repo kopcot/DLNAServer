@@ -36,13 +36,13 @@ Not part of any deployment. Listed for completeness.
 | --- | --- | --- |
 | FluentAssertions | 8.11.0 | Licence file in the package - see below |
 | Microsoft.AspNetCore.Mvc.Testing | 8.0.11 | MIT |
-| Microsoft.NET.Test.Sdk | 18.10.1 | MIT |
+| Microsoft.NET.Test.Sdk | 18.11.0 | MIT |
 | NetArchTest.Rules | 1.3.2 | MIT, not declared in the package metadata |
-| NUnit | 4.6.1 | MIT |
+| NUnit | 5.0.0 | MIT |
 | NUnit.Analyzers | 4.15.0 | MIT |
-| NUnit3TestAdapter | 6.3.0 | MIT |
+| NUnit3TestAdapter | 6.3.1 | MIT |
 | Selenium.WebDriver | 4.52.0 | Apache-2.0 |
-| coverlet.collector | 10.0.1 | MIT |
+| coverlet.collector | 10.1.0 | MIT |
 
 ## Two that are not simply permissive
 

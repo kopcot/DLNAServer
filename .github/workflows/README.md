@@ -31,7 +31,7 @@ is where the two differ. Formatting and the coverage summary run on Linux only; 
 are the same on both. Coverage appears as the run's **job summary** - GitHub's own reporting, so there is
 no Codecov account or token to look after - and the raw results are kept as an artifact for 14 days.
 
-The admin UI tests in `DlnaServer.UiTests` run on Linux only too: they drive headless Chrome and exercise pages, not paths, so the Windows leg filters them out with `FullyQualifiedName!~DlnaServer.UiTests` ([ADR 0038](../../docs/ADR/0038-admin-ui-tests-drive-the-real-host.md)). `release.yml` runs on Linux and tests the whole solution, so a release runs them as well.
+The admin UI tests in `DlnaServer.UiTests` run on Linux only too: they drive headless Chrome and exercise pages, not paths, so the Windows leg filters them out with `FullyQualifiedName!~DlnaServer.UiTests` ([ADR 0038](../../docs/ADR/0038-admin-ui-tests-drive-the-real-host.md)). `release.yml` runs on Linux and tests the whole solution, so a release runs them as well. The build jobs of both workflows stop after 30 minutes, so a hung browser fails the run instead of holding a runner for GitHub's six-hour default.
 
 `docker.yml` runs only when something the image build reads changed, so a documentation-only change skips
 it. The build uses a Buildx layer cache, so the restore layer is only redone when a project file changes.

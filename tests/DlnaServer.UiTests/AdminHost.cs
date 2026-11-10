@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Net;
+using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Text.Json;
 
 namespace DlnaServer.UiTests
 {
@@ -37,12 +39,20 @@ namespace DlnaServer.UiTests
         private readonly string _root;
         private readonly Queue<string> _output = new(MaxBufferedLines);
 
-        private AdminHost(Process process, string root, int adminPort, int mediaPort)
+        private bool _isStarted;
+
+        private AdminHost(
+            Process process,
+            string root,
+            int adminPort,
+            int mediaPort)
         {
             _process = process;
             _root = root;
             AdminUri = new Uri($"http://127.0.0.1:{adminPort}");
             MediaUri = new Uri($"http://127.0.0.1:{mediaPort}");
+            _process.OutputDataReceived += OnOutput;
+            _process.ErrorDataReceived += OnOutput;
         }
 
         public Uri AdminUri { get; }
@@ -51,55 +61,45 @@ namespace DlnaServer.UiTests
 
         public HttpClient Http { get; } = new();
 
-        public static async Task<AdminHost> StartAsync(CancellationToken cancellationToken = default)
+        public static async Task<AdminHost> StartAsync(CancellationToken cancellationToken)
         {
             var hostAssembly = HostAssemblyPath();
             var root = Directory.CreateTempSubdirectory("dlna-ui-").FullName;
-            var mediaFolder = Path.Combine(root, SourceFolderName);
-            CopyTestMedia(hostAssembly, mediaFolder);
-
-            var adminPort = FreePort();
-            var mediaPort = FreePort();
-            var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
-            {
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-            startInfo.ArgumentList.Add(hostAssembly);
-
-            // config.json is missing on purpose: the Host writes defaults carrying the shipped file-type map,
-            // where a hand-written file would carry an empty map and index nothing.
-            startInfo.Environment["DLNA_CONFIG_FILE"] = Path.Combine(root, "config.json");
-            startInfo.Environment["ConnectionStrings__DlnaDatabase"] =
-                $"Data Source={Path.Combine(root, "dlna.sqlite")};Pooling=True;Default Timeout=30;";
-            startInfo.Environment["Dlna__Server__Port"] = mediaPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            startInfo.Environment["Dlna__Server__AdminPort"] = adminPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            startInfo.Environment["Dlna__Server__FriendlyName"] = FriendlyName;
-            startInfo.Environment["Dlna__Library__SourceFolders__0"] = mediaFolder;
-
-            // Static web assets - the admin stylesheet - are served from a build folder only in Development.
-            startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
-
-            var process = new Process { StartInfo = startInfo };
-            var host = new AdminHost(process, root, adminPort, mediaPort);
-            process.OutputDataReceived += host.OnOutput;
-            process.ErrorDataReceived += host.OnOutput;
-            _ = process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
+            AdminHost? host = null;
 
             try
             {
+                var mediaFolder = Path.Combine(root, SourceFolderName);
+                CopyTestMedia(hostAssembly, mediaFolder);
+
+                var (adminPort, mediaPort) = FreePorts();
+                var process = new Process { StartInfo = CreateStartInfo(hostAssembly, root, mediaFolder, adminPort, mediaPort) };
+                host = new AdminHost(process, root, adminPort, mediaPort);
+                host.Start();
                 await host.WaitUntilReadyAsync(cancellationToken);
+
+                return host;
             }
-            catch
+            catch (Exception startFailure)
             {
-                await host.DisposeAsync();
+                try
+                {
+                    if (host is null)
+                    {
+                        DeleteRoot(root);
+                    }
+                    else
+                    {
+                        await host.DisposeAsync();
+                    }
+                }
+                catch (Exception cleanupFailure)
+                {
+                    throw new AggregateException(startFailure, cleanupFailure);
+                }
+
                 throw;
             }
-
-            return host;
         }
 
         /// <summary>
@@ -117,20 +117,19 @@ namespace DlnaServer.UiTests
         /// </remarks>
         public async ValueTask DisposeAsync()
         {
-            if (!_process.HasExited)
+            try
             {
-                await StopGracefullyAsync();
+                if (_isStarted)
+                {
+                    await StopAsync(CancellationToken.None);
+                }
             }
-
-            if (!_process.HasExited)
+            finally
             {
-                _process.Kill(entireProcessTree: true);
+                _process.Dispose();
+                Http.Dispose();
+                DeleteRoot(_root);
             }
-
-            await _process.WaitForExitAsync();
-            _process.Dispose();
-            Http.Dispose();
-            Directory.Delete(_root, recursive: true);
         }
 
         private static string HostAssemblyPath()
@@ -160,21 +159,102 @@ namespace DlnaServer.UiTests
             File.Copy(Path.Combine(icons, HolidayPicture), Path.Combine(holiday, HolidayPicture));
         }
 
-        // ponytail: the port is free when asked and could be taken before the Host binds it; a clash fails
-        // startup loudly with the Host's own output, which is the cheaper failure.
-        private static int FreePort()
+        private static ProcessStartInfo CreateStartInfo(
+            string hostAssembly,
+            string root,
+            string mediaFolder,
+            int adminPort,
+            int mediaPort)
         {
-            var listener = new TcpListener(IPAddress.Loopback, 0);
-            listener.Start();
-            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            listener.Stop();
+            var dotnet = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH")
+                ?? "dotnet";
+            var startInfo = new ProcessStartInfo(dotnet)
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            startInfo.ArgumentList.Add(hostAssembly);
 
-            return port;
+            // The child inherits this environment, so an operator's own Dlna__ settings or URLs would reach the
+            // test Host - another source folder indexed, uploads switched on, other ports.
+            foreach (var key in startInfo.Environment.Keys.Where(IsInheritedHostSetting).ToList())
+            {
+                _ = startInfo.Environment.Remove(key);
+            }
+
+            // config.json is missing on purpose: the Host writes defaults carrying the shipped file-type map,
+            // where a hand-written file would carry an empty map and index nothing.
+            startInfo.Environment["DLNA_CONFIG_FILE"] = Path.Combine(root, "config.json");
+            startInfo.Environment["ConnectionStrings__DlnaDatabase"] =
+                $"Data Source={Path.Combine(root, "dlna.sqlite")};Pooling=True;Default Timeout=30;";
+            startInfo.Environment["Dlna__Server__Port"] = mediaPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            startInfo.Environment["Dlna__Server__AdminPort"] = adminPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            startInfo.Environment["Dlna__Server__FriendlyName"] = FriendlyName;
+            startInfo.Environment["Dlna__Library__SourceFolders__0"] = mediaFolder;
+
+            // Static web assets - the admin stylesheet - are served from a build folder only in Development.
+            startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+
+            return startInfo;
+        }
+
+        private static bool IsInheritedHostSetting(string key)
+        {
+            return key.Replace("__", ":", StringComparison.Ordinal).StartsWith("Dlna:", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("ASPNETCORE_URLS", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("DOTNET_URLS", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Both listeners are held until both ports are read, so the two differ - the Host refuses equal ports.
+        // ponytail: a port is free when asked and could be taken before the Host binds it; a clash fails
+        // startup loudly with the Host's own output, which is the cheaper failure.
+        private static (int Admin, int Media) FreePorts()
+        {
+            var admin = new TcpListener(IPAddress.Loopback, 0);
+            var media = new TcpListener(IPAddress.Loopback, 0);
+
+            try
+            {
+                admin.Start();
+                media.Start();
+
+                return (((IPEndPoint)admin.LocalEndpoint).Port, ((IPEndPoint)media.LocalEndpoint).Port);
+            }
+            finally
+            {
+                admin.Stop();
+                media.Stop();
+            }
+        }
+
+        /// <summary>
+        /// A temporary folder that cannot be deleted - a file still held open on Windows - is left behind
+        /// with a warning rather than failing a run that has otherwise passed.
+        /// </summary>
+        private static void DeleteRoot(string root)
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                TestContext.Progress.WriteLine($"The test Host's folder {root} was left behind: {exception.Message}");
+            }
+        }
+
+        private void Start()
+        {
+            _ = _process.Start();
+            _isStarted = true;
+            _process.BeginOutputReadLine();
+            _process.BeginErrorReadLine();
         }
 
         /// <summary>
         /// Liveness on the admin port is not enough - it answers before the migrations finish - so this also
-        /// waits for readiness and for the scan to have indexed every test file.
+        /// waits for readiness and for the scan to have indexed the three test pictures.
         /// </summary>
         private async Task WaitUntilReadyAsync(CancellationToken cancellationToken)
         {
@@ -187,6 +267,9 @@ namespace DlnaServer.UiTests
                 {
                     if (_process.HasExited)
                     {
+                        // Waited for, so the output readers have drained and the crash's own lines are in the buffer.
+                        await _process.WaitForExitAsync(timeout.Token);
+
                         throw new InvalidOperationException(
                             $"The Host exited with code {_process.ExitCode} before it was ready.{Environment.NewLine}{BufferedOutput()}");
                     }
@@ -212,11 +295,12 @@ namespace DlnaServer.UiTests
                     return false;
                 }
 
-                var files = await Http.GetStringAsync(new Uri(MediaUri, "/manage/file"), cancellationToken);
+                var page = await Http.GetFromJsonAsync<JsonElement>(new Uri(MediaUri, "/manage/file"), cancellationToken);
+                var indexed = page.GetProperty("files").EnumerateArray()
+                    .Select(static f => Path.GetFileName(f.GetProperty("fullPath").GetString()))
+                    .ToHashSet(StringComparer.Ordinal);
 
-                return files.Contains(SmallPicture, StringComparison.Ordinal)
-                    && files.Contains(LargePicture, StringComparison.Ordinal)
-                    && files.Contains(HolidayPicture, StringComparison.Ordinal);
+                return indexed.SetEquals([SmallPicture, LargePicture, HolidayPicture]);
             }
             catch (HttpRequestException)
             {
@@ -225,9 +309,28 @@ namespace DlnaServer.UiTests
             }
         }
 
-        private async Task StopGracefullyAsync()
+        private async Task StopAsync(CancellationToken cancellationToken)
         {
-            using var timeout = new CancellationTokenSource(_stopTimeout);
+            if (!_process.HasExited)
+            {
+                await StopGracefullyAsync(cancellationToken);
+            }
+
+            // Killing a process that exited after the check is a no-op, not an exception.
+            if (!_process.HasExited)
+            {
+                _process.Kill(entireProcessTree: true);
+            }
+
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(_stopTimeout);
+            await _process.WaitForExitAsync(timeout.Token);
+        }
+
+        private async Task StopGracefullyAsync(CancellationToken cancellationToken)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(_stopTimeout);
 
             try
             {
@@ -236,7 +339,7 @@ namespace DlnaServer.UiTests
             }
             catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException)
             {
-                // Not answering, or not gone in time: DisposeAsync kills it.
+                // Not answering, or not gone in time: StopAsync kills it.
             }
         }
 

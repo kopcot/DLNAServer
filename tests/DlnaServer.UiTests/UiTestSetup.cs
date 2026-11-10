@@ -1,8 +1,9 @@
 namespace DlnaServer.UiTests
 {
     /// <summary>
-    /// One Host and one browser for the whole run: starting either costs seconds. No test changes what
-    /// another one reads - the saved model name is read by its own test only.
+    /// One Host and one browser for the whole run: starting either costs seconds. A test that changes
+    /// shared state either changes what no other test reads - the saved model name - or puts it back in its
+    /// tear-down - the hidden-folder switch.
     /// </summary>
     [SetUpFixture]
     internal sealed class UiTestSetup
@@ -15,7 +16,7 @@ namespace DlnaServer.UiTests
         public async Task StartAsync()
         {
             Host = await AdminHost.StartAsync(cancellationToken: CancellationToken.None);
-            Browser = new AdminBrowser(Host);
+            Browser = new AdminBrowser(host: Host);
         }
 
         [OneTimeTearDown]

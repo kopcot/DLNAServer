@@ -25,6 +25,9 @@ jobs:
   build:
     name: Build and test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # A hung test - the UI tests start a server and a browser - fails the job instead of holding the runner
+    # for GitHub's six-hour default.
+    timeout-minutes: 30
 
     # Windows because it is the development box and paths are where the two differ - ExcludeFolders takes
     # either separator, and a test that only ever ran on Linux cannot show that both work.

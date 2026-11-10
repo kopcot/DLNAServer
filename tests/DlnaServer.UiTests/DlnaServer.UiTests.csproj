@@ -32,13 +32,23 @@
     <ProjectReference Include="..\..\src\DlnaServer.Host\DlnaServer.Host.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
-  <!-- Where that output folder is, in the configuration this project is built in - Release in CI, Debug on
-       a dev box - so AdminHost never guesses. -->
+  <!-- One Host and one browser serve the whole run, so no two tests may run at once. -->
   <ItemGroup>
-    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
-      <_Parameter1>HostAssemblyPath</_Parameter1>
-      <_Parameter2>$(MSBuildThisFileDirectory)../../src/DlnaServer.Host/bin/$(Configuration)/net8.0/DlnaServer.Host.dll</_Parameter2>
-    </AssemblyAttribute>
+    <AssemblyAttribute Include="NUnit.Framework.NonParallelizableAttribute" />
   </ItemGroup>
+
+  <!-- Where that output folder is, asked of the Host project itself in the configuration this project is
+       built in - Release in CI, Debug on a dev box - so AdminHost never guesses. -->
+  <Target Name="AddHostAssemblyPath" BeforeTargets="GetAssemblyAttributes">
+    <MSBuild Projects="@(ProjectReference)" Targets="GetTargetPath" Condition="'%(Filename)' == 'DlnaServer.Host'">
+      <Output TaskParameter="TargetOutputs" PropertyName="HostAssemblyPath" />
+    </MSBuild>
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>HostAssemblyPath</_Parameter1>
+        <_Parameter2>$(HostAssemblyPath)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
 
 </Project>

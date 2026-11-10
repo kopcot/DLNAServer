@@ -45,7 +45,8 @@ namespace DlnaServer.UnitTests.Uploads
         [TestCase("film\r\nupload from=10.0.0.1.mp4")]
         [TestCase("film\n.mp4")]
         [TestCase("film\t.mp4")]
-        [TestCase("film\u001b[31m.mp4")]
+        // Named: the escape character in the generated name made every filtered run skip this case.
+        [TestCase("film\u001b[31m.mp4", TestName = "{m}(an ANSI escape sequence)")]
         public void Sanitise_WithAControlCharacter_ReturnsEmpty(string sent)
         {
             // Arrange

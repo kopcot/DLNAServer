@@ -31,7 +31,7 @@ comment still means section 7b - only the file it lives in has changed.
 | Admin UI | Blazor Server, in-process, on its own Kestrel port |
 | Wire compatibility | Byte-identical, golden-file tested |
 | Config | `config.json`, `IOptionsMonitor` hot-reload, clean restart path |
-| Test stack | NUnit + FluentAssertions |
+| Test stack | NUnit + FluentAssertions; Selenium.WebDriver and headless Chrome for the admin UI ([ADR 0038](ADR/0038-admin-ui-tests-drive-the-real-host.md)) |
 | Packages | Reference versions, minus the unused ones |
 | DLNA response headers | Sent, behind `Compatibility.SendDlnaResponseHeaders` |
 | SSDP M-SEARCH | Fixed, with `Compatibility.UseLegacyInvertedSearchTargetMatch` to restore old behaviour |
@@ -1163,6 +1163,8 @@ something: `GetPendingProcessingAsync` skips a suppressed row.
   without letting the module's default shadow the host's instance.
 - **An interactive admin page is drawn twice, and a UI test has to survive the second drawing.** The prerendered page arrives first; when the Blazor circuit attaches, its first interactive render replaces the DOM. An element found before that is stale (the `<h1>` read failed this way), a click lands on a page that does nothing yet, and text typed into an input is thrown away - so a search typed too early runs with no criteria and finds everything. `AdminBrowser.ActUntil` repeats the whole action, re-finding each element, and every check it waits for rules out the wrong outcome as well (the other file absent, the saved value read back), never just "something happened". Found 2026-11-10 (ADR 0038).
 - **On a desktop-wide window the preview page's full-screen button covers the photo link.** The link is the phone layout's way to the photo page, so a click on it is intercepted; the UI test opens its address instead.
+- **An admin page that throws in its interactive render looks fine in the browser.** The layout's `ErrorBoundary` is static, so it only replaces a page that threw while prerendering; a throw once the circuit is running ends the circuit and leaves the prerendered page on screen, buttons that do nothing included. The only sign is an error in the browser console, which the UI tests read (`AdminBrowser.AssertCircuitWithoutError`, and every fixture's tear-down). Found 2026-11-10 by review; proved by making the Dashboard and the Preview page throw after their first render.
+- **A test case whose generated name holds a control character is skipped by every `--filter`.** `Sanitise_WithAControlCharacter_ReturnsEmpty("film\u001b[31m.mp4")` ran unfiltered and vanished from any filtered run - positive or negative - so the Windows leg, which filters out the UI tests, ran 495 unit tests instead of 496. Such a case needs a `TestName` without the character. Found 2026-11-10.
 
 ### Local development environment, as left on 2026-09-02
 
