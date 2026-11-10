@@ -225,8 +225,12 @@ else
            Escape is handled HERE rather than on the stage below, even though the stage is what takes the
            focus: keydown bubbles, so this catches the key whatever is focused inside the overlay. On the
            stage alone it stopped working the moment a toolbar button was clicked, because the focus was
-           then on the button and outside the handler's element. *@
-        <div class="lightbox" @onkeydown="OnViewerKeyDown">
+           then on the button and outside the handler's element.
+
+           .modal is what keeps Tab inside: while it is on the page the stylesheet hides the layout around
+           it, so the sidebar behind can no longer be reached - see admin.css. *@
+        <div class="lightbox modal" role="dialog" aria-modal="true" aria-label="@_details.File.Title"
+             @onkeydown="OnViewerKeyDown">
             <div class="lightboxbar">
                 <button type="button" @onclick="ZoomOut" disabled="@(_zoomPercent <= MinZoomPercent)"
                         aria-label="Zoom out">&minus;</button>

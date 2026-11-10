@@ -757,7 +757,18 @@ td input[type=text], td select, .actions input[type=number] {
     somewhere they never chose. :has is what reaches upward from the overlay to the root scroller - the
     same selector the folder list already depends on.
 */
-html:has(.lightbox) { overflow: hidden; }
+html:has(.modal) { overflow: hidden; }
+
+/*
+    A modal keeps the keyboard inside itself - the photo viewer now, the delete confirmation later. Any
+    overlay carrying .modal hides the rest of the layout while it is up, and hidden content can be neither
+    focused nor read out, so Tab cycles through the overlay's controls (and the browser's own) instead of
+    walking into the sidebar behind it. visibility, because a descendant can turn it back on: the overlay
+    stays visible inside a hidden layout. No JavaScript, and nothing for a page to forget to undo.
+    An overlay that should let the page show through behind it needs another way: this blanks the page.
+*/
+.layout:has(.modal) { visibility: hidden; }
+.modal { visibility: visible; }
 
 /* The file name gives way first - the controls either side of it are the part that has to stay. */
 .lightboxtitle { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
