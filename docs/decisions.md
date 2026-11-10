@@ -787,7 +787,9 @@ licence and points at the file rather than reproducing its text.
   - the server does not start. `DisabledUploadConvention` is the worked example.
 - **A tooltip or popover inside a `.panel` must be `position: fixed`**, not absolute. A panel is
   `overflow-x: auto`, which makes its other axis scrollable too, so an absolutely positioned box is
-  clipped by its own panel and puts a scrollbar on it.
+  clipped by its own panel and puts a scrollbar on it. And a fixed box needs real offsets: left at its static
+  position it stays where the value was when the page was laid out, so it vanished once the page scrolled.
+  Since 2026-11-10 `.tech::after` is anchored to its value with CSS anchor positioning.
 - **SOAP operation parameters are PascalCase.** SoapCore binds each argument from the body element of the
   same name and renderers send `<ObjectID>`; camelCase names bind nothing and every argument arrives null.
   This is the one place the usual camelCase convention is deliberately broken.

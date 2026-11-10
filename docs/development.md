@@ -99,7 +99,7 @@ a build log.
 
 **Two documents state the current version and must move with it**: the version line near the top of
 `README.md`, and the example release tag in this file (`docs/development.md`). `.github/SECURITY.md` carries a `Major.Minor`
-support table that moves on a Minor bump only. Everything else that names a version - `docs/history.md`'s batch
+support table that moves on a Major or Minor bump. Everything else that names a version - `docs/history.md`'s batch
 headings, its trap entries, `release-notes.md`'s section headings - is a **historical reference** and is
 correct as written. Do not sweep those; rewriting history to match the present is how a decision record
 stops being one.

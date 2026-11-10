@@ -100,7 +100,8 @@
             part-way through. These pages keep working throughout.
         </p>
         <div class="actions">
-            <input type="number" min="1" max="72" @bind="_blockHours" style="width:80px" />
+            <input id="blockHours" type="number" min="1" max="72" @bind="_blockHours" style="width:80px"
+                   aria-label="How many hours to block televisions for" />
             <span class="muted">hour(s)</span>
             <button @onclick="Block">Block</button>
         </div>

@@ -17,6 +17,13 @@
        and nothing else. Every page that does have controls opts in with @@rendermode InteractiveServer,
        and a page that forgets to loses its buttons visibly rather than silently. *@
     <Routes />
+    @* Blazor's reconnect banner, supplied here so it wears the admin colours: with an element of this id on the
+       page, blazor.web.js only switches its components-reconnect-* classes and admin.css does the rest. *@
+    <div id="components-reconnect-modal" role="status" aria-live="polite">
+        <p class="reconnect-show">The connection to the server was lost. Reconnecting&hellip;</p>
+        <p class="reconnect-failed">The server cannot be reached. <a href="" data-enhance-nav="false">Reload the page</a> once it is back.</p>
+        <p class="reconnect-rejected">The server has restarted. <a href="" data-enhance-nav="false">Reload the page</a> to carry on.</p>
+    </div>
     <script src="_framework/blazor.web.js"></script>
 </body>
 </html>

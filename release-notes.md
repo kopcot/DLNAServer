@@ -14,6 +14,10 @@ worth telling you about is added to the version it belongs to.
 
 Nothing else changed: every page, button and setting is where it was, televisions see the same server, and upgrading costs nothing.
 
+**Fixes on the same pages.** *Show where each value comes from* now puts its note right under the value and keeps it on the screen, where it used to vanish once the page was scrolled. The assembly list on About and the table of uploaded files fit a phone screen. A screen reader announces the phone menu button as a menu that opens and closes, and the message shown while a page reconnects to the server matches the rest of the pages.
+
+If a page still shows the old look after the upgrade, reload it - the browser may be holding on to the previous version's styles.
+
 ## 1.3
 
 **The library only answers your own network.** On a NAS with an internet-reachable IPv6 address, the part of the server televisions use - browsing, playing and downloading files - could be reached from outside if the router let it through, so anyone who found the address could list and download the whole library. It now answers only devices on the local network or a Tailscale address, like the admin pages already did. Televisions on your network are not affected. A device reaching the server from anywhere else - over a VPN that hands out public addresses, or over a public IPv6 address from another network - now gets *not found*.

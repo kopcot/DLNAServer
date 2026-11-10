@@ -4,15 +4,16 @@
     @* The page's own PageTitle, rendered later inside @Body, replaces this one. *@
     <PageTitle>ZEN DLNA Server</PageTitle>
     <nav class="sidebar">
-        @* The phone layout's menu button, without JavaScript: the label toggles the checkbox and the
-           stylesheet shows the menu while it is ticked. Enhanced navigation re-renders the checkbox
-           unticked, so choosing a page closes the menu again. Both are hidden on a wide screen. *@
-        @* autocomplete off: Firefox otherwise restores it ticked on a reload or a back-forward restore. *@
-        <input type="checkbox" id="menutoggle" class="menutoggle" autocomplete="off" />
         <div class="brandbar">
             @* The device icon a television shows for this server, so the page and the icon read as one product - ADR 0039. *@
             <div class="brand"><img src="/admin/icon/large.png" alt="" width="32" height="32" />ZEN DLNA Server</div>
-            <label for="menutoggle" class="menubutton" title="Menu" aria-label="Menu">&#9776;</label>
+            @* The phone layout's menu button, without JavaScript: an empty details element whose summary is a
+               native disclosure button, so a screen reader announces it as expanded or collapsed rather than as
+               a checkbox. The stylesheet shows the menu while it is open, and enhanced navigation re-renders it
+               shut, so choosing a page closes the menu again. Hidden on a wide screen. *@
+            <details class="menubutton">
+                <summary title="Menu" aria-label="Menu">&#9776;</summary>
+            </details>
         </div>
         <NavMenu />
         @* Held at the foot of the column by the menu growing above it, so it sits at the bottom of the

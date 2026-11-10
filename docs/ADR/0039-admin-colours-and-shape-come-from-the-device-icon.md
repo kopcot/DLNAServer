@@ -35,7 +35,8 @@ All under `src/DlnaServer.Host/Resources/images/icons/`, copied byte for byte fr
 | --- | --- | --- | --- |
 | `--sky` | `#b9e1fa` | `#b9e1fa` | The device icon's field and bands, as measured |
 | `--amber` | `#fec409` | `#fec409` | The media-kind icons' fill |
-| `--ink` (text) | `#112b35` | `#e3edf1` | The media-kind icons' outline; in the dark, a near-white on the same hue |
+| `--navy` | `#112b35` | `#112b35` | The media-kind icons' outline, as measured. Not used directly: it is `--ink` in the light theme and `--on-accent` in the dark |
+| `--ink` (text) | `--navy` | `#e3edf1` | The media-kind icons' outline; in the dark, a near-white on the same hue |
 | `--muted` (secondary text) | `#52707a` | `#93abb5` | The slate side face, darkened (light) or lightened (dark) to pass AA |
 | `--ground` (page) | `#f4f7f8` | `#0f1619` | Slate at 8% over white; in the dark, a near-black on the slate hue |
 | `--panel` (cards) | `#ffffff` | `#172024` | The icon's white; in the dark, one step above the ground |
@@ -43,7 +44,7 @@ All under `src/DlnaServer.Host/Resources/images/icons/`, copied byte for byte fr
 | `--edge` (control borders) | `#638e9c` | `#58757e` | The slate side face, at the 3:1 that WCAG 1.4.11 asks of a control's boundary |
 | `--band`, `--band-ink` (the current page in the menu) | `--sky` behind `--ink` | `--sky` at 16% over the panel, behind `--sky` | The device icon's bands |
 | `--accent` (links, the primary button, focus rings) | `#1c6b9c` | `#b9e1fa` | The sky hue (203°) at 36% lightness; in the dark, the icon's own sky, unchanged |
-| `--on-accent` (text on the accent) | `#ffffff` | `#112b35` | White; in the dark, the navy outline |
+| `--on-accent` (text on the accent) | `#ffffff` | `--navy` | White; in the dark, the navy outline |
 | `--warn` | `#8f6400` | `#fec409` | The amber family (42° against the icon's 46°), deepened to pass AA on white; in the dark, the icon's own amber |
 | `--go`, `--stop` | `#1f7a3d`, `#b3261e` | the same | **Not from the icons** - the green and red of a confirm-or-back-out pair, kept from before because a decision button must read as go or stop, not as the brand |
 
@@ -51,7 +52,7 @@ The current page in the menu is a band of `--sky` in the light theme and of `--s
 
 **The shapes come from the device icon too.** Cards have a 12px radius (10px on a phone) and controls 8px - the icon's slightly softened corners, not pills and not sharp boxes. The kind badges on tiles stay fully round, like the icon's lights. Borders are 1px hairlines, like the icon's edges. A card carries one soft shadow, offset downward and tinted with the navy rather than grey, which is the icon's cast shadow. There are no gradients: the icon is flat. The sidebar shows `large.png` itself beside the name, so the picture and the page sit side by side.
 
-**The rule:** a new colour in the admin UI is taken from these icons - a token above, or the hue of one with its lightness moved for contrast - and is added to this table. If the device icon or the media-kind icons change, the sampled values above are measured again and the tokens follow in the same change. The exceptions are functional, not brand colours: `--go` and `--stop`, and the black behind a video and the photo viewer, which is a letterbox rather than a colour.
+**The rule:** a new colour in the admin UI is taken from these icons - a token above, or the hue of one with its lightness moved for contrast - and is added to this table. If the device icon or the media-kind icons change, the sampled values above are measured again and the tokens follow in the same change. The exceptions are functional, not brand colours: `--go` and `--stop`, the black behind a video and the photo viewer, which is a letterbox rather than a colour, and the dark theme's card shadow, which is pure black because a navy tint does not show on a near-black ground.
 
 ## Contrast, WCAG 2.2
 
@@ -72,8 +73,13 @@ Measured with the WCAG relative-luminance formula on the token values above. AA 
 | Success notice text on its tinted background | 5.17 | 9.92 |
 | Failure notice text on its tinted background | 4.75 | 8.79 |
 | White on `--go` / `--stop` | 5.37 / 6.54 | 5.37 / 6.54 |
+| The three filled buttons on hover (`filter: brightness(.9)`): primary / go / stop | 5.39 / 5.04 / 6.06 | 9.05 / 5.04 / 6.06 |
+| A danger button at rest - `--warn` text and border on a card | 5.26 | 10.34 |
+| A danger button on hover - `--warn` on its own 8% tint | 4.73 | 8.76 |
 | Control border (`--edge`) on a card | 3.57 | 3.36 |
 | Control border on the page ground | 3.32 | 3.71 |
+
+The hover row is the worse of the two ways a browser may apply the filter - to the colour values as stored, or to their linear light - so it holds either way. The filter darkens a button's text with its fill; the `opacity: .9` it replaced let the page through instead, which lightened the fill and took light `--go` to 4.42.
 
 ## Consequences
 

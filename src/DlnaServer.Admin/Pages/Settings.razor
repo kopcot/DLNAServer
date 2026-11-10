@@ -329,8 +329,8 @@
 
     <FormField Label="Maximum size" For="maxWidth">
         <ChildContent>
-            <input id="maxWidth" type="number" @bind="_edited.Thumbnails.MaxWidth" />
-            <input id="maxHeight" type="number" @bind="_edited.Thumbnails.MaxHeight" />
+            <input id="maxWidth" type="number" aria-label="Maximum preview width in pixels" @bind="_edited.Thumbnails.MaxWidth" />
+            <input id="maxHeight" type="number" aria-label="Maximum preview height in pixels" @bind="_edited.Thumbnails.MaxHeight" />
         </ChildContent>
         <Hint>
             Width and height in pixels. A preview only ever shrinks to fit; a smaller picture is left alone.

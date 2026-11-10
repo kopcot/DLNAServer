@@ -11,8 +11,10 @@
 
     --sky: #b9e1fa;
     --amber: #fec409;
+    /* The media-kind icons' outline: the text colour here, and the text on the accent in the dark. */
+    --navy: #112b35;
 
-    --ink: #112b35;
+    --ink: var(--navy);
     --muted: #52707a;
     --line: #e1eaed;
     /* A control's boundary - inputs, outlined buttons - which WCAG 1.4.11 wants at 3:1; --line is for dividers. */
@@ -48,7 +50,7 @@
         /* The icon's own light blue and amber become the accent and the warning here: on a dark ground
            they are the readable ones. */
         --accent: var(--sky);
-        --on-accent: #112b35;
+        --on-accent: var(--navy);
         --band: color-mix(in srgb, var(--sky) 16%, var(--panel));
         --band-ink: var(--sky);
         --warn: var(--amber);
@@ -78,7 +80,7 @@ a { color: var(--accent); }
 
 /* Colour changes on hover are the only motion here, and they stay off for anyone who asked for less. */
 @media (prefers-reduced-motion: no-preference) {
-    a, button, .button, .tile { transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s; }
+    a, button { transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s; }
 }
 
 .layout { display: flex; min-height: 100vh; }
@@ -126,9 +128,9 @@ a { color: var(--accent); }
     box-shadow: var(--shadow);
 }
 
-/* The phone layout's menu button and the checkbox it toggles, neither of which a wide screen needs - and
-   display:none keeps the checkbox out of the keyboard's tab order there. */
-.menutoggle, .menubutton { display: none; }
+/* The phone layout's menu button, which a wide screen does not need - display:none also keeps it out of the
+   keyboard's tab order there. */
+.menubutton { display: none; }
 
 /* flex:1 is what pushes .sitefoot down: the menu claims the column's spare height rather than the footer
    sitting directly under the last item halfway up the screen. */
@@ -156,7 +158,9 @@ a { color: var(--accent); }
     font-size: 12px;
 }
 
-/* The page you are on is one of the icon's bands - the stripe the eye looks for to say "you are here". */
+/* The page you are on is one of the icon's bands - the stripe the eye looks for to say "you are here".
+   The sub-item selector is load-bearing: `.nav li.sub a` outranks `.nav a.active`, and without it a current
+   sub-item kept --muted on the band, 3.84:1. */
 .nav a.active,
 .nav li.sub a.active {
     color: var(--band-ink);
@@ -231,8 +235,13 @@ h2 { font-size: 17px; font-weight: 650; margin: 28px 0 12px; }
 
     position: FIXED rather than absolute, and deliberately. A panel is `overflow-x: auto`, which makes the
     other axis scrollable too, so an absolutely positioned bubble would be clipped by its own panel and
-    would put a scrollbar on it. A fixed box with auto offsets is laid out at its static position and is
-    not clipped by any overflow ancestor, so the margin below is what moves it off the line it belongs to.
+    would put a scrollbar on it. A fixed box is not clipped by any overflow ancestor.
+
+    Where it goes: anchored under the value, and flipped above it or to its left when that would leave the
+    viewport, wherever the page is scrolled. A browser without anchor positioning shows it as a bar along
+    the foot of the screen instead - away from the value, but always on screen. Fixed with no offsets at all,
+    which is what this was until 2026-11-10, kept the position the value had when the page was laid out:
+    once the page scrolled, the bubble stayed behind, or sat below the bottom of the screen.
 */
 .tech {
     border-bottom: 1px dotted var(--muted);
@@ -244,9 +253,12 @@ h2 { font-size: 17px; font-weight: 650; margin: 28px 0 12px; }
     position: fixed;
     z-index: 5;
     display: none;
-    margin: 20px 0 0 -6px;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    margin-inline: auto;
     width: max-content;
-    max-width: 320px;
+    max-width: min(320px, calc(100vw - 32px));
     padding: 6px 9px;
     border: 1px solid var(--line);
     border-radius: var(--radius-control);
@@ -265,6 +277,21 @@ h2 { font-size: 17px; font-weight: 650; margin: 28px 0 12px; }
 
 .tech:hover::after,
 .tech:focus::after { display: block; }
+
+/* anchor-scope is the test: without it every value would share one anchor name, the last on the page. */
+@supports (anchor-scope: --tech) {
+    .tech { anchor-name: --tech; anchor-scope: --tech; }
+
+    .tech::after {
+        position-anchor: --tech;
+        top: anchor(bottom);
+        left: anchor(left);
+        right: auto;
+        bottom: auto;
+        margin: 6px 0;
+        position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+    }
+}
 
 /* A column whose figure sits at the foot, so a label that wraps onto two lines does not push its figure
    below the figures of the tiles beside it. */
@@ -295,7 +322,11 @@ button, .button {
 button:hover, .button:hover { border-color: var(--accent); color: var(--accent); }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .tile img, .tile .noimg { border-bottom: 1px solid var(--line); }
-button.danger:hover { border-color: var(--warn); color: var(--warn); }
+
+/* An action that throws something away is marked before it is pointed at, not only on hover: the warning
+   colour at rest, and its own 8% tint under the pointer - the failure notice's pair (ADR 0039). */
+button.danger { border-color: var(--warn); color: var(--warn); }
+button.danger:hover { border-color: var(--warn); color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, var(--panel)); }
 
 /*
     Filled rather than outlined, so the pair reads at a glance without being compared. Used where the two
@@ -303,9 +334,11 @@ button.danger:hover { border-color: var(--warn); color: var(--warn); }
 */
 button.go { background: var(--go); border-color: var(--go); color: #fff; }
 button.stop { background: var(--stop); border-color: var(--stop); color: #fff; }
-/* The three filled buttons darken identically on hover; outlined buttons recolour their border instead. */
-button.go:hover, button.stop:hover { opacity: .9; color: #fff; }
-button.primary:hover { opacity: .9; color: var(--on-accent); }
+/* The three filled buttons darken identically on hover; outlined buttons recolour their border instead.
+   A filter, not opacity: opacity let the page through and lightened them, and light --go fell to 4.42:1. */
+button.go:hover, button.stop:hover { color: #fff; }
+button.primary:hover { color: var(--on-accent); }
+button.primary:hover, button.go:hover, button.stop:hover { filter: brightness(.9); }
 button:disabled { opacity: .5; cursor: default; }
 
 .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
@@ -426,7 +459,7 @@ td input[type=text], td select, .actions input[type=number] {
     text-align: left;
 }
 .collapse-toggle:hover { border-color: transparent; color: var(--accent); }
-.collapse-toggle .chevron { font-size: 11px; color: var(--muted); }
+.collapse-toggle .chevron { font-size: 15px; line-height: 1; color: var(--muted); }
 .collapse-toggle .collapse-summary { font-size: 13px; font-weight: 400; }
 
 /* Shut, the panel is just its heading - so the rule below it would be a line under nothing. */
@@ -721,11 +754,11 @@ html:has(.lightbox) { overflow: hidden; }
 
 /*
     The picture's own box scrolls, so zooming past the screen pans instead of stretching the overlay. It
-    carries the focus as well, which is what lets the arrow keys pan it without a handler - so its focus
-    ring is suppressed, since the ring would frame the whole screen and say nothing.
+    carries the focus as well, which is what lets the arrow keys pan it without a handler. A keyboard user
+    sees the ring, drawn inside the stage's edge; a click that opened the viewer draws none.
 */
 .lightboxstage { flex: 1 1 auto; overflow: auto; }
-.lightboxstage:focus { outline: none; }
+.lightboxstage:focus-visible { outline-offset: -3px; }
 
 /*
     Two modes, and never both at once. Fitted is what the viewer opens at and what `Fit to screen` returns
@@ -768,10 +801,43 @@ html:has(.lightbox) { overflow: hidden; }
 
 dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: 4px 18px; margin: 0; }
 dl.meta dt { color: var(--muted); }
-dl.meta dd { margin: 0; word-break: break-all; }
+/* Breaks only a token too long for the line - a path, a hash - rather than splitting every word anywhere. */
+dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 
 .muted { color: var(--muted); }
 .paths { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+/*
+    The banner Blazor raises when the connection behind an interactive page drops - a restart, a network
+    blip. App.razor supplies the element, so Blazor only switches these classes on it and the look is
+    ours: a card at the foot of the screen in the page's own colours, rather than the framework's grey
+    sheet over everything. Each message shows only in its own state.
+*/
+#components-reconnect-modal {
+    display: none;
+    position: fixed;
+    z-index: 20;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    max-width: 480px;
+    margin-inline: auto;
+    padding: 12px 16px;
+    background: var(--panel);
+    color: var(--ink);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+#components-reconnect-modal.components-reconnect-show,
+#components-reconnect-modal.components-reconnect-failed,
+#components-reconnect-modal.components-reconnect-rejected { display: block; }
+#components-reconnect-modal > p { display: none; margin: 0; }
+#components-reconnect-modal > .reconnect-failed,
+#components-reconnect-modal > .reconnect-rejected { color: var(--warn); }
+#components-reconnect-modal.components-reconnect-show > .reconnect-show,
+#components-reconnect-modal.components-reconnect-failed > .reconnect-failed,
+#components-reconnect-modal.components-reconnect-rejected > .reconnect-rejected { display: block; }
 
 /*
     Phones and narrow windows. The desktop layout is a fixed 220px sidebar beside the content, which on a
@@ -804,8 +870,12 @@ dl.meta dd { margin: 0; word-break: break-all; }
     .brandbar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; }
     .brand { padding: 0 16px; }
 
-    .menubutton {
+    .menubutton { display: block; }
+
+    /* The summary is the button. Its own disclosure triangle is dropped - the three bars say "menu". */
+    .menubutton > summary {
         display: block;
+        list-style: none;
         padding: 2px 16px;
         font-size: 24px;
         line-height: 1;
@@ -813,20 +883,19 @@ dl.meta dd { margin: 0; word-break: break-all; }
         cursor: pointer;
         user-select: none;
     }
-
-    /* Visually hidden rather than display:none, so the menu can still be opened from a keyboard. */
-    .menutoggle { display: block; position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+    .menubutton > summary::-webkit-details-marker { display: none; }
     /* Inset: the button reaches the screen's right edge, where an outside outline loses its right side. */
-    .menutoggle:focus-visible + .brandbar .menubutton { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .menubutton > summary:focus-visible { outline-offset: -2px; }
 
     /* Hidden until the button is pressed, then a list down the screen - scrolled inside itself if the
-       phone is too short to show all of it, so the page underneath does not scroll away. 60px is the
-       name row with the sidebar's padding; dvh follows a mobile browser's toolbar where vh does not.
+       phone is too short to show all of it, so the page underneath does not scroll away. 60px is the 55px
+       bar the menu hangs from plus a few pixels' gap at the screen's foot; dvh follows a mobile browser's
+       toolbar where vh does not.
        Absolute against the sticky bar, so it always drops OVER the page: in the flow it pushed the page
        down at the top and overlaid it once scrolled, since a stuck bar's growth no longer moves anything. */
     .nav { display: none; }
 
-    .menutoggle:checked ~ .nav {
+    .sidebar:has(.menubutton[open]) > .nav {
         display: block;
         position: absolute;
         top: 100%;
@@ -888,6 +957,15 @@ dl.meta dd { margin: 0; word-break: break-all; }
     .actions button, .actions .button { flex: 1 1 auto; text-align: center; min-height: 40px; }
 
     th, td { padding: 6px 8px; }
+
+    /* A tag, assembly or upload table cannot hold three or four columns across a phone - it scrolled
+       sideways inside its panel and showed one. Each row becomes a short block of its cells instead. */
+    .tagdump thead { display: none; }
+    .tagdump table, .tagdump tbody { display: block; }
+    .tagdump tr { display: block; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .tagdump tr:last-child { border-bottom: none; }
+    .tagdump td, .tagdump td.num { display: block; padding: 1px 0; border: none; text-align: left; }
+    .tagdump td.tagvalue { max-width: none; overflow-wrap: anywhere; }
 
     .searchform, .fieldpair { grid-template-columns: 1fr; gap: 0; }
     .field select { width: 100%; }

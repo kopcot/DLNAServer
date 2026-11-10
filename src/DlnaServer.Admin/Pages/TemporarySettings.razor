@@ -30,7 +30,8 @@
         <p class="muted">They are hidden.</p>
 
         <div class="actions">
-            <input id="showMinutes" type="number" min="@MinMinutes" max="@MaxMinutes" @bind="_minutes" style="width:80px" />
+            <input id="showMinutes" type="number" min="@MinMinutes" max="@MaxMinutes" @bind="_minutes" style="width:80px"
+                   aria-label="How many minutes to show the hidden folders for" />
             <span class="muted">minute(s)</span>
             <button class="primary" @onclick="Show">Show now</button>
         </div>
@@ -63,6 +64,7 @@
 
         <div class="actions">
             <input id="tooltipMinutes" type="number" min="@MinMinutes" max="@MaxMinutes"
+                   aria-label="How many minutes to show where values come from"
                    @bind="_tooltipMinutes" style="width:80px" />
             <span class="muted">minute(s)</span>
             <button class="primary" @onclick="ShowTooltips">Show now</button>
