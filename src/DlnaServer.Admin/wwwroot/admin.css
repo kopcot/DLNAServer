@@ -259,6 +259,7 @@ h2 { font-size: 17px; font-weight: 650; margin: 28px 0 12px; }
     margin-inline: auto;
     width: max-content;
     max-width: min(320px, calc(100vw - 32px));
+    overflow-wrap: anywhere;
     padding: 6px 9px;
     border: 1px solid var(--line);
     border-radius: var(--radius-control);
@@ -289,8 +290,26 @@ h2 { font-size: 17px; font-weight: 650; margin: 28px 0 12px; }
         right: auto;
         bottom: auto;
         margin: 6px 0;
-        position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+        position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --tech-across-below, --tech-across-above;
     }
+}
+
+/* The last resort, for a phone: a note too wide to start at the value or to end at it spans the screen
+   instead, still directly under (or over) the value. */
+@position-try --tech-across-below {
+    top: anchor(bottom);
+    bottom: auto;
+    left: 16px;
+    right: 16px;
+    margin: 6px auto;
+}
+
+@position-try --tech-across-above {
+    top: auto;
+    bottom: anchor(top);
+    left: 16px;
+    right: 16px;
+    margin: 6px auto;
 }
 
 /* A column whose figure sits at the foot, so a label that wraps onto two lines does not push its figure
@@ -534,8 +553,14 @@ td input[type=text], td select, .actions input[type=number] {
    none below when it is the last thing in its card. */
 .actions + .notice { margin-top: 12px; }
 .panel > .notice:last-child, .savebar > .notice { margin-bottom: 0; }
+/* A refused save joins every reason into one message; capped, so on a phone it cannot cover the screen the
+   operator has to scroll to reach the field it names. */
+.savebar > .notice { max-height: 30vh; overflow-y: auto; }
 
-/* Settings' Save bar and its message, held at the foot of the screen - see the comment in Settings.razor. */
+/* Settings' Save bar and its message, held at the foot of the screen - see the comment in Settings.razor.
+   The scroll padding keeps a field the keyboard moves to from ending up underneath the bar: the bar is about
+   65px without a message, and focusing only scrolls far enough to bring the field just inside the edge. */
+html:has(.savebar) { scroll-padding-bottom: 96px; }
 .savebar {
     position: sticky;
     bottom: 0;
@@ -831,6 +856,8 @@ dl.meta dd { margin: 0; overflow-wrap: anywhere; }
 
 .muted { color: var(--muted); }
 .paths { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+/* A folder path in a heading or a line of its own is one long token: on a phone it ran out of its card. */
+.panel > h2, p.paths { overflow-wrap: anywhere; }
 
 /*
     The banner Blazor raises when the connection behind an interactive page drops - a restart, a network

@@ -50,20 +50,22 @@
             </FieldPair>
 
             <FieldPair>
-                @* Bound as text and parsed here: bound to an int, a decimal like 1.5 failed to parse and was
-                   dropped without a word, and the search ran with no size filter at all. *@
+                @* Text boxes, bound as text and parsed here. Bound to an int, a decimal like 1.5 failed to parse
+                   and was dropped without a word, and the search ran with no size filter at all. Not type=number
+                   either: a number box hands over an empty value for anything it cannot parse itself - "1e",
+                   "12abc", "1,5" in a comma-decimal locale - which would read as no filter just the same. *@
                 <FormField Label="Size from (MB)" For="minSize" Error="@WholeNumberError(_criteria.MinSizeText)">
-                    <input id="minSize" type="number" min="0" step="1" @bind="_criteria.MinSizeText" />
+                    <input id="minSize" type="text" inputmode="numeric" @bind="_criteria.MinSizeText" />
                 </FormField>
 
                 <FormField Label="Size to (MB)" For="maxSize" Error="@WholeNumberError(_criteria.MaxSizeText)">
-                    <input id="maxSize" type="number" min="0" step="1" @bind="_criteria.MaxSizeText" />
+                    <input id="maxSize" type="text" inputmode="numeric" @bind="_criteria.MaxSizeText" />
                 </FormField>
             </FieldPair>
 
             <FormField Label="Video at least this wide (pixels)" For="minWidth" Error="@WholeNumberError(_criteria.MinWidthText)">
                 <ChildContent>
-                    <input id="minWidth" type="number" min="0" step="1" @bind="_criteria.MinWidthText" />
+                    <input id="minWidth" type="text" inputmode="numeric" @bind="_criteria.MinWidthText" />
                 </ChildContent>
                 <Hint>Only finds files whose details have already been read.</Hint>
             </FormField>
@@ -379,8 +381,8 @@
     /// A non-negative whole number in plain digits, or nothing when the box is empty.
     /// </summary>
     /// <remarks>
-    /// <see cref="NumberStyles.None"/>: no sign, no decimal point, no exponent - a number box still
-    /// accepts <c>1.5</c> and <c>1e3</c>, and either must be refused rather than read as something else.
+    /// <see cref="NumberStyles.None"/>: no sign, no decimal point, no exponent - the box takes whatever is
+    /// typed, and <c>1.5</c>, <c>1e3</c> or <c>-2</c> must be refused rather than read as something else.
     /// </remarks>
     internal static bool TryParseWholeNumber(string? text, out int? value)
     {

@@ -12,8 +12,8 @@ namespace DlnaServer.Admin.Shared
         [LoggerMessage(
             EventId = 1,
             Level = LogLevel.Debug,
-            Message = "Compatibility profile '{Profile}' cleared: type {Mime} does not offer it")]
-        private static partial void LogProfileCleared(ILogger logger, string profile, DlnaMime mime);
+            Message = "Compatibility profile '{Profile}' of type {PreviousMime} cleared: type {Mime} does not offer it")]
+        private static partial void LogProfileCleared(ILogger logger, string profile, DlnaMime previousMime, DlnaMime mime);
 
         [LoggerMessage(
             EventId = 2,

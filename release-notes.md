@@ -12,7 +12,7 @@ worth telling you about is added to the version it belongs to.
 
 **The admin pages have a new look.** They now share the colours and shapes of the server's own icon - the one your television shows in its list of sources and your browser shows on the tab - and that icon sits beside the server's name at the top of the menu, so the pages and the server are easy to recognise as the same thing. Sections are soft cards on a quiet grey page, the page you are on is marked in the icon's light blue, and the pages follow your device's light or dark setting. Text, links and buttons are easier to read in both, and a keyboard now shows clearly where it is on every page.
 
-**Pausing televisions moved to Temporary.** *Television traffic* - *Block* televisions for 1 to 72 hours, and *Unblock now* - is now on the *Temporary* settings page instead of *Maintenance*, beside the other settings that lapse on their own and are forgotten when the server restarts. It works as before: televisions are refused while the server keeps announcing itself, so it stays in their list of sources. The Dashboard's notice that televisions are paused links to it.
+**Pausing televisions moved to Temporary.** *Television traffic* - *Block* televisions for 1 to 72 hours, and *Unblock now* - is now on the *Temporary* settings page instead of *Maintenance*, beside the other settings that lapse on their own and are forgotten when the server restarts. It works as before: televisions are refused, and the server keeps announcing itself on the network meanwhile. The Dashboard's notice that televisions are paused links to it.
 
 Nothing else moved: every other page, button and setting is where it was, televisions see the same server, and upgrading costs nothing.
 
