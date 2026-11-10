@@ -809,9 +809,13 @@ that renders wrongly rather than an error:
   without rendering everything first. So a row may not wrap: `.scroller` forces
   `white-space: nowrap` + `text-overflow: ellipsis` on paths and folder links, with the full text in a
   `title`. The constants are **measured from the rendered page**, not derived
-  (32.5 paths, 41.5 Library folder, 59.5 folder-search result), and each is commented with the CSS it has
+  (33 paths, 41.5 Library folder, 59.5 folder-search result), and each is commented with the CSS it has
   to stay in step with. A wrong value still works - the component measures and corrects - at the cost of a
-  second render and, on a reload, a scroll position showing the wrong rows.
+  second render and, on a reload, a scroll position showing the wrong rows. **A row must measure the same
+  at every width, too:** the paths row was 32.5 against a drawn 33 on a desktop and 31 on a phone, because
+  the phone layout narrows `th, td` padding - `.scroller table.paths td` pins its own since 2026-11-10. And
+  in a table, `border-collapse: collapse` splits each rule between the two rows it separates, so the first
+  row is half a pixel short of the rest; that table draws separate borders for exactly this reason.
 - **The scroll container needs a real height**, which the page's own scroll does not give it: `.scroller`
   is `max-height: 60vh; overflow-y: auto`. `max-height` rather than `height`, so a two-row list does not
   sit in a tall empty box. `tabindex="-1"` is required or keyboard scrolling silently does nothing in

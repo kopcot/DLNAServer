@@ -74,9 +74,10 @@
     /// Measured from the rendered table rather than derived, and it has to stay in step with the padding
     /// and font size of <c>table.paths td</c>. Too small and the first render puts rows outside the
     /// visible region, which costs a second render and can leave the scroll position showing the wrong
-    /// rows on a reload.
+    /// rows on a reload. <c>.scroller table.paths td</c> pins that padding and line height at every
+    /// width, so the row measures 33px on a phone as well as on a desktop.
     /// </remarks>
-    private const float PathRowHeight = 32.5f;
+    private const float PathRowHeight = 33f;
 
     private ServedFileCacheReport _report = null!;
 

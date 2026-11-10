@@ -599,6 +599,12 @@ td input[type=text], td select, .actions input[type=number] {
     text-overflow: ellipsis;
 }
 
+/* The served-paths row is FileCache's ItemSize: 18px of 12px text, 14px of padding and the 1px rule, 33px.
+   Pinned here, outranking the phone layout's narrower th/td padding, so the row is 33px at every width; and
+   separate borders, because collapsed ones split each rule between two rows and the first came out 32.5. */
+.scroller table.paths { border-collapse: separate; border-spacing: 0; }
+.scroller table.paths td { padding: 7px 10px; line-height: 18px; }
+
 .folders { list-style: none; margin: 0 0 6px; padding: 0; }
 /* Virtualize stacks content rows vertically, which needs block rather than list-item. */
 .folders li { display: block; }
