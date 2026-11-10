@@ -41,7 +41,7 @@ question needs settling, and write nothing into it.
 > them and is gone. On 2026-10-26 the standing decisions moved again, one file each, into `docs/ADR/` - numbered as they were, so standing decision *N* is ADR *N*, padded to four digits, - and section 7b keeps the open work and the traps.
 >
 > **State.** Running on the NAS, working set 563.4 MB → **177.7 MB** after the memory pass, a television
-> plays from it, **1,111 tests at 0 warnings**, no vulnerable packages. **The NAS runs the current product
+> plays from it, **1,189 tests at 0 warnings**, no vulnerable packages. **The NAS runs the current product
 > version**: `http://192.168.1.200:26853/admin/about` reported `1.1.0926` on 2026-09-27, started from
 > `T:\apps\Dlna-server`. See "Where things stand" in docs/decisions.md section 8. Three `/review-all --full`
 > passes and a deduplication pass have run and everything they raised is closed except the items listed
@@ -109,6 +109,7 @@ src/DlnaServer.Host/          the only executable; nothing references it
 tests/DlnaServer.UnitTests/         NUnit + FluentAssertions
 tests/DlnaServer.IntegrationTests/  real components wired through DI - no host, no WebApplicationFactory
 tests/DlnaServer.ArchitectureTests/ NetArchTest - layering and the entity/DTO boundary
+tests/DlnaServer.UiTests/           Selenium + headless Chrome against the real Host process - Linux CI only
 ```
 
 **Startup database handling.** A missing database is created from migrations; a corrupt one (failing

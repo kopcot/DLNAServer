@@ -27,7 +27,7 @@ comment still means section 7b - only the file it lives in has changed.
 | --- | --- |
 | Approach | Redesign; Reference is a behavioural spec, not a code template |
 | Target framework | `net8.0` (QNAP has the .NET 8.0 runtime installed — confirmed) |
-| Structure | Layered `src/` projects + 3 test projects |
+| Structure | Layered `src/` projects + 4 test projects |
 | Admin UI | Blazor Server, in-process, on its own Kestrel port |
 | Wire compatibility | Byte-identical, golden-file tested |
 | Config | `config.json`, `IOptionsMonitor` hot-reload, clean restart path |
@@ -660,6 +660,8 @@ The boundary that stays: anything provable without a host still goes in `DlnaSer
 host test that duplicates an existing one earns nothing and costs startup on every run. The two
 convention documents are updated when the tests land, not before.
 
+**The first host-level tests landed on 2026-11-10 as admin UI tests**, in `tests/DlnaServer.UiTests`: Selenium and headless Chrome against the Host started as its own process, not through `WebApplicationFactory` - see [ADR 0038](ADR/0038-admin-ui-tests-drive-the-real-host.md). The convention documents name the fourth project; their "no host" line still describes `DlnaServer.IntegrationTests`.
+
 ### Assembly version - bump it on EVERY change
 
 Asked for on 2026-09-15 and binding from then on: **every change to this project bumps the assembly
@@ -1159,6 +1161,8 @@ something: `GetPendingProcessingAsync` skips a suppressed row.
   `DatabaseInitializer` its reset signal touched ten call sites in one fixture. Not a reason to avoid it -
   just budget for it, and remember `TryAddSingleton` in the module keeps the tests' own containers working
   without letting the module's default shadow the host's instance.
+- **An interactive admin page is drawn twice, and a UI test has to survive the second drawing.** The prerendered page arrives first; when the Blazor circuit attaches, its first interactive render replaces the DOM. An element found before that is stale (the `<h1>` read failed this way), a click lands on a page that does nothing yet, and text typed into an input is thrown away - so a search typed too early runs with no criteria and finds everything. `AdminBrowser.ActUntil` repeats the whole action, re-finding each element, and every check it waits for rules out the wrong outcome as well (the other file absent, the saved value read back), never just "something happened". Found 2026-11-10 (ADR 0038).
+- **On a desktop-wide window the preview page's full-screen button covers the photo link.** The link is the phone layout's way to the photo page, so a click on it is intercepted; the UI test opens its address instead.
 
 ### Local development environment, as left on 2026-09-02
 
@@ -1449,6 +1453,8 @@ piece of work rather than an afternoon - start from these rather than re-derivin
   real folders.
 
 Ten to twenty tests remains the right size. `Microsoft.AspNetCore.Mvc.Testing` is already referenced.
+
+**Update 2026-11-10:** the admin pages are now covered from outside the process ([ADR 0038](ADR/0038-admin-ui-tests-drive-the-real-host.md)), which avoids the first two obstacles - a separate process has real Kestrel on real ports and its own working directory - and meets the third halfway: the scanner and the watcher point at a temporary tree, but SSDP still advertises on the network while the run lasts. HTTP-level host tests through `WebApplicationFactory` - routing, port filters, status codes and headers a renderer receives - are still unwritten, and these three obstacles still apply to them.
 
 **Two measurements are owed and neither can be taken from a development machine:**
 

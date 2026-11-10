@@ -68,13 +68,16 @@ so several of those conventions are enforced rather than merely documented.
 
 ## Tests
 
-Add or update tests with the change. The three projects split by what they need:
+Add or update tests with the change. The four projects split by what they need:
 
 | Project | For |
 | --- | --- |
 | `DlnaServer.UnitTests` | a type in isolation |
 | `DlnaServer.IntegrationTests` | real components wired through DI - no host, no `WebApplicationFactory` |
 | `DlnaServer.ArchitectureTests` | layering and the entity/DTO boundary |
+| `DlnaServer.UiTests` | the admin pages in headless Chrome, against the real Host started as its own process |
+
+`DlnaServer.UiTests` needs Chrome installed; Selenium Manager, inside the Selenium package, finds or downloads the matching driver. The run starts one Host on two free ports with a temporary `config.json`, database and media tree, all deleted afterwards - but its logs go to the Host's own `bin` folder, and it advertises itself over SSDP as *ZEN DLNA Server (UI tests)* while it runs, so a television on the same network can see it until the run stops it. A run killed from outside - the test host stopped from the IDE - leaves the Host and chromedriver running; end them by hand. Skip the project with `--filter "FullyQualifiedName!~DlnaServer.UiTests"`, which is what CI's Windows leg does ([ADR 0038](ADR/0038-admin-ui-tests-drive-the-real-host.md)). The tests find elements by tag, id, link address and visible text, never by CSS class, so restyling the admin UI does not break them - keep it that way.
 
 **A green build is not verification for a configuration-shaped change.** MSBuild properties,
 `runtimeconfig` entries, middleware and registration order have almost no test coverage - a wrong one

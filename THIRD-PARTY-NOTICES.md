@@ -41,6 +41,7 @@ Not part of any deployment. Listed for completeness.
 | NUnit | 4.6.1 | MIT |
 | NUnit.Analyzers | 4.15.0 | MIT |
 | NUnit3TestAdapter | 6.3.0 | MIT |
+| Selenium.WebDriver | 4.52.0 | Apache-2.0 |
 | coverlet.collector | 10.0.1 | MIT |
 
 ## Two that are not simply permissive

@@ -37,6 +37,7 @@ COPY src/DlnaServer.Host/DlnaServer.Host.csproj                 src/DlnaServer.H
 COPY tests/DlnaServer.UnitTests/DlnaServer.UnitTests.csproj                 tests/DlnaServer.UnitTests/
 COPY tests/DlnaServer.IntegrationTests/DlnaServer.IntegrationTests.csproj   tests/DlnaServer.IntegrationTests/
 COPY tests/DlnaServer.ArchitectureTests/DlnaServer.ArchitectureTests.csproj tests/DlnaServer.ArchitectureTests/
+COPY tests/DlnaServer.UiTests/DlnaServer.UiTests.csproj                     tests/DlnaServer.UiTests/
 COPY src/DlnaServer.Core/packages.lock.json                     src/DlnaServer.Core/
 COPY src/DlnaServer.Persistence/packages.lock.json              src/DlnaServer.Persistence/
 COPY src/DlnaServer.Media/packages.lock.json                    src/DlnaServer.Media/
@@ -46,6 +47,7 @@ COPY src/DlnaServer.Host/packages.lock.json                     src/DlnaServer.H
 COPY tests/DlnaServer.UnitTests/packages.lock.json                          tests/DlnaServer.UnitTests/
 COPY tests/DlnaServer.IntegrationTests/packages.lock.json                   tests/DlnaServer.IntegrationTests/
 COPY tests/DlnaServer.ArchitectureTests/packages.lock.json                  tests/DlnaServer.ArchitectureTests/
+COPY tests/DlnaServer.UiTests/packages.lock.json                            tests/DlnaServer.UiTests/
 
 RUN dotnet restore DlnaServer.sln --locked-mode
 

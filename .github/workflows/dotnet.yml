@@ -62,11 +62,17 @@ jobs:
       - name: Build
         run: dotnet build DlnaServer.sln --configuration Release --no-restore -warnaserror
 
+      # The admin UI tests drive headless Chrome and run on Linux only: the Windows leg is here for path
+      # handling, which they do not exercise, so it filters them out (ADR 0038).
       - name: Test
+        shell: bash
+        env:
+          TEST_FILTER: ${{ runner.os == 'Windows' && 'FullyQualifiedName!~DlnaServer.UiTests' || '' }}
         run: >
           dotnet test DlnaServer.sln
           --configuration Release
           --no-build
+          ${TEST_FILTER:+--filter "$TEST_FILTER"}
           --logger "trx;LogFileName=test-results.trx"
           --logger "console;verbosity=normal"
           --collect:"XPlat Code Coverage"

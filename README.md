@@ -13,7 +13,7 @@ today keep working. The internals are new.
 > are a dated snapshot.
 >
 > **Deployed and measured.** This build runs on the NAS, its working set fell from 563.4 MB to
-> **177.7 MB** under the memory pass, and a television plays from it. 798 tests at 0 warnings, no
+> **177.7 MB** under the memory pass, and a television plays from it. 1,189 tests at 0 warnings, no
 > vulnerable packages, no open Majors. What is still owed is a *steady-state* memory reading — the
 > 177.7 MB was taken 255 s after a restart — and confirmation on a real television of the four DIDL
 > fields added on 2026-09-06.
@@ -62,7 +62,7 @@ On a phone the menu folds behind a button: [phone menu](docs/screenshots/phone-m
 | `src/DlnaServer.Upnp` | SSDP, `description.xml`, SCPD, SOAP services, DIDL-Lite. No EF, no HTTP. |
 | `src/DlnaServer.Admin` | Blazor Server admin UI, as a Razor Class Library. |
 | `src/DlnaServer.Host` | The ASP.NET Core host. The only executable; nothing references it. |
-| `tests/` | Unit, architecture and integration projects - see [Architecture](docs/architecture.md). |
+| `tests/` | Unit, architecture, integration and admin UI projects - see [Architecture](docs/architecture.md). |
 
 The dependency directions and the entity/DTO boundary are enforced by `tests/DlnaServer.ArchitectureTests`,
 so a violation fails the build rather than a review.

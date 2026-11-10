@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Version>1.1.1110</Version>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit.Analyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Selenium.WebDriver" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+    <Using Include="FluentAssertions" />
+  </ItemGroup>
+
+  <!-- Build order only: the tests start the Host as its own process from its own output folder and talk
+       to it over HTTP, so nothing of it is loaded here. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DlnaServer.Host\DlnaServer.Host.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <!-- Where that output folder is, in the configuration this project is built in - Release in CI, Debug on
+       a dev box - so AdminHost never guesses. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>HostAssemblyPath</_Parameter1>
+      <_Parameter2>$(MSBuildThisFileDirectory)../../src/DlnaServer.Host/bin/$(Configuration)/net8.0/DlnaServer.Host.dll</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

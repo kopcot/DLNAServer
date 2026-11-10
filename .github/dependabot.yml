@@ -23,6 +23,7 @@ updates:
           - "FluentAssertions"
           - "coverlet.*"
           - "NetArchTest.*"
+          - "Selenium.*"
       # SkiaSharp and its native assets move together, always - see Directory.Packages.props.
       skiasharp:
         patterns:

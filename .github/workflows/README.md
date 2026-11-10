@@ -10,7 +10,7 @@ comment, and Dependabot keeps those pins current. The traps that shaped them are
 
 | Workflow | Runs on | What it does | Needs more than read? |
 | --- | --- | --- | --- |
-| [`dotnet.yml`](dotnet.yml) | push and PR to `main`; nightly via `full-suite.yml` | Formatting check, Release build at 0 warnings, all tests on Linux **and** Windows, coverage summary on the run page | no |
+| [`dotnet.yml`](dotnet.yml) | push and PR to `main`; nightly via `full-suite.yml` | Formatting check, Release build at 0 warnings, all tests on Linux **and** Windows - the admin UI tests on Linux only - coverage summary on the run page | no |
 | [`docker.yml`](docker.yml) | push and PR to `main` when anything the image reads changed; manual; nightly | Builds the image, starts it with host networking, smoke tests it, scans it with Trivy | no |
 | CodeQL *default setup* - no file here | push and PR to `main`; weekly | CodeQL analysis of the C# and of these workflow files, with the *Extended* query suite | configured in **Settings → Code security** |
 | [`dependency-review.yml`](dependency-review.yml) | PR to `main` | Lists packages and actions a PR adds or removes | no |
@@ -30,6 +30,8 @@ the restore. It runs on Windows as well as Linux because the development box is 
 is where the two differ. Formatting and the coverage summary run on Linux only; the sources and the tests
 are the same on both. Coverage appears as the run's **job summary** - GitHub's own reporting, so there is
 no Codecov account or token to look after - and the raw results are kept as an artifact for 14 days.
+
+The admin UI tests in `DlnaServer.UiTests` run on Linux only too: they drive headless Chrome and exercise pages, not paths, so the Windows leg filters them out with `FullyQualifiedName!~DlnaServer.UiTests` ([ADR 0038](../../docs/ADR/0038-admin-ui-tests-drive-the-real-host.md)). `release.yml` runs on Linux and tests the whole solution, so a release runs them as well.
 
 `docker.yml` runs only when something the image build reads changed, so a documentation-only change skips
 it. The build uses a Buildx layer cache, so the restore layer is only redone when a project file changes.
