@@ -43,7 +43,7 @@ jobs:
       # global.json pins the SDK band the NAS runs, so CI resolves the same one rather than whatever
       # the runner happens to carry.
       - name: Setup .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
 
@@ -76,7 +76,7 @@ jobs:
       # One runner is enough: the same tests cover the same code on both.
       - name: Summarise coverage
         if: runner.os == 'Linux'
-        uses: danielpalme/ReportGenerator-GitHub-Action@d3ebf1f760f7d8ab92cc44d9bcfee7ad73722a31 # 5.5.11
+        uses: danielpalme/ReportGenerator-GitHub-Action@861674232075b2c6bd1405a04c4bb9b150653e81 # 5.5.12
         with:
           reports: TestResults/**/coverage.cobertura.xml
           targetdir: TestResults/coverage-report
