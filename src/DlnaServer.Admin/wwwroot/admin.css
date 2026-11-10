@@ -374,7 +374,7 @@ button:disabled { opacity: .5; cursor: default; }
 .field textarea { width: 100%; }
 
 /* The controls that sit in an editable table row or a row of buttons rather than in a FormField - the
-   subtitle languages, the two type maps, the minute and hour boxes on Temporary settings and Maintenance - get the same box, or they arrive as
+   subtitle languages, the two type maps, the minute and hour boxes on Temporary settings - get the same box, or they arrive as
    the browser's own and are the only thing on the page that does not match. */
 td input[type=text], td select, .actions input[type=number] {
     font: inherit;

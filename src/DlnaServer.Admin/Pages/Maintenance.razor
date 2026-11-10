@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @inherits AdminPageBase
 @inject IMediaFileRepository Files
-@inject IApiBlocker Blocker
 @inject ISubscriptionStore Subscriptions
 @inject IRestartSignal RestartSignal
 @inject IHostApplicationLifetime Lifetime
@@ -84,30 +83,6 @@
     </p>
 </Panel>
 
-<Panel Heading="Television traffic">
-    @if (Blocker.IsBlocked)
-    {
-        <p>
-            Blocked until @Fmt.Clock(Blocker.BlockedUntilUtc).
-            <span class="muted">@Blocker.Reason</span>
-        </p>
-        <div class="actions"><button @onclick="Unblock">Unblock now</button></div>
-    }
-    else
-    {
-        <p class="muted">
-            Stops answering televisions for a while, so maintenance can run without them reconnecting
-            part-way through. These pages keep working throughout.
-        </p>
-        <div class="actions">
-            <input id="blockHours" type="number" min="1" max="72" @bind="_blockHours" style="width:80px"
-                   aria-label="How many hours to block televisions for" />
-            <span class="muted">hour(s)</span>
-            <button @onclick="Block">Block</button>
-        </div>
-    }
-</Panel>
-
 <Panel Heading="Subscriptions">
     @if (_subscriptions.Count == 0)
     {
@@ -178,24 +153,8 @@
 </Panel>
 
 @code {
-    /// <summary>
-    /// Bounds for the block duration, matching the <c>min</c> and <c>max</c> on the input.
-    /// </summary>
-    /// <remarks>
-    /// The input's own attributes are decoration: there is no <c>EditForm</c> behind it, so they style an
-    /// invalid value and submit it anyway. <c>0</c> reached
-    /// <c>ArgumentOutOfRangeException.ThrowIfNegativeOrZero</c> inside <c>Block</c> and a large value
-    /// overflowed <c>TimeSpan.FromHours</c> - either way the page was lost and the message never set,
-    /// so the operator saw a failure with no explanation. Clamped here instead, which is also what the
-    /// route constraint on <c>/manage/block/{hours:int:min(1):max(72)}</c> already enforces.
-    /// </remarks>
-    private const int MinBlockHours = 1;
-    private const int MaxBlockHours = 72;
-    private const int DefaultBlockHours = 1;
-
     private IReadOnlyList<EventSubscription> _subscriptions = [];
     private bool _busy;
-    private int _blockHours = DefaultBlockHours;
     private int _directoryCount;
     private bool _periodicRescan;
     private int _rescanIntervalMinutes;
@@ -352,23 +311,6 @@
                 Message = $"Cleared the details of {metadata} file(s) and {thumbnails} preview(s).";
             },
             "The details and previews could not be cleared.");
-    }
-
-    private void Block()
-    {
-        // Clamped, not validated: the input's min/max are decoration without an EditForm behind them.
-        var hours = Math.Clamp(_blockHours, MinBlockHours, MaxBlockHours);
-
-        _blockHours = hours;
-
-        Blocker.Block(TimeSpan.FromHours(hours), $"Paused for {hours} hour(s) from these pages");
-        Message = $"Televisions are paused for {hours} hour(s).";
-    }
-
-    private void Unblock()
-    {
-        Blocker.Release();
-        Message = "Televisions are being answered again.";
     }
 
     private void Restart()

@@ -2382,7 +2382,7 @@ pages use under Library - rather than a panel on the Settings page, so that ever
 Settings is written by its Save button and everything on this page is not. `Settings`' own `NavLink` gained
 `Match="NavLinkMatch.All"` for the same reason Library's has it: without it the parent stays highlighted on
 the child page. It is the home for anything similar later - note that Maintenance's "Television traffic"
-block is the same class of setting and is the obvious candidate to move here.
+block is the same class of setting and is the obvious candidate to move here. (Done 2026-11-10 - section 6zb.)
 
 **Verified against the running server**, on a three-file library with `Private` temporarily hidden:
 `/manage/database` counted all 3 files including the hidden one; a SOAP `Browse` of the root returned
@@ -3565,3 +3565,12 @@ Asked for as four workflows: build and test, dependency review, a container buil
 - **Virtualize row heights were measured after the change and are unchanged** - 41.5 Library folder, 59.5 folder search. The Recently-served path rows measure 33 (31 on a phone) against an `ItemSize` of 32.5, and did so on the base stylesheet too: pre-existing, left alone.
 - **The README screenshots were retaken** on a generated demo library at `C:\DemoMedia`, the same neutral path as before, with `FriendlyName` set and About left out.
 - Major bump on the maintainer's decision ("reskinning application mean a new major version 2.0"): `DlnaServer.Host` and `DlnaServer.Admin` to `2.0.1110`, release notes `## 2.0`, `.github/SECURITY.md` supports `2.0.x` only. No other project changed. UI tests 23/23 three times; nothing in them had to change.
+
+## 6zb. Fixes on the 2.0 restyle, from its review and a click-through in Chrome (2026-11-10, `2.0.1110`)
+
+The restyle's `/review-all` raised no blocker; the maintainer took every suggestion, and a click-through of every page in Chrome at desktop and phone width, light and dark, found what reading the code had not. All of it landed under the same version.
+
+- **The Recently-served path row is exactly its `ItemSize` at every width** - 33px, pinned in CSS. It drew 33 on a desktop and 31 on a phone against an `ItemSize` of 32.5, and collapsed table borders made the first row half a pixel shorter than the rest (section 7, *Virtualization*).
+- **Review polish:** `button.danger` gained a resting style; the filled buttons darken with `filter: brightness(.9)` on hover instead of the `opacity` that lightened them (light `--go` had fallen to 4.42:1); a `--navy` token; the phone menu is a `details` disclosure rather than a hidden checkbox; the lightbox stage draws a keyboard focus ring; the number inputs that had no name have one. Contrast of the new pairs is in ADR 0039.
+- **Click-through findings:** provenance tooltips are anchored to their value with CSS anchor positioning - `position: fixed` with no offsets had kept them where the value was when the page was laid out, so they vanished on scrolling; the reconnect banner is supplied by `App.razor` and drawn in the page's colours; a `.tagdump` table stacks on a phone; `dl.meta` breaks only over-long tokens; the collapse chevron is larger.
+- **Television traffic moved from Maintenance to Temporary settings**, on the maintainer's call ("it will block traffic only temporary for set of time"): it lapses after 1 to 72 hours and is never written to `config.json`, the same class of setting as the two already there - the move section 6l anticipated. The menu is unchanged. The page logs each block and unblock, a UI test drives *Block* and *Unblock now* with a tear-down that unblocks, Help names the button correctly (*Block*, not *Pause televisions*) and says the server keeps announcing itself over SSDP while televisions get 503, and the Dashboard's paused notice links to the page.

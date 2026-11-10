@@ -10,11 +10,17 @@ namespace DlnaServer.UiTests
         private static readonly By _showHidden = By.XPath($"{HiddenFoldersPanel}//button[normalize-space()='Show now']");
         private static readonly By _hideHidden = By.XPath($"{HiddenFoldersPanel}//button[normalize-space()='Hide now']");
 
+        private const string TelevisionTrafficPanel = "//h2[normalize-space()='Television traffic']/..";
+
+        private static readonly By _block = By.XPath($"{TelevisionTrafficPanel}//button[normalize-space()='Block']");
+        private static readonly By _unblock = By.XPath($"{TelevisionTrafficPanel}//button[normalize-space()='Unblock now']");
+
         private static AdminBrowser Browser => UiTestSetup.Browser;
 
         /// <remarks>
-        /// The hidden-folder switch is process-wide, so it is put back whatever the test did - a failure half
-        /// way through would otherwise leave every later listing showing the hidden folders.
+        /// The hidden-folder switch and the television block are process-wide, so both are put back whatever
+        /// the test did - a failure half way through would otherwise leave every later listing showing the
+        /// hidden folders, or the shared Host refusing televisions for an hour.
         /// </remarks>
         [TearDown]
         public void TearDown()
@@ -32,6 +38,14 @@ namespace DlnaServer.UiTests
                         action: () => Browser.Driver.FindElement(_hideHidden).Click(),
                         done: () => !Browser.IsPresent(by: _hideHidden),
                         because: "the hidden folders are hidden again for the tests that follow");
+                }
+
+                if (Browser.IsPresent(by: _unblock))
+                {
+                    Browser.ActUntil(
+                        action: () => Browser.Driver.FindElement(_unblock).Click(),
+                        done: () => !Browser.IsPresent(by: _unblock),
+                        because: "televisions are answered again for the tests that follow");
                 }
             }
         }
@@ -89,6 +103,27 @@ namespace DlnaServer.UiTests
                 action: () => Browser.Driver.FindElement(_hideHidden).Click(),
                 done: () => Browser.IsDisplayed(by: _showHidden) && !Browser.IsPresent(by: _hideHidden),
                 because: "hiding the folders again puts the panel back in its starting state");
+        }
+
+        [Test]
+        public void BlockTelevisions_ThenUnblock_TogglesBack()
+        {
+            // Arrange
+            var blockedUntil = By.XPath($"{TelevisionTrafficPanel}//p[starts-with(normalize-space(), 'Blocked until')]");
+            Browser.Open(path: "/admin/settings/temporary");
+            Browser.ActUntil(
+                action: () => Browser.Driver.FindElement(_block).Click(),
+                done: () => Browser.IsDisplayed(by: _unblock) && Browser.IsDisplayed(by: blockedUntil)
+                    && !Browser.IsPresent(by: _block),
+                because: "Block stops answering televisions, says until when, and offers Unblock now instead");
+
+            // Act
+            // Assert
+            Browser.ActUntil(
+                action: () => Browser.Driver.FindElement(_unblock).Click(),
+                done: () => Browser.IsDisplayed(by: _block) && !Browser.IsPresent(by: _unblock)
+                    && !Browser.IsPresent(by: blockedUntil),
+                because: "unblocking answers televisions again and puts the panel back in its starting state");
         }
     }
 }

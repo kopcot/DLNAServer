@@ -55,8 +55,8 @@ Render mode: **I** = `InteractiveServer` (a SignalR circuit), **S** = static ser
 | `/admin/upload` | `Upload` | S | - | Add files | Choose the files | DataTable, FormField, Notice, PageHeader, Panel |
 | `/admin/cache` | `FileCache` | I | APB | Recently served files | (pinned stats); Files in memory (N) | Notice, PageHeader, Panel, Scroller, StatGrid, StatTile |
 | `/admin/settings` | `Settings` | I | - | Settings | Server; Library; Uploads; Previews; File types (c); Subtitle types (c); Recently served files (c); Compatibility (c); Database (c) | CheckField, CollapsiblePanel, ExtensionMapEditor, FormField, Notice, PageHeader, Panel, SubtitleTypeEditor |
-| `/admin/settings/temporary` | `TemporarySettings` | I | - | Temporary settings | Show temporarily hidden folders; Show where each value comes from | Notice, PageHeader, Panel |
-| `/admin/maintenance` | `Maintenance` | I | APB | Maintenance | Look for changes now; Rebuild details and previews; All metadata read from files; Television traffic; Subscriptions; Rebuild from scratch; Server | ConfirmActionPair, DataTable, MetaList, MetaRow, Notice, PageHeader, Panel, Provenance |
+| `/admin/settings/temporary` | `TemporarySettings` | I | - | Temporary settings | Show temporarily hidden folders; Show where each value comes from; Television traffic | Notice, PageHeader, Panel |
+| `/admin/maintenance` | `Maintenance` | I | APB | Maintenance | Look for changes now; Rebuild details and previews; All metadata read from files; Subscriptions; Rebuild from scratch; Server | ConfirmActionPair, DataTable, MetaList, MetaRow, Notice, PageHeader, Panel, Provenance |
 | `/admin/help` | `Help` | S | - | Help | twelve topic panels, from *What this server is* to *Where things are kept* | PageHeader, Panel |
 | `/admin/about` | `About` | S | - | About | This server; What your televisions are told; Copyright; Getting started | DataTable, MetaList, MetaRow, PageHeader, Panel |
 
@@ -75,8 +75,8 @@ directly:
 | Settings | three `textarea`s, `.checks` / `.checkrow` / `.verdict` for the folder checks, `.advanced-heading`, `button.primary` |
 | Upload | the one plain `<form method="post" enctype="multipart/form-data">`, radio buttons, `input#files[type=file]`, `.checks`, `.tagdump` |
 | FileCache | `Virtualize` over the served paths, `button.danger` |
-| Maintenance | `input[type=number]`, `.paths` |
-| TemporarySettings | two `input[type=number]` minute boxes inside `.actions` |
+| Maintenance | `.paths` |
+| TemporarySettings | two `input[type=number]` minute boxes and the `input#blockHours` hours box, each inside `.actions` |
 | About | `.tagdump` / `.tagvalue` |
 
 ## Shared components (`Shared/`, 28)
@@ -146,6 +146,7 @@ and structure, never on a styling class, so a reskin is free to change classes -
 | A panel's `h2` is a direct child of the panel, so `//h2[…]/..` reaches its buttons | `Panel` | `MaintenancePageTest`, `SettingsPagesTest` |
 | *Server* panel: *Restart server* → *Confirm restart* / *Cancel* | Maintenance (`ConfirmActionPair`) | `MaintenancePageTest` |
 | *Show temporarily hidden folders* panel: *Show now* / *Hide now* | TemporarySettings | `SettingsPagesTest` |
+| *Television traffic* panel: *Block* → *Unblock now*, and a `p` starting *Blocked until* while blocked | TemporarySettings | `SettingsPagesTest` |
 | "Uploading is switched off" in `main` and no `input[type='file']` while uploads are off | Upload | `UploadPageTest` |
 | No error in the browser console; an interactive page logs `blazor.web.js`'s *WebSocket connected* once its circuit attaches | every page; `App.razor` loads `blazor.web.js` | every fixture's tear-down; `AdminPagesTest`, `LibraryPagesTest` wait for the circuit |
 

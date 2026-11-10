@@ -195,10 +195,19 @@
         from nothing and every file gets a <strong>new identifier</strong> - so a television's own
         bookmarks and recently-played list will point at nothing. Last resort.
     </p>
+</Panel>
+
+<Panel Heading="Temporary settings, and pausing televisions">
     <p>
-        <strong>Pause televisions</strong> stops answering renderers for a number of hours. These pages
+        Everything on <a href="/admin/settings/temporary">Temporary</a> lapses on its own after the time
+        you choose, is never written to the settings file, and is forgotten when the server restarts.
+    </p>
+    <p>
+        <strong>Block</strong>, under <em>Television traffic</em>, stops answering televisions for 1 to 72
+        hours - a television asking for a folder or a file is told the server is unavailable. These pages
         keep working throughout, which is the point: it is how you get the machine quiet without stopping
-        the server.
+        the server. The server keeps announcing itself on the network meanwhile, so it stays in each
+        television's list of sources. <strong>Unblock now</strong> ends it early.
     </p>
 </Panel>
 

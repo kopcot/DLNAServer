@@ -2,7 +2,9 @@
 @rendermode InteractiveServer
 @inject ITemporaryFolderVisibility Visibility
 @inject ITechnicalTooltips Tooltips
+@inject IApiBlocker Blocker
 @inject IMediaFormatter Fmt
+@inject ILogger<TemporarySettings> Logger
 
 <PageHeader Title="Temporary settings">
     Settings that apply the moment you press the button and are <strong>not</strong> written to your
@@ -76,12 +78,59 @@
     </p>
 </Panel>
 
+@* Here rather than on Maintenance, since 2026-11-10: like the two above it lapses on its own after the
+   period chosen and is never written to config.json, so it is the same class of setting. *@
+<Panel Heading="Television traffic">
+    @if (Blocker.IsBlocked)
+    {
+        <p>
+            Blocked until @Fmt.Clock(Blocker.BlockedUntilUtc).
+            <span class="muted">@Blocker.Reason</span>
+        </p>
+        <div class="actions"><button @onclick="Unblock">Unblock now</button></div>
+    }
+    else
+    {
+        <p class="muted">
+            Stops answering televisions for a while, so maintenance can run without them reconnecting
+            part-way through. These pages keep working throughout.
+        </p>
+        <div class="actions">
+            <input id="blockHours" type="number" min="@MinBlockHours" max="@MaxBlockHours" @bind="_blockHours"
+                   style="width:80px" aria-label="How many hours to block televisions for" />
+            <span class="muted">hour(s)</span>
+            <button @onclick="Block">Block</button>
+        </div>
+    }
+
+    <p class="muted">
+        While blocked, a television asking for a folder or a file is told the server is unavailable. The
+        server still announces itself on the network, so it stays in the television's list of sources.
+    </p>
+</Panel>
+
 @code {
     private const int MinMinutes = 1;
     private const int MaxMinutes = 1440;
 
+    /// <summary>
+    /// Bounds for the block duration, matching the <c>min</c> and <c>max</c> on the input.
+    /// </summary>
+    /// <remarks>
+    /// The input's own attributes are decoration: there is no <c>EditForm</c> behind it, so they style an
+    /// invalid value and submit it anyway. <c>0</c> reached
+    /// <c>ArgumentOutOfRangeException.ThrowIfNegativeOrZero</c> inside <c>Block</c> and a large value
+    /// overflowed <c>TimeSpan.FromHours</c> - either way the page was lost and the message never set,
+    /// so the operator saw a failure with no explanation. Clamped here instead, which is also what the
+    /// route constraint on <c>/manage/block/{hours:int:min(1):max(72)}</c> already enforces.
+    /// </remarks>
+    private const int MinBlockHours = 1;
+    private const int MaxBlockHours = 72;
+    private const int DefaultBlockHours = 1;
+
     private int _minutes = 15;
     private int _tooltipMinutes = 15;
+    private int _blockHours = DefaultBlockHours;
     private string? _message;
 
     /// <remarks>
@@ -117,5 +166,29 @@
     {
         Tooltips.Disable();
         _message = "Values no longer show where they come from.";
+    }
+
+    private void Block()
+    {
+        // Clamped, not validated: the input's min/max are decoration without an EditForm behind them.
+        var hours = Math.Clamp(_blockHours, MinBlockHours, MaxBlockHours);
+
+        if (hours != _blockHours)
+        {
+            LogBlockHoursClamped(Logger, _blockHours, hours);
+        }
+
+        _blockHours = hours;
+
+        Blocker.Block(TimeSpan.FromHours(hours), $"Paused for {hours} hour(s) from these pages");
+        LogTelevisionsBlocked(Logger, hours, Blocker.BlockedUntilUtc);
+        _message = $"Televisions are paused for {hours} hour(s).";
+    }
+
+    private void Unblock()
+    {
+        Blocker.Release();
+        LogTelevisionsUnblocked(Logger);
+        _message = "Televisions are being answered again.";
     }
 }
