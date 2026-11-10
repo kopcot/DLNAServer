@@ -174,7 +174,7 @@
       "dlnaserver.persistence": {
         "type": "Project",
         "dependencies": {
-          "DlnaServer.Core": "[1.1.1026, )",
+          "DlnaServer.Core": "[1.1.1110, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[9.0.22, )",
           "SQLitePCLRaw.lib.e_sqlite3": "[3.53.3, )"
         }
