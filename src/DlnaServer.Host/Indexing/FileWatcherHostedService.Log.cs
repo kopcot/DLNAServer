@@ -67,5 +67,19 @@ namespace DlnaServer.Host.Indexing
             Message = "Ignored a {Kind} change to '{Path}' (renamed from '{OldPath}', for a rename): it is the "
                 + "server's own database or settings file, or a backup of one, which no scan can index")]
         private partial void LogIgnoredServerFileChange(FileChangeKind kind, string path, string? oldPath);
+
+        [LoggerMessage(
+            EventId = 9,
+            Level = LogLevel.Information,
+            Message = "Source folder(s) {Folders} are now present with something in them and watched; a full scan "
+                + "is requested so the files already there are indexed")]
+        private partial void LogSourceFoldersRecovered(string folders);
+
+        [LoggerMessage(
+            EventId = 10,
+            Level = LogLevel.Debug,
+            Message = "{Count} source folder(s) are still missing, empty or unreadable; the watch is left as it is "
+                + "and checked again in a minute")]
+        private partial void LogSourceFoldersStillNotReady(int count);
     }
 }

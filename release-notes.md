@@ -24,6 +24,8 @@ A VobSub subtitle's `.idx` file added beside its `.sub` is noticed as soon as it
 
 **Security fix: previews no longer follow links.** Previews are kept in a `.@__thumb` folder inside your media folders, so anyone able to write to the share could put a link there under a preview's name, and the server would overwrite - or read and serve as a preview - whatever file the link pointed at, with the server's own permissions. A preview, or a preview folder, that is a link is now left alone and the log says which one; remove the link to have the preview made.
 
+**A share that mounts late is picked up by itself.** When a media folder was missing at start-up - or was the empty mount point of a share that had not mounted yet - the server watched it again once it appeared, but did not look at the files already in it, so they stayed out of the library until the next scan or a restart. It now checks such a folder every minute and scans the library as soon as it is there with something in it.
+
 If a page still shows the old look after the upgrade, reload it - the browser may be holding on to the previous version's styles.
 
 ## 1.3

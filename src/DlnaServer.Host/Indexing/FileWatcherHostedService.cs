@@ -105,6 +105,7 @@ namespace DlnaServer.Host.Indexing
         private readonly TimeProvider _timeProvider;
         private readonly IDatabaseReadySignal _readySignal;
         private readonly ServerOwnedFiles _serverOwnedFiles;
+        private readonly ISourceFolderChecker _sourceFolders;
         private readonly ILogger<FileWatcherHostedService> _logger;
 
         /// <summary>
@@ -153,6 +154,11 @@ namespace DlnaServer.Host.Indexing
         private IReadOnlyList<string> _attached = [];
         private long _lastAttachTimestamp;
 
+        // The source folders that attached AND were present with something in them when the watch was
+        // built. A folder that attached empty may be the bare mountpoint of a share that is not mounted
+        // yet, and a watch on that sees nothing once the share mounts over it.
+        private HashSet<string> _readyRoots = new(StringComparer.Ordinal);
+
         public FileWatcherHostedService(
             IFileSystemChangeWatcher watcher,
             IServiceScopeFactory scopeFactory,
@@ -160,6 +166,7 @@ namespace DlnaServer.Host.Indexing
             TimeProvider timeProvider,
             IDatabaseReadySignal readySignal,
             ServerOwnedFiles serverOwnedFiles,
+            ISourceFolderChecker sourceFolders,
             ILogger<FileWatcherHostedService> logger)
         {
             _watcher = watcher;
@@ -168,6 +175,7 @@ namespace DlnaServer.Host.Indexing
             _timeProvider = timeProvider;
             _readySignal = readySignal;
             _serverOwnedFiles = serverOwnedFiles;
+            _sourceFolders = sourceFolders;
             _logger = logger;
         }
 
@@ -183,6 +191,7 @@ namespace DlnaServer.Host.Indexing
                 // loop it is guarded by had started.
                 _watched = ReadWatchTargets();
                 _attached = _watcher.Start(_watched.SourceFolders, _watched.ExcludeFolders);
+                _readyRoots = FindReadyRoots(_watched.SourceFolders);
             }
             catch (Exception exception)
             {
@@ -267,12 +276,24 @@ namespace DlnaServer.Host.Indexing
             // have noticed. Retried on an interval rather than every tick, because tearing
             // every watcher down twice a second while a share stays unmounted is its own
             // outage. Not while a fault is backing off: that wait is the longer one.
+            // A folder that attached empty is retried too, but rebuilt only once it has filled: tearing
+            // every watcher down each minute for a folder that is meant to be empty would lose events.
             var isRetryDue = !_isFaultRestartPending
-                && _attached.Count < current.SourceFolders.Length
+                && _readyRoots.Count < current.SourceFolders.Length
                 && _timeProvider.GetElapsedTime(_lastAttachTimestamp) >= _unwatchedRetryInterval;
+            var isRetryOnly = !faulted && isRetryDue && current.Matches(_watched);
 
             if (!faulted && !isRetryDue && current.Matches(_watched))
             {
+                return;
+            }
+
+            if (isRetryOnly
+                && _attached.Count >= current.SourceFolders.Length
+                && FindReadyRoots(current.SourceFolders).IsSubsetOf(_readyRoots))
+            {
+                _lastAttachTimestamp = _timeProvider.GetTimestamp();
+                LogSourceFoldersStillNotReady(current.SourceFolders.Length - _readyRoots.Count);
                 return;
             }
 
@@ -303,6 +324,38 @@ namespace DlnaServer.Host.Indexing
 
             _isFaultRestartPending = false;
             LogWatchRebuilt(faulted);
+
+            var wasReady = _readyRoots;
+            _readyRoots = FindReadyRoots(current.SourceFolders);
+
+            // Files that were already there when a late share mounted raise no event, so only a full pass
+            // finds them. A fault or a configuration change asks for its own pass; a retry has to ask here.
+            var recovered = _readyRoots.Except(wasReady).ToList();
+
+            if (isRetryOnly && recovered.Count > 0)
+            {
+                LogSourceFoldersRecovered(string.Join(", ", recovered));
+                _watcher.RequestResync();
+            }
+        }
+
+        /// <summary>
+        /// The source folders that attached and are present with something in them.
+        /// </summary>
+        private HashSet<string> FindReadyRoots(string[] sourceFolders)
+        {
+            var ready = new HashSet<string>(StringComparer.Ordinal);
+            var checks = _sourceFolders.Check(sourceFolders);
+
+            for (var index = 0; index < checks.Count; index++)
+            {
+                if (checks[index].IsSafeToReconcile && _attached.Contains(checks[index].Path, StringComparer.Ordinal))
+                {
+                    _ = ready.Add(checks[index].Path);
+                }
+            }
+
+            return ready;
         }
 
         /// <summary>

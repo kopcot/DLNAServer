@@ -30,6 +30,7 @@ namespace DlnaServer.IntegrationTests
 
         private MutableTimeProvider _time = null!;
         private FakeChangeWatcher _watcher = null!;
+        private FakeSourceFolderChecker _sourceFolders = null!;
         private RecordingIndexer _indexer = null!;
         private ServiceProvider _provider = null!;
         private DlnaOptions _options = null!;
@@ -40,6 +41,7 @@ namespace DlnaServer.IntegrationTests
         {
             _time = new MutableTimeProvider(_start);
             _watcher = new FakeChangeWatcher();
+            _sourceFolders = new FakeSourceFolderChecker();
             _indexer = new RecordingIndexer();
 
             var services = new ServiceCollection();
@@ -59,6 +61,7 @@ namespace DlnaServer.IntegrationTests
                 new ServerOwnedFiles(
                     configurationPath: InMediaRoot("config.json"),
                     databaseConnectionString: $"Data Source={InMediaRoot("dlna.sqlite")};Pooling=True"),
+                _sourceFolders,
                 NullLogger<FileWatcherHostedService>.Instance);
         }
 
@@ -303,6 +306,74 @@ namespace DlnaServer.IntegrationTests
                 + "and the one-minute retry for an unattached folder must not cut that short");
         }
 
+        /// <summary>
+        /// A QNAP share that fails to mount leaves its mountpoint as an empty folder, which attaches - and a
+        /// watch on it sees nothing once the share mounts over it.
+        /// </summary>
+        [Test]
+        public void RefreshWatch_WhenAnEmptySourceFolderFills_RebuildsAndRequestsAFullPass()
+        {
+            // Arrange - the watch is built while the folder is the bare mountpoint.
+            _sourceFolders.IsEmpty = true;
+            _service.RefreshWatch();
+
+            _time.Advance(TimeSpan.FromSeconds(61));
+            _service.RefreshWatch();
+
+            var restartsWhileEmpty = _watcher.Restarts;
+
+            // Act - the share mounts.
+            _sourceFolders.IsEmpty = false;
+            _time.Advance(TimeSpan.FromSeconds(61));
+            _service.RefreshWatch();
+
+            // Assert
+            restartsWhileEmpty.Should().Be(1,
+                "because a folder that stays empty must not tear every watcher down each minute");
+            _watcher.Restarts.Should().Be(2,
+                "because the watch on the bare mountpoint has to be rebuilt onto the mounted share");
+            _watcher.Resyncs.Should().Be(1,
+                "because the files already on the share raise no event, so only a full pass finds them");
+        }
+
+        [Test]
+        public void RefreshWatch_WhenAMissingSourceFolderAttachesLater_RequestsAFullPass()
+        {
+            // Arrange - the folder is not there when the watch is built.
+            _watcher.AttachNothing = true;
+            _sourceFolders.IsMissing = true;
+            _service.RefreshWatch();
+
+            // Act - it appears, and the retry a minute later attaches it.
+            _watcher.AttachNothing = false;
+            _sourceFolders.IsMissing = false;
+            _time.Advance(TimeSpan.FromSeconds(61));
+            _service.RefreshWatch();
+
+            _time.Advance(TimeSpan.FromSeconds(61));
+            _service.RefreshWatch();
+
+            // Assert
+            _watcher.Restarts.Should().Be(2, "because the retry stops once the folder is watched");
+            _watcher.Resyncs.Should().Be(1,
+                "because one pass indexes what the folder held when it appeared, and it is asked for once");
+        }
+
+        [Test]
+        public void RefreshWatch_ForAConfigurationChange_LeavesThePassToTheConfigurationChange()
+        {
+            // Arrange
+            _service.RefreshWatch();
+
+            // Act
+            _options.Library.SourceFolders = ["/share/Media", "/share/Music"];
+            _service.RefreshWatch();
+
+            // Assert
+            _watcher.Resyncs.Should().Be(0,
+                "because only the late-folder retry has nothing else to ask for the pass it needs");
+        }
+
         [Test]
         public void RefreshWatch_ARebuildForAConfigurationChange_SatisfiesAFaultThatWasBackingOff()
         {
@@ -531,6 +602,10 @@ namespace DlnaServer.IntegrationTests
 
             public bool IsRestartRequested { get; set; }
 
+            public bool AttachNothing { get; set; }
+
+            public int Resyncs { get; private set; }
+
             public IReadOnlyList<string> Restart(
                 IReadOnlyList<string> sourceFolders,
                 IReadOnlyList<string> excludedFolderNames)
@@ -539,7 +614,9 @@ namespace DlnaServer.IntegrationTests
 
                 return FailRestart
                     ? throw new IOException("the inotify watch limit is exhausted")
-                    : [.. sourceFolders];
+                    : AttachNothing
+                        ? []
+                        : [.. sourceFolders];
             }
 
             public bool ConsumeResyncRequest()
@@ -557,6 +634,24 @@ namespace DlnaServer.IntegrationTests
 
             public void RequestResync()
             {
+                Resyncs++;
+            }
+        }
+
+        private sealed class FakeSourceFolderChecker : ISourceFolderChecker
+        {
+            public bool IsEmpty { get; set; }
+
+            public bool IsMissing { get; set; }
+
+            public IReadOnlyList<SourceFolderCheck> Check(IReadOnlyCollection<string> paths)
+            {
+                return [.. paths.Select(path => new SourceFolderCheck
+                {
+                    Path = path,
+                    Problem = IsMissing ? "No such folder." : null,
+                    IsEmpty = IsEmpty,
+                })];
             }
         }
     }
