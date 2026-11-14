@@ -212,13 +212,13 @@ namespace DlnaServer.UiTests
         /// </remarks>
         private static bool IsInheritedHostSetting(string key)
         {
-            var name = WithoutHostPrefix(key: key, prefix: "ASPNETCORE_")
+            var withoutPrefix = WithoutHostPrefix(key: key, prefix: "ASPNETCORE_")
                 ?? WithoutHostPrefix(key: key, prefix: "DOTNET_");
-            var setting = (name ?? key).Replace("__", ":", StringComparison.Ordinal);
+            var setting = (withoutPrefix ?? key).Replace("__", ":", StringComparison.Ordinal);
 
             return setting.StartsWith("Dlna:", StringComparison.OrdinalIgnoreCase)
                 || setting.StartsWith("Kestrel:", StringComparison.OrdinalIgnoreCase)
-                || (name is not null && name.Equals("URLS", StringComparison.OrdinalIgnoreCase));
+                || (withoutPrefix is not null && withoutPrefix.Equals("URLS", StringComparison.OrdinalIgnoreCase));
         }
 
         private static string? WithoutHostPrefix(

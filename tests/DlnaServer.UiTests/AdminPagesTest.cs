@@ -9,7 +9,7 @@ namespace DlnaServer.UiTests
 
         // Whether a page attaches a Blazor circuit after prerendering, which is what can die unseen.
         private const bool Interactive = true;
-        private const bool Prerendered = false;
+        private const bool Static = false;
 
         private static readonly By _heading = By.TagName("h1");
 
@@ -30,9 +30,9 @@ namespace DlnaServer.UiTests
         [TestCase("/admin/settings", "Settings", Interactive)]
         [TestCase("/admin/settings/temporary", "Temporary settings", Interactive)]
         [TestCase("/admin/maintenance", "Maintenance", Interactive)]
-        [TestCase("/admin/help", "Help", Prerendered)]
-        [TestCase("/admin/about", "About", Prerendered)]
-        [TestCase("/admin/upload", "Add files", Prerendered)]
+        [TestCase("/admin/help", "Help", Static)]
+        [TestCase("/admin/about", "About", Static)]
+        [TestCase("/admin/upload", "Add files", Static)]
         public void Open_EachAdminPage_RendersItsHeadingWithoutTheErrorBoundary(
             string path,
             string heading,
