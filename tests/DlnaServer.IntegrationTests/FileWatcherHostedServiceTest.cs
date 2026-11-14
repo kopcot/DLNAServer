@@ -24,6 +24,8 @@ namespace DlnaServer.IntegrationTests
     [TestFixture]
     internal sealed class FileWatcherHostedServiceTest
     {
+        private const string MediaRoot = "/share/Media";
+
         private static readonly DateTimeOffset _start = new(2026, 9, 8, 12, 0, 0, TimeSpan.Zero);
 
         private MutableTimeProvider _time = null!;
@@ -54,6 +56,9 @@ namespace DlnaServer.IntegrationTests
                 new StaticOptionsMonitor<DlnaOptions>(_options),
                 _time,
                 new DatabaseReadySignal(),
+                new ServerOwnedFiles(
+                    configurationPath: InMediaRoot("config.json"),
+                    databaseConnectionString: $"Data Source={InMediaRoot("dlna.sqlite")};Pooling=True"),
                 NullLogger<FileWatcherHostedService>.Instance);
         }
 
@@ -62,6 +67,12 @@ namespace DlnaServer.IntegrationTests
         {
             _service.Dispose();
             _provider.Dispose();
+        }
+
+        // Full, as the watch reports paths: on Windows a rooted path without a drive gains one.
+        private static string InMediaRoot(string name)
+        {
+            return Path.GetFullPath(Path.Combine(MediaRoot, name));
         }
 
         private void Raise(string path)
@@ -365,6 +376,7 @@ namespace DlnaServer.IntegrationTests
         [TestCase("/share/Media/film.en.srt", FileChangeKind.CreatedOrChanged, null)]
         [TestCase("/share/Media/Mr. Robot", FileChangeKind.Deleted, null)]
         [TestCase("/share/Media/film.mkv.bak", FileChangeKind.Renamed, "/share/Media/film.mkv")]
+        [TestCase("/share/Media/film.idx", FileChangeKind.CreatedOrChanged, null)]
         public async Task ScanIfDueAsync_AfterAChangeThatCanReachTheIndex_Scans(string path, FileChangeKind kind, string? oldPath)
         {
             // Arrange
@@ -379,8 +391,72 @@ namespace DlnaServer.IntegrationTests
 
             // Assert
             scanned.Should().BeTrue(
-                "because media, subtitles, a deleted path that may have been a folder, and a rename away from "
-                + "a media type can all change what the library holds");
+                "because media, subtitles and the VobSub index that types them, a deleted path that may have "
+                + "been a folder, and a rename away from a media type can all change what the library holds");
+        }
+
+        /// <summary>
+        /// SQLite deletes its <c>-wal</c> and <c>-shm</c> whenever the last connection closes, and a delete is
+        /// otherwise always kept - so with the application folder as the library, the pass each delete
+        /// scheduled reopened the database and set up the next one.
+        /// </summary>
+        [TestCase("dlna.sqlite-wal", FileChangeKind.Deleted, null)]
+        [TestCase("dlna.sqlite-shm", FileChangeKind.Deleted, null)]
+        [TestCase("dlna.sqlite-journal", FileChangeKind.Deleted, null)]
+        [TestCase("dlna.sqlite", FileChangeKind.Deleted, null)]
+        [TestCase("config.json", FileChangeKind.Deleted, null)]
+        [TestCase("config.json.saving", FileChangeKind.Deleted, null)]
+        [TestCase("backup/config.json.saved-2026-11-14_1430", FileChangeKind.Deleted, null)]
+        [TestCase("backup/dlna.sqlite.corrupt-2026-11-14_1430", FileChangeKind.Deleted, null)]
+        [TestCase("dlna.sqlite-wal", FileChangeKind.CreatedOrChanged, null)]
+        [TestCase("config.json", FileChangeKind.CreatedOrChanged, null)]
+        [TestCase("config.json", FileChangeKind.Renamed, "config.json.saving")]
+        public async Task ScanIfDueAsync_AfterAnyChangeToTheServersOwnFiles_DoesNotScan(
+            string name,
+            FileChangeKind kind,
+            string? oldName)
+        {
+            // Arrange
+            var oldPath = oldName is null
+                ? null
+                : InMediaRoot(oldName);
+
+            _watcher.Raise(new FileChangeEvent(InMediaRoot(name), oldPath, kind, _time.GetTimestamp()));
+
+            // Act
+            _service.Drain(CancellationToken.None);
+            _time.Advance(TimeSpan.FromSeconds(31));
+            _service.CollectSettled();
+            _time.Advance(TimeSpan.FromSeconds(11));
+            var scanned = await _service.ScanIfDueAsync(cancellationToken: CancellationToken.None);
+
+            // Assert
+            scanned.Should().BeFalse(
+                $"because a {kind} of the server's own '{name}' cannot change the library, whatever kind of change it is");
+            _indexer.Passes.Should().Be(0,
+                "because the pass it would schedule reopens the database and recreates the very files it reacted to");
+        }
+
+        [Test]
+        public async Task ScanIfDueAsync_AfterAMediaFileIsRenamedOntoAServerFileName_Scans()
+        {
+            // Arrange
+            _watcher.Raise(new FileChangeEvent(
+                FullPath: InMediaRoot("config.json"),
+                OldFullPath: InMediaRoot("film.mkv"),
+                Kind: FileChangeKind.Renamed,
+                OccurredTimestamp: _time.GetTimestamp()));
+
+            // Act
+            _service.Drain(CancellationToken.None);
+            _time.Advance(TimeSpan.FromSeconds(31));
+            _service.CollectSettled();
+            _time.Advance(TimeSpan.FromSeconds(11));
+            var scanned = await _service.ScanIfDueAsync(cancellationToken: CancellationToken.None);
+
+            // Assert
+            scanned.Should().BeTrue(
+                "because the film left the library, and only an event whose both ends are the server's own is dropped");
         }
 
         /// <summary>

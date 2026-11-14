@@ -338,6 +338,12 @@ namespace DlnaServer.Host
                 provider.GetRequiredService<TimeProvider>(),
                 provider.GetRequiredService<ILogger<SettingsWriter>>()));
 
+            // The watcher drops every event on these. Built from the two paths the server itself opens, so
+            // it follows DLNA_CONFIG_FILE and a database moved by its connection string.
+            _ = builder.Services.AddSingleton(new ServerOwnedFiles(
+                configurationPath: configurationPath,
+                databaseConnectionString: connectionString));
+
             // Lets the settings page report what each source folder actually is before it is saved, rather
             // than the operator finding out from a server that refuses to start.
             _ = builder.Services.AddSingleton<ISourceFolderChecker, SourceFolderChecker>();

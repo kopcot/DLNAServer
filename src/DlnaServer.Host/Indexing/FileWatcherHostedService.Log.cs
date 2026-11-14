@@ -47,14 +47,25 @@ namespace DlnaServer.Host.Indexing
         private partial void LogWatchKeepsFaulting(int firstDelayMinutes, int maxDelayMinutes);
 
         /// <remarks>
-        /// Trace, not Debug: the database's write-ahead log raises one of these for every write while a
-        /// scan runs, so anything louder would bury the log it is meant to help read.
+        /// Trace, not Debug: with the application folder as the library, the log files raise one of these
+        /// for every line written, so anything louder would bury the log it is meant to help read.
         /// </remarks>
         [LoggerMessage(
             EventId = 7,
             Level = LogLevel.Trace,
-            Message = "Ignored a {Kind} change to '{Path}': the library does not index that file type, so it "
-                + "cannot change what the library holds")]
-        private partial void LogIgnoredChange(FileChangeKind kind, string path);
+            Message = "Ignored a {Kind} change to '{Path}' (renamed from '{OldPath}', for a rename): the library "
+                + "does not index that file type, so it cannot change what the library holds")]
+        private partial void LogIgnoredChange(FileChangeKind kind, string path, string? oldPath);
+
+        /// <remarks>
+        /// Trace for the same reason as <see cref="LogIgnoredChange"/>: the database's write-ahead log changes
+        /// on every write a scan makes.
+        /// </remarks>
+        [LoggerMessage(
+            EventId = 8,
+            Level = LogLevel.Trace,
+            Message = "Ignored a {Kind} change to '{Path}' (renamed from '{OldPath}', for a rename): it is the "
+                + "server's own database or settings file, or a backup of one, which no scan can index")]
+        private partial void LogIgnoredServerFileChange(FileChangeKind kind, string path, string? oldPath);
     }
 }

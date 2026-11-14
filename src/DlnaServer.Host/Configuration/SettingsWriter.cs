@@ -8,6 +8,11 @@ namespace DlnaServer.Host.Configuration
     /// <inheritdoc cref="ISettingsWriter"/>
     internal sealed partial class SettingsWriter : ISettingsWriter, IDisposable
     {
+        /// <summary>
+        /// Appended to the configuration path for the temporary file a save is written to before it is moved into place.
+        /// </summary>
+        internal const string TemporaryFileSuffix = ".saving";
+
         /// <remarks>
         /// Read-mutate-write over a single file, from a singleton two admin circuits can reach at once.
         /// Without this, concurrent saves raced on the same <c>.saving</c> temporary and the later
@@ -52,7 +57,7 @@ namespace DlnaServer.Host.Configuration
 
                 // Written to a temporary file and moved into place: the configuration provider watches this
                 // path, and a partial write would be read as a corrupt file by the very reload it triggers.
-                var temporaryPath = _configurationPath + ".saving";
+                var temporaryPath = _configurationPath + TemporaryFileSuffix;
 
                 await File.WriteAllTextAsync(temporaryPath, json, cancellationToken);
                 File.Move(temporaryPath, _configurationPath, overwrite: true);
