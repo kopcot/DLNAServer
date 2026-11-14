@@ -189,6 +189,107 @@ namespace DlnaServer.IntegrationTests
             File.Exists(second.BackupPath!).Should().BeTrue("because the latest backup is retained");
         }
 
+        /// <summary>
+        /// A new container volume has no config.json, and defaults name no source folder - so the image
+        /// served its own /app until the media folder was set somewhere.
+        /// </summary>
+        [Test]
+        public void EnsureUsable_WhenFileIsMissingAndAnInitialFolderIsGiven_WritesThatFolder()
+        {
+            // Arrange
+            // Act
+            var result = ConfigurationFileGuard.EnsureUsable(
+                filePath: _configPath,
+                timeProvider: TimeProvider.System,
+                initialSourceFolder: "/media");
+
+            // Assert
+            result.Status.Should().Be(ConfigurationFileStatus.Created,
+                "because there was no file to keep");
+            ReadSourceFolders().Should().Equal(["/media"],
+                "because the first file written is the one place the initial folder is used");
+        }
+
+        /// <summary>
+        /// The initial folder is a seed, not an override: once the file exists the Settings page owns it.
+        /// </summary>
+        [Test]
+        public void EnsureUsable_WhenFileExistsAndAnInitialFolderIsGiven_LeavesItUnchanged()
+        {
+            // Arrange
+            const string original = """{ "Dlna": { "Library": { "SourceFolders": [ "/media/Films" ] } } }""";
+            File.WriteAllText(_configPath, original);
+
+            // Act
+            var result = ConfigurationFileGuard.EnsureUsable(
+                filePath: _configPath,
+                timeProvider: TimeProvider.System,
+                initialSourceFolder: "/media");
+
+            // Assert
+            result.Status.Should().Be(ConfigurationFileStatus.Valid,
+                "because a readable file is the operator's");
+            File.ReadAllText(_configPath).Should().Be(original,
+                "because a folder narrowed on the Settings page must survive every later start");
+        }
+
+        /// <summary>
+        /// Only a missing file is seeded. A replaced one had the operator's own folders, which are recovered
+        /// from its backup - not silently swapped for the image's media mount.
+        /// </summary>
+        [Test]
+        public void EnsureUsable_WhenFileIsUnusableAndAnInitialFolderIsGiven_DoesNotWriteIt()
+        {
+            // Arrange
+            File.WriteAllText(_configPath, "{ not json");
+
+            // Act
+            var result = ConfigurationFileGuard.EnsureUsable(
+                filePath: _configPath,
+                timeProvider: TimeProvider.System,
+                initialSourceFolder: "/media");
+
+            // Assert
+            result.Status.Should().Be(ConfigurationFileStatus.Replaced,
+                "because the file could not be parsed");
+            ReadSourceFolders().Should().BeEmpty(
+                "because the seed is for the first file only, and the replacement keeps the old defaults");
+        }
+
+        [Test]
+        public void EnsureUsable_WhenFileIsMissingAndNoInitialFolderIsGiven_WritesNoFolder()
+        {
+            // Arrange
+            // Act
+            _ = ConfigurationFileGuard.EnsureUsable(
+                filePath: _configPath,
+                timeProvider: TimeProvider.System,
+                initialSourceFolder: null);
+            var bound = new ConfigurationBuilder()
+                .AddJsonFile(_configPath, optional: false, reloadOnChange: false)
+                .Build()
+                .GetSection(DlnaOptions.SectionName)
+                .Get<DlnaOptions>()!;
+            DlnaOptionsDefaults.Apply(bound);
+
+            // Assert
+            ReadSourceFolders().Should().BeEmpty(
+                "because outside the image nothing names a folder, as before");
+            bound.Library.SourceFolders.Should().Equal([AppContext.BaseDirectory],
+                "because with no folder written the application-folder fallback still applies");
+        }
+
+        private string[] ReadSourceFolders()
+        {
+            var bound = new ConfigurationBuilder()
+                .AddJsonFile(_configPath, optional: false, reloadOnChange: false)
+                .Build()
+                .GetSection(DlnaOptions.SectionName)
+                .Get<DlnaOptions>();
+
+            return bound is null ? [] : [.. bound.Library.SourceFolders];
+        }
+
         private JsonElement? ReadSection()
         {
             using var document = JsonDocument.Parse(File.ReadAllText(_configPath));

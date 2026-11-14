@@ -28,14 +28,24 @@ namespace DlnaServer.Host.Configuration
         /// <summary>
         /// Ensures <paramref name="filePath"/> exists and parses. Replaces it with defaults if it does not.
         /// </summary>
-        public static ConfigurationFileResult EnsureUsable(string filePath, TimeProvider timeProvider)
+        /// <param name="filePath">The configuration file.</param>
+        /// <param name="timeProvider">Dates the backup of a file that had to be replaced.</param>
+        /// <param name="initialSourceFolder">
+        /// The source folder written into a file created because none existed, or null for none. Only that
+        /// first file gets it: an existing file is the operator's, and a replaced one is recovered from its
+        /// backup, so after the first start the Settings page owns the folder.
+        /// </param>
+        public static ConfigurationFileResult EnsureUsable(
+            string filePath,
+            TimeProvider timeProvider,
+            string? initialSourceFolder = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
             ArgumentNullException.ThrowIfNull(timeProvider);
 
             if (!File.Exists(filePath))
             {
-                WriteDefaults(filePath);
+                WriteDefaults(filePath, initialSourceFolder);
 
                 return new ConfigurationFileResult(
                     ConfigurationFileStatus.Created,
@@ -58,7 +68,7 @@ namespace DlnaServer.Host.Configuration
             }
 
             var backupPath = MoveAside(filePath, timeProvider);
-            WriteDefaults(filePath);
+            WriteDefaults(filePath, initialSourceFolder: null);
 
             return new ConfigurationFileResult(
                 ConfigurationFileStatus.Replaced,
@@ -160,7 +170,7 @@ namespace DlnaServer.Host.Configuration
             return backupPath;
         }
 
-        private static void WriteDefaults(string filePath)
+        private static void WriteDefaults(string filePath, string? initialSourceFolder)
         {
             var directory = Path.GetDirectoryName(filePath);
 
@@ -181,6 +191,11 @@ namespace DlnaServer.Host.Configuration
             // gives. Without it the recovered file carried an empty map, and an empty map indexes nothing -
             // so a server recovered from a lost config.json had no media even once its folders were set.
             options.Library.MediaFileExtensions = MediaFileExtensionDefaults.Create();
+
+            if (!string.IsNullOrWhiteSpace(initialSourceFolder))
+            {
+                options.Library.SourceFolders = [initialSourceFolder];
+            }
 
             var defaults = new Dictionary<string, DlnaOptions>(StringComparer.Ordinal)
             {

@@ -54,6 +54,17 @@ namespace DlnaServer.Host
         private const string ConfigurationFileVariable = "DLNA_CONFIG_FILE";
 
         /// <summary>
+        /// Environment variable naming the source folder written into a <c>config.json</c> created because
+        /// none existed.
+        /// </summary>
+        /// <remarks>
+        /// Read on that first write only, so the Settings page owns the folder from then on - unlike a
+        /// <c>Dlna__Library__SourceFolders__0</c> variable, which wins over every save. The image sets it to
+        /// <c>/media</c>, its media mount; without it a new data volume served the application folder.
+        /// </remarks>
+        private const string InitialSourceFolderVariable = "DLNA_INITIAL_SOURCE_FOLDER";
+
+        /// <summary>
         /// Key of the media index connection string in <c>appsettings.json</c>.
         /// </summary>
         private const string DatabaseConnectionName = "DlnaDatabase";
@@ -180,7 +191,11 @@ namespace DlnaServer.Host
             var configurationPath = Environment.GetEnvironmentVariable(ConfigurationFileVariable) is { Length: > 0 } configuredPath
                 ? Path.GetFullPath(configuredPath)
                 : Path.Combine(builder.Environment.ContentRootPath, ConfigurationFileName);
-            var configurationResult = ConfigurationFileGuard.EnsureUsable(configurationPath, TimeProvider.System);
+            var initialSourceFolder = Environment.GetEnvironmentVariable(InitialSourceFolderVariable);
+            var configurationResult = ConfigurationFileGuard.EnsureUsable(
+                configurationPath,
+                TimeProvider.System,
+                initialSourceFolder);
 
             // The guard above only covers startup, and reloadOnChange makes the same parse failure
             // reachable at runtime: FileConfigurationProvider.Load(reload: true) rethrows on the file
@@ -225,7 +240,7 @@ namespace DlnaServer.Host
             // Reported here, not from a hosted service: options validation runs first and throws on a
             // bad configuration, so a warning raised later would never be seen - precisely when the
             // operator most needs to know their config was replaced.
-            ReportConfiguration(startupLogger, configurationResult);
+            ReportConfiguration(startupLogger, configurationResult, initialSourceFolder);
             ReportSourceFolderFallback(startupLogger, builder.Configuration);
 
             _ = builder.Services.AddSingleton(restartSignal);
@@ -560,7 +575,10 @@ namespace DlnaServer.Host
             }
         }
 
-        private static void ReportConfiguration(Serilog.Core.Logger logger, ConfigurationFileResult result)
+        private static void ReportConfiguration(
+            Serilog.Core.Logger logger,
+            ConfigurationFileResult result,
+            string? initialSourceFolder)
         {
             switch (result.Status)
             {
@@ -580,6 +598,16 @@ namespace DlnaServer.Host
                         + "under Dlna - the reference server's flat file is not compatible. The file has "
                         + "been left exactly as it is.",
                         result.FilePath);
+                    break;
+
+                case ConfigurationFileStatus.Created when !string.IsNullOrWhiteSpace(initialSourceFolder):
+                    logger.Information(
+                        "No configuration file found. Wrote defaults to {FilePath}, with {SourceFolder} as the "
+                        + "source folder from {Variable}. Change it on the Settings page - the variable is "
+                        + "not read again once the file exists.",
+                        result.FilePath,
+                        initialSourceFolder,
+                        InitialSourceFolderVariable);
                     break;
 
                 case ConfigurationFileStatus.Created:

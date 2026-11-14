@@ -124,6 +124,10 @@ ENV ConnectionStrings__DlnaDatabase="Data Source=/data/dlna.sqlite;Pooling=True;
     # a missing one is written with defaults on the first start.
     DLNA_CONFIG_FILE=/data/config.json \
     #
+    # Written as the source folder into that first config.json only, so a new volume serves the media mount
+    # rather than /app, and the Settings page owns the folder from then on. An existing file is never touched.
+    DLNA_INITIAL_SOURCE_FOLDER=/media \
+    #
     # Blazor Server's circuits use data protection, whose keys default to $HOME/.aspnet and are therefore
     # lost with the container - the framework warns about exactly this at startup. Pointing HOME at the
     # data volume persists them, so the admin UI survives a `docker compose up -d` without every open
@@ -149,8 +153,9 @@ ENV ConnectionStrings__DlnaDatabase="Data Source=/data/dlna.sqlite;Pooling=True;
 EXPOSE 26852 26853
 
 # Readiness on the media port, the surface a television uses: 200 only once the database has migrated and
-# config.json has validated, 503 otherwise - a process that merely answers says neither. It is 503 as well
-# while television traffic is blocked from Temporary settings. start-period covers a first migration.
+# config.json has validated, 503 otherwise - a process that merely answers says neither. A television-traffic
+# block from Temporary settings leaves it answering, so a block never marks the container unhealthy.
+# start-period covers a first migration.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
     CMD curl --fail --silent --show-error --max-time 8 \
         "http://127.0.0.1:${Dlna__Server__Port:-26852}/health/ready" || exit 1
