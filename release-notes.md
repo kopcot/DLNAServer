@@ -22,6 +22,8 @@ Nothing else moved: every other page, button and setting is where it was, televi
 
 A VobSub subtitle's `.idx` file added beside its `.sub` is noticed as soon as it lands again, rather than at the next scan. If the server has to replace a settings file it cannot read, its log now says that the replacement names no media folder - not even `/media` in the image - and that your folders and settings are in the backup it names, to put back by hand.
 
+**Security fix: previews no longer follow links.** Previews are kept in a `.@__thumb` folder inside your media folders, so anyone able to write to the share could put a link there under a preview's name, and the server would overwrite - or read and serve as a preview - whatever file the link pointed at, with the server's own permissions. A preview, or a preview folder, that is a link is now left alone and the log says which one; remove the link to have the preview made.
+
 If a page still shows the old look after the upgrade, reload it - the browser may be holding on to the previous version's styles.
 
 ## 1.3

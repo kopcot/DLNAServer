@@ -61,5 +61,12 @@ namespace DlnaServer.Media.Processing
             Message = "ffmpeg finished the frame for '{FilePath}' but the wrapper's output log raced as it "
                 + "exited; the frame on disc is used")]
         private partial void LogOutputLogRaceRidden(string filePath);
+
+        [LoggerMessage(
+            EventId = 10,
+            Level = LogLevel.Warning,
+            Message = "The thumbnail '{TargetPath}' or its folder is a link, so no thumbnail is read or "
+                + "written through it; remove the link to have one made")]
+        private partial void LogLinkedThumbnailRefused(string targetPath);
     }
 }

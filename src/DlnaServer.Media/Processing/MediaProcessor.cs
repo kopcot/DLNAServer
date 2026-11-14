@@ -147,6 +147,14 @@ namespace DlnaServer.Media.Processing
                 settings.ThumbnailMime,
                 settings.StoreThumbnailContent);
 
+            // Before adoption, which would read through the link, and before ffmpeg writes its frame into
+            // the same folder. Refused rather than replaced: a linked folder is not ours to write into.
+            if (ImageThumbnailGenerator.IsLinked(targetPath))
+            {
+                LogLinkedThumbnailRefused(targetPath);
+                return null;
+            }
+
             // Adopt a thumbnail that is already there rather than making it again. With thumbnails stored
             // beside the media, a library the reference has been previewing for years already has them -
             // and for video this is the difference between adopting a file and running ffmpeg over the

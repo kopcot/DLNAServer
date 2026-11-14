@@ -193,7 +193,7 @@ namespace DlnaServer.Media.Processing.Thumbnails
                 // 25,000 redundant reads off a NAS volume.
                 var content = encoded.AsSpan().ToArray();
 
-                File.WriteAllBytes(targetPath, content);
+                WriteReplacing(targetPath, content);
 
                 return new GeneratedThumbnail(
                     targetPath,
@@ -211,6 +211,45 @@ namespace DlnaServer.Media.Processing.Thumbnails
                 // service stopped the whole host. Failing to produce a thumbnail is never fatal.
                 LogThumbnailFailed(sourcePath, exception.Message);
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Whether a thumbnail path, or the folder holding it, is a symbolic link or a junction.
+        /// </summary>
+        /// <remarks>
+        /// The thumbnail folder sits inside a source folder anyone with write access to the share can
+        /// fill, so a link planted under a thumbnail's name would have the server read and serve, or
+        /// overwrite, whatever it points at - as the server's own user.
+        /// </remarks>
+        internal static bool IsLinked(string targetPath)
+        {
+            var folder = Path.GetDirectoryName(targetPath);
+
+            return new FileInfo(targetPath).LinkTarget is not null
+                || (folder is not null && new DirectoryInfo(folder).LinkTarget is not null);
+        }
+
+        // Written beside the target and renamed over it: a rename replaces a link standing at the target
+        // instead of writing through it, and a write cut short never leaves a truncated thumbnail to be
+        // adopted on the next pass. CreateNew refuses a temporary name that already exists, link or not.
+        private static void WriteReplacing(string targetPath, byte[] content)
+        {
+            var temporaryPath = $"{targetPath}.{Guid.NewGuid():N}.tmp";
+
+            try
+            {
+                using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    stream.Write(content);
+                }
+
+                File.Move(temporaryPath, targetPath, overwrite: true);
+            }
+            finally
+            {
+                // A no-op once the move has happened.
+                File.Delete(temporaryPath);
             }
         }
 
