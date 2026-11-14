@@ -27,7 +27,6 @@ WORKDIR /src
 # Directory.Packages.props uses central package management and restore reads the whole graph. Each
 # lock file comes with it, since the restore is locked and refuses to run without them.
 COPY global.json Directory.Build.props Directory.Packages.props DlnaServer.sln ./
-COPY src/DlnaServer.Host/config.json                            app/
 COPY src/DlnaServer.Core/DlnaServer.Core.csproj                 src/DlnaServer.Core/
 COPY src/DlnaServer.Persistence/DlnaServer.Persistence.csproj   src/DlnaServer.Persistence/
 COPY src/DlnaServer.Media/DlnaServer.Media.csproj               src/DlnaServer.Media/
@@ -99,7 +98,6 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=build /publish ./
-COPY --from=build /src/app/config.json ./config.json
 
 # FFmpegProvisioner looks for an 'ffmpeg' folder beside the binaries and uses whatever is in it without
 # downloading. Symlinks rather than copies so an apt upgrade of ffmpeg is picked up.
@@ -150,11 +148,12 @@ ENV ConnectionStrings__DlnaDatabase="Data Source=/data/dlna.sqlite;Pooling=True;
 # values are whatever Dlna.Server.Port and Dlna.Server.AdminPort say.
 EXPOSE 26852 26853
 
-# The media port answers /manage without authentication and is the surface a television uses, so it is
-# the honest liveness probe. start-period covers the first library scan on a large volume.
+# Readiness on the media port, the surface a television uses: 200 only once the database has migrated and
+# config.json has validated, 503 otherwise - a process that merely answers says neither. It is 503 as well
+# while television traffic is blocked from Temporary settings. start-period covers a first migration.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
     CMD curl --fail --silent --show-error --max-time 8 \
-        "http://127.0.0.1:${Dlna__Server__Port:-26852}/manage/database" || exit 1
+        "http://127.0.0.1:${Dlna__Server__Port:-26852}/health/ready" || exit 1
 
 # Non-root. The container must still be able to WRITE INTO THE MEDIA TREE, because thumbnails are stored
 # beside the media in Thumbnails.SubFolderName - see Docker.usage.md, "Why the media mount is not
