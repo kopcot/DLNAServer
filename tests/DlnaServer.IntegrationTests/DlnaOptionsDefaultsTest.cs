@@ -1,5 +1,6 @@
 using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Dlna;
+using DlnaServer.Core.Files;
 using DlnaServer.Host.Configuration;
 using Microsoft.Extensions.Configuration;
 
@@ -37,14 +38,12 @@ namespace DlnaServer.IntegrationTests
         {
             // Arrange
             var options = new DlnaOptions();
-            var cacheFolderName = Path.GetFileName(
-                Path.TrimEndingDirectorySeparator(options.Thumbnails.CacheDirectory));
 
             // Act
             DlnaOptionsDefaults.Apply(options);
 
             // Assert
-            options.Library.ExcludeFolders.Should().Contain(cacheFolderName,
+            options.Library.ExcludeFolders.Should().Contain(options.Thumbnails.CacheDirectory,
                 "because the cache lives inside the folder that just became the library");
         }
 
@@ -190,7 +189,7 @@ namespace DlnaServer.IntegrationTests
             DlnaOptionsDefaults.Apply(options);
 
             // Assert
-            options.Library.ExcludeFolders.Should().Contain("Resources",
+            options.Library.ExcludeFolders.Should().Contain(Path.Combine(AppContext.BaseDirectory, "Resources"),
                 "because the device icons are protocol assets, not somebody's photographs");
         }
 
@@ -208,7 +207,7 @@ namespace DlnaServer.IntegrationTests
             DlnaOptionsDefaults.Apply(options);
 
             // Assert
-            options.Library.ExcludeFolders.Should().Contain("logs",
+            options.Library.ExcludeFolders.Should().Contain(Path.Combine(AppContext.BaseDirectory, "logs"),
                 "because the server's own log files are not media, and watching them turns each log line into a rescan");
         }
 
@@ -232,6 +231,39 @@ namespace DlnaServer.IntegrationTests
                 "because only the fallback serves the server's own folder - a library may have a folder of that name");
         }
 
+        /// <summary>
+        /// The Settings page shows the post-configured exclusions and saves them back, so a save made while
+        /// the fallback was in force put its entries into <c>config.json</c> for good. As bare names they then
+        /// hid every <c>logs</c> and <c>Resources</c> folder of the library the operator named next.
+        /// </summary>
+        [Test]
+        public void Apply_AfterTheFallbackExclusionsWereSavedWithARealLibrary_HidesNoLibraryFolderOfTheSameName()
+        {
+            // Arrange - the fallback's output, saved by the Settings page together with the operator's folder.
+            var fallback = new DlnaOptions();
+            DlnaOptionsDefaults.Apply(fallback);
+            var saved = new DlnaOptions
+            {
+                Library = new LibraryOptions
+                {
+                    SourceFolders = ["/share/Media"],
+                    ExcludeFolders = [.. fallback.Library.ExcludeFolders],
+                },
+            };
+
+            // Act
+            DlnaOptionsDefaults.Apply(saved);
+            var excluded = saved.Library.ExcludeFolders.ToArray();
+
+            // Assert
+            PathExclusion.IsExcluded("/share/Media/Concerts/logs/live.mkv", excluded).Should().BeFalse(
+                "because a library folder called logs is media, not the server's own log folder");
+            PathExclusion.IsExcluded("/share/Media/Resources/icon.jpg", excluded).Should().BeFalse(
+                "because only the application's own asset folder is excluded, not every folder of that name");
+            PathExclusion.IsExcluded(Path.Combine(AppContext.BaseDirectory, "logs", "app.log"), excluded).Should().BeTrue(
+                "because the saved entries still exclude the application's own log folder they were made for");
+        }
+
         [Test]
         public void Apply_WithANestedCacheDirectory_ExcludesItsOwnFolderName()
         {
@@ -248,7 +280,7 @@ namespace DlnaServer.IntegrationTests
             DlnaOptionsDefaults.Apply(options);
 
             // Assert
-            options.Library.ExcludeFolders.Should().Contain("previews",
+            options.Library.ExcludeFolders.Should().Contain(Path.Combine(AppContext.BaseDirectory, "cache", "previews"),
                 "because the exclusion has to match the folder the thumbnails actually land in");
         }
 
@@ -260,7 +292,7 @@ namespace DlnaServer.IntegrationTests
             {
                 Library = new LibraryOptions
                 {
-                    ExcludeFolders = ["thumbnails"],
+                    ExcludeFolders = [Path.Combine(AppContext.BaseDirectory, "thumbnails")],
                 },
                 Thumbnails = new ThumbnailOptions
                 {
@@ -272,7 +304,13 @@ namespace DlnaServer.IntegrationTests
             DlnaOptionsDefaults.Apply(options);
 
             // Assert
-            options.Library.ExcludeFolders.Should().Equal(["thumbnails", ".@__thumb", "Resources", "logs"],
+            options.Library.ExcludeFolders.Should().Equal(
+                [
+                    Path.Combine(AppContext.BaseDirectory, "thumbnails"),
+                    ".@__thumb",
+                    Path.Combine(AppContext.BaseDirectory, "Resources"),
+                    Path.Combine(AppContext.BaseDirectory, "logs"),
+                ],
                 "because configuration reloads re-run this, and each one would otherwise append again - "
                 + "the thumbnail sub-folder is added unconditionally and belongs in the expected list");
         }

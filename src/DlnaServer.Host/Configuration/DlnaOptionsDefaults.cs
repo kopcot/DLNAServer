@@ -144,6 +144,11 @@ namespace DlnaServer.Host.Configuration
         /// the binaries on the NAS, as the <c>/app/logs</c> volume in the image - so the watch covered it and
         /// each log line written there was reported as a change to the library.
         /// </para>
+        /// <para>
+        /// All three are excluded by FULL path under the application folder, not by name. The Settings page
+        /// writes the exclusions back into <c>config.json</c> on every save, so a bare <c>logs</c> or
+        /// <c>Resources</c> outlived the fallback and then hid every folder of that name in the real library.
+        /// </para>
         /// </remarks>
         private static void ApplySourceFolderFallback(DlnaOptions options)
         {
@@ -154,11 +159,9 @@ namespace DlnaServer.Host.Configuration
 
             options.Library.SourceFolders = [AppContext.BaseDirectory];
 
-            Exclude(options.Library, ResolveCacheFolderName(options.Thumbnails.CacheDirectory));
-            Exclude(options.Library, ResourcesExclusion);
-
-            // The logs are written into the folder being watched, so every line was a change and a reason to scan again.
-            Exclude(options.Library, Program.LogFolderName);
+            Exclude(options.Library, ResolveCacheFolder(options.Thumbnails.CacheDirectory));
+            Exclude(options.Library, Path.Combine(AppContext.BaseDirectory, ResourcesExclusion));
+            Exclude(options.Library, Path.Combine(AppContext.BaseDirectory, Program.LogFolderName));
         }
 
         /// <summary>
@@ -264,16 +267,15 @@ namespace DlnaServer.Host.Configuration
             return false;
         }
 
-        private static string ResolveCacheFolderName(string? cacheDirectory)
+        private static string ResolveCacheFolder(string? cacheDirectory)
         {
             if (string.IsNullOrWhiteSpace(cacheDirectory))
             {
-                return FallbackThumbnailExclusion;
+                return Path.Combine(AppContext.BaseDirectory, FallbackThumbnailExclusion);
             }
 
-            var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(cacheDirectory));
-
-            return string.IsNullOrEmpty(name) ? FallbackThumbnailExclusion : name;
+            // Relative to the application folder, which is the working directory Program sets at startup.
+            return Path.TrimEndingDirectorySeparator(Path.Combine(AppContext.BaseDirectory, cacheDirectory));
         }
     }
 }
