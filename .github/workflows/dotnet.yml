@@ -66,7 +66,8 @@ jobs:
         run: dotnet build DlnaServer.sln --configuration Release --no-restore -warnaserror
 
       # The admin UI tests drive headless Chrome and run on Linux only: the Windows leg is here for path
-      # handling, which they do not exercise, so it filters them out (ADR 0038).
+      # handling, which they do not exercise, so it filters them out (ADR 0038). A test hung for 10 minutes
+      # stops the test host while the job still has time to write and upload the results of the tests before it.
       - name: Test
         shell: bash
         env:
@@ -76,6 +77,8 @@ jobs:
           --configuration Release
           --no-build
           ${TEST_FILTER:+--filter "$TEST_FILTER"}
+          --blame-hang-timeout 10m
+          --blame-hang-dump-type none
           --logger "trx;LogFileName=test-results.trx"
           --logger "console;verbosity=normal"
           --collect:"XPlat Code Coverage"

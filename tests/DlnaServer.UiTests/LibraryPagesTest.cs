@@ -69,8 +69,8 @@ namespace DlnaServer.UiTests
             OpenSmallPreview();
 
             // Act
-            // Followed by its address: on a desktop-wide window the full-screen button covers the link, which
-            // is how the phone layout reaches the photo page.
+            // Followed by its address: on a desktop the full-screen button sits over the link, which is the
+            // phone layout's way to the photo page.
             var photoLink = By.CssSelector("main a[href^='/admin/photo/']");
             var photoPage = Browser.Read(read: d => d.FindElement(photoLink).GetDomAttribute("href"));
             Browser.Open(path: photoPage!);

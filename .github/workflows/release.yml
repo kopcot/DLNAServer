@@ -52,11 +52,12 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore DlnaServer.sln --locked-mode
 
-      # The release must not ship something the build gate would have rejected.
+      # The release must not ship something the build gate would have rejected. A test hung for 10 minutes
+      # stops the test host and is named in the log, as in dotnet.yml, rather than running into the job's timeout.
       - name: Build and test
         run: |
           dotnet build DlnaServer.sln --configuration Release --no-restore -warnaserror
-          dotnet test DlnaServer.sln --configuration Release --no-build
+          dotnet test DlnaServer.sln --configuration Release --no-build --blame-hang-timeout 10m --blame-hang-dump-type none
 
       # Mirrors NasBuild.sh: framework-dependent, because the NAS carries the .NET 8 runtime.
       - name: Publish

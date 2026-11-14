@@ -7,6 +7,10 @@ namespace DlnaServer.UiTests
     {
         private const string ErrorBoundaryText = "Something went wrong on this page";
 
+        // Whether a page attaches a Blazor circuit after prerendering, which is what can die unseen.
+        private const bool Interactive = true;
+        private const bool Prerendered = false;
+
         private static readonly By _heading = By.TagName("h1");
 
         private static AdminBrowser Browser => UiTestSetup.Browser;
@@ -17,19 +21,22 @@ namespace DlnaServer.UiTests
             Browser.CheckAfterTest();
         }
 
-        [TestCase("/admin", "Dashboard", true)]
-        [TestCase("/admin/library", "Library", true)]
-        [TestCase("/admin/library/search/files", "Search files", true)]
-        [TestCase("/admin/library/search", "Search files", true)]
-        [TestCase("/admin/library/search/folders", "Search folders", true)]
-        [TestCase("/admin/cache", "Recently served files", true)]
-        [TestCase("/admin/settings", "Settings", true)]
-        [TestCase("/admin/settings/temporary", "Temporary settings", true)]
-        [TestCase("/admin/maintenance", "Maintenance", true)]
-        [TestCase("/admin/help", "Help", false)]
-        [TestCase("/admin/about", "About", false)]
-        [TestCase("/admin/upload", "Add files", false)]
-        public void Open_EachAdminPage_RendersItsHeadingWithoutTheErrorBoundary(string path, string heading, bool isInteractive)
+        [TestCase("/admin", "Dashboard", Interactive)]
+        [TestCase("/admin/library", "Library", Interactive)]
+        [TestCase("/admin/library/search/files", "Search files", Interactive)]
+        [TestCase("/admin/library/search", "Search files", Interactive)]
+        [TestCase("/admin/library/search/folders", "Search folders", Interactive)]
+        [TestCase("/admin/cache", "Recently served files", Interactive)]
+        [TestCase("/admin/settings", "Settings", Interactive)]
+        [TestCase("/admin/settings/temporary", "Temporary settings", Interactive)]
+        [TestCase("/admin/maintenance", "Maintenance", Interactive)]
+        [TestCase("/admin/help", "Help", Prerendered)]
+        [TestCase("/admin/about", "About", Prerendered)]
+        [TestCase("/admin/upload", "Add files", Prerendered)]
+        public void Open_EachAdminPage_RendersItsHeadingWithoutTheErrorBoundary(
+            string path,
+            string heading,
+            bool isInteractive)
         {
             // Arrange
             // Act
@@ -63,7 +70,7 @@ namespace DlnaServer.UiTests
         }
 
         [Test]
-        public void Open_Dashboard_NavLinksEveryPageButTheShippedOffUpload()
+        public void FollowNavLink_FromDashboard_OpensItsPageAndListsEveryPageButTheShippedOffUpload()
         {
             // Arrange
             string[] menu =

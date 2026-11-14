@@ -20,7 +20,7 @@ namespace DlnaServer.UiTests
         }
 
         [Test]
-        public void ArmRestart_ThenCancel_LeavesTheServerRunning()
+        public void ArmRestart_ThenCancel_DisarmsTheRestart()
         {
             // Arrange
             var restart = By.XPath($"{ServerPanel}//button[normalize-space()='Restart server']");

@@ -75,11 +75,6 @@ namespace DlnaServer.UiTests
             Driver.Navigate().GoToUrl(_host.Admin(path));
         }
 
-        public IWebElement WaitFor(By by)
-        {
-            return Wait().Until(d => d.FindElement(by));
-        }
-
         /// <summary>
         /// The text of the first match, re-found if the circuit's first interactive render replaced it.
         /// </summary>
@@ -116,7 +111,9 @@ namespace DlnaServer.UiTests
         /// <summary>
         /// Waits until <paramref name="condition"/> holds, failing with <paramref name="because"/> if it never does.
         /// </summary>
-        public void WaitUntil(Func<bool> condition, string because)
+        public void WaitUntil(
+            Func<bool> condition,
+            string because)
         {
             var wait = Wait();
             wait.Message = because;
@@ -132,7 +129,10 @@ namespace DlnaServer.UiTests
         /// typed text is discarded by the first interactive render. Repeating the whole action, re-finding
         /// every element, rides that out without a sleep, and a stale element from a re-render is not fatal.
         /// </remarks>
-        public void ActUntil(Action action, Func<bool> done, string because)
+        public void ActUntil(
+            Action action,
+            Func<bool> done,
+            string because)
         {
             var attempt = new WebDriverWait(Driver, _attemptTimeout);
             attempt.IgnoreExceptionTypes(typeof(StaleElementReferenceException), typeof(NoSuchElementException));
@@ -160,7 +160,7 @@ namespace DlnaServer.UiTests
                 {
                     if (DateTime.UtcNow >= deadline)
                     {
-                        throw new WebDriverTimeoutException($"Not done within {_timeout.TotalSeconds} seconds: {because}", exception);
+                        throw new WebDriverTimeoutException($"Timed out after {_timeout.TotalSeconds} seconds: {because}", exception);
                     }
 
                     // Not interactive yet, or the element was re-rendered under the action: go round again.
@@ -180,7 +180,7 @@ namespace DlnaServer.UiTests
         public void AssertCircuitWithoutError()
         {
             var wait = Wait();
-            wait.Message = "because an interactive page connects its circuit once it has loaded";
+            wait.Message = "no console error and no 'WebSocket connected' - an interactive page connects its circuit once it has loaded";
             _ = wait.Until(_ =>
             {
                 ReadConsole();
@@ -200,28 +200,57 @@ namespace DlnaServer.UiTests
         /// Run from every fixture's tear-down: fails a passing test whose page logged an error, and attaches a
         /// screenshot to a failed test so a red CI run shows what the page looked like.
         /// </summary>
+        /// <remarks>
+        /// A tear-down that drives the browser itself calls the two halves instead, around its own work, so the
+        /// screenshot shows the test's page and the errors its work causes are charged to this test.
+        /// </remarks>
         public void CheckAfterTest()
+        {
+            CaptureAfterTest();
+            AssertAfterTest();
+        }
+
+        /// <summary>
+        /// The first half of <see cref="CheckAfterTest"/>: a screenshot of the page as the test left it, if the
+        /// test failed or the page has logged an error.
+        /// </summary>
+        public void CaptureAfterTest()
+        {
+            ReadConsole();
+
+            if (HasFailed() || ConsoleErrors().Count > 0)
+            {
+                var path = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"{TestContext.CurrentContext.Test.ID}.png");
+                ((ITakesScreenshot)Driver).GetScreenshot().SaveAsFile(path);
+                TestContext.AddTestAttachment(path);
+            }
+        }
+
+        /// <summary>
+        /// The second half of <see cref="CheckAfterTest"/>: fails a passing test on any console error since it
+        /// started, and forgets them so none is charged to the next test.
+        /// </summary>
+        public void AssertAfterTest()
         {
             ReadConsole();
             var errors = ConsoleErrors();
             _console.Clear();
             _consoleAtLastOpen = 0;
 
-            var hasFailed = TestContext.CurrentContext.Result.Outcome.Status == NUnit.Framework.Interfaces.TestStatus.Failed;
-
-            if (hasFailed || errors.Count > 0)
+            // A failure in a tear-down replaces the test's own message, so a test already red keeps that one and
+            // the errors go to its output instead - often the reason a wait before them timed out.
+            if (HasFailed())
             {
-                var path = Path.Combine(TestContext.CurrentContext.WorkDirectory, $"{TestContext.CurrentContext.Test.ID}.png");
-                ((ITakesScreenshot)Driver).GetScreenshot().SaveAsFile(path);
-                TestContext.AddTestAttachment(path);
+                foreach (var error in errors)
+                {
+                    TestContext.Out.WriteLine($"Browser console error: {error}");
+                }
+
+                return;
             }
 
-            // A failure in a tear-down replaces the test's own message, so a test already red keeps that one.
-            if (!hasFailed)
-            {
-                errors.Should().BeEmpty(
-                    "because an error in the console means a page broke while the test drove it");
-            }
+            errors.Should().BeEmpty(
+                "because an error in the console means a page broke while the test drove it");
         }
 
         public void Dispose()
@@ -248,6 +277,11 @@ namespace DlnaServer.UiTests
             wait.IgnoreExceptionTypes(typeof(StaleElementReferenceException));
 
             return wait;
+        }
+
+        private static bool HasFailed()
+        {
+            return TestContext.CurrentContext.Result.Outcome.Status == NUnit.Framework.Interfaces.TestStatus.Failed;
         }
     }
 }

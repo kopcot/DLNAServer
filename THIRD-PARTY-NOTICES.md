@@ -5,25 +5,25 @@ which carries its own terms. The versions are the ones pinned in `Directory.Pack
 the authority, and this list is regenerated from it rather than edited by hand.
 
 Nothing here is redistributed in source form. The published output carries the compiled assemblies of
-these packages and, for SkiaSharp, its native library.
+these packages and, for SkiaSharp and SQLite, their native libraries.
 
 ## Shipped with the server
 
 | Package | Version | Licence |
 | --- | --- | --- |
 | CommunityToolkit.HighPerformance | 8.4.2 | MIT |
-| Microsoft.EntityFrameworkCore.Design | 9.0.10 | MIT |
-| Microsoft.EntityFrameworkCore.Sqlite | 9.0.10 | MIT |
-| Microsoft.Extensions.Caching.Memory | 9.0.10 | MIT |
-| Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.12 | MIT |
-| Microsoft.Extensions.Logging.Abstractions | 10.0.12 | MIT |
+| Microsoft.EntityFrameworkCore.Design | 9.0.22 | MIT |
+| Microsoft.EntityFrameworkCore.Sqlite | 9.0.22 | MIT |
+| Microsoft.Extensions.Caching.Memory | 10.0.14 | MIT |
+| Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.14 | MIT |
+| Microsoft.Extensions.Logging.Abstractions | 10.0.14 | MIT |
 | MetadataExtractor | 2.9.3 | Apache-2.0 |
-| Serilog.AspNetCore | 9.0.0 | Apache-2.0 |
+| Serilog.AspNetCore | 10.0.0 | Apache-2.0 |
 | Serilog.Sinks.File | 7.0.0 | Apache-2.0 |
-| SkiaSharp | 4.152.1 | MIT |
-| SkiaSharp.NativeAssets.Linux.NoDependencies | 4.152.1 | MIT |
-| SoapCore | 1.2.1.11 | MIT |
-| SQLitePCLRaw.lib.e_sqlite3 | 3.53.3 | Apache-2.0, declared as a licence file in the package rather than an SPDX expression |
+| SkiaSharp | 4.154.0 | MIT |
+| SkiaSharp.NativeAssets.Linux.NoDependencies | 4.154.0 | MIT |
+| SoapCore | 1.2.1.18 | MIT |
+| SQLitePCLRaw.lib.e_sqlite3 | 3.53.3 | Public domain (SQLite), declared as a licence file in the package rather than an SPDX expression |
 | System.Security.Cryptography.Xml | 8.0.5 | MIT |
 | Xabe.FFmpeg | 6.0.2 | Custom, by URL - see below |
 | Xabe.FFmpeg.Downloader | 6.0.2 | Custom, by URL - see below |
@@ -35,14 +35,16 @@ Not part of any deployment. Listed for completeness.
 | Package | Version | Licence |
 | --- | --- | --- |
 | FluentAssertions | 8.11.0 | Licence file in the package - see below |
-| Microsoft.AspNetCore.Mvc.Testing | 8.0.11 | MIT |
 | Microsoft.NET.Test.Sdk | 18.11.0 | MIT |
-| NetArchTest.Rules | 1.3.2 | MIT, not declared in the package metadata |
+| NetArchTest.Rules | 1.3.2 | Not declared in the package - no licence element, URL or file |
 | NUnit | 5.0.0 | MIT |
 | NUnit.Analyzers | 4.15.0 | MIT |
 | NUnit3TestAdapter | 6.3.1 | MIT |
 | Selenium.WebDriver | 4.52.0 | Apache-2.0 |
 | coverlet.collector | 10.1.0 | MIT |
+
+`Directory.Packages.props` also pins `Microsoft.AspNetCore.Mvc.Testing` 8.0.11, but no project references
+it and no lock file resolves it, so nothing here uses it and it is not listed.
 
 ## Two that are not simply permissive
 
@@ -60,8 +62,10 @@ depending on the build. That choice, and its consequences, belong to whoever put
 ## How this list was checked
 
 Each row was read from the `<license>` element of the package's own `.nuspec` in the local NuGet cache,
-not from memory. Three do not declare a plain SPDX expression and are called out in the table for that
-reason: SQLitePCLRaw ships a licence file, Xabe.FFmpeg points at a URL, and NetArchTest declares nothing.
+not from memory, for the version every `packages.lock.json` resolves - which, through central transitive
+pinning, is the one `Directory.Packages.props` names. Four do not declare a plain SPDX expression and are
+called out in the table for that reason: SQLitePCLRaw.lib.e_sqlite3 and FluentAssertions ship a licence
+file, read from the package, Xabe.FFmpeg points at a URL, and NetArchTest declares nothing at all.
 
 ## Verifying this list
 

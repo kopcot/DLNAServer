@@ -20,16 +20,16 @@ namespace DlnaServer.UiTests
         /// <remarks>
         /// The hidden-folder switch and the television block are process-wide, so both are put back whatever
         /// the test did - a failure half way through would otherwise leave every later listing showing the
-        /// hidden folders, or the shared Host refusing televisions for an hour.
+        /// hidden folders, or the shared Host refusing televisions for an hour. The screenshot is taken before
+        /// the restore navigates away and the console is checked after it, so an error the restore causes is
+        /// charged to this test rather than the next.
         /// </remarks>
         [TearDown]
         public void TearDown()
         {
+            Browser.CaptureAfterTest();
+
             try
-            {
-                Browser.CheckAfterTest();
-            }
-            finally
             {
                 // Each restore in its own finally, so a failure putting one back cannot leave the other set.
                 try
@@ -40,6 +40,10 @@ namespace DlnaServer.UiTests
                 {
                     Restore(button: _unblock, because: "televisions are answered again for the tests that follow");
                 }
+            }
+            finally
+            {
+                Browser.AssertAfterTest();
             }
         }
 

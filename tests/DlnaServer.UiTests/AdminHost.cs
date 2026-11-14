@@ -41,6 +41,9 @@ namespace DlnaServer.UiTests
 
         private bool _isStarted;
 
+        // What the last readiness check found missing, so a startup timeout says what it was waiting for.
+        private string _unmetReadiness = "never checked";
+
         private AdminHost(
             Process process,
             string root,
@@ -64,19 +67,29 @@ namespace DlnaServer.UiTests
         public static async Task<AdminHost> StartAsync(CancellationToken cancellationToken)
         {
             var hostAssembly = HostAssemblyPath();
+            var (adminPort, mediaPort) = FreePorts();
+
+            // Nothing that can fail sits between creating the folder and the host that owns it, so disposing
+            // the host is the one cleanup there is - it deletes the folder whether or not the Host started.
             var root = Directory.CreateTempSubdirectory("dlna-ui-").FullName;
-            AdminHost? host = null;
+            var mediaFolder = Path.Combine(root, SourceFolderName);
+            var startInfo = CreateStartInfo(
+                hostAssembly: hostAssembly,
+                root: root,
+                mediaFolder: mediaFolder,
+                adminPort: adminPort,
+                mediaPort: mediaPort);
+            var host = new AdminHost(
+                process: new Process { StartInfo = startInfo },
+                root: root,
+                adminPort: adminPort,
+                mediaPort: mediaPort);
 
             try
             {
-                var mediaFolder = Path.Combine(root, SourceFolderName);
-                CopyTestMedia(hostAssembly, mediaFolder);
-
-                var (adminPort, mediaPort) = FreePorts();
-                var process = new Process { StartInfo = CreateStartInfo(hostAssembly, root, mediaFolder, adminPort, mediaPort) };
-                host = new AdminHost(process, root, adminPort, mediaPort);
+                CopyTestMedia(hostAssembly: hostAssembly, mediaFolder: mediaFolder);
                 host.Start();
-                await host.WaitUntilReadyAsync(cancellationToken);
+                await host.WaitUntilReadyAsync(cancellationToken: cancellationToken);
 
                 return host;
             }
@@ -84,14 +97,7 @@ namespace DlnaServer.UiTests
             {
                 try
                 {
-                    if (host is null)
-                    {
-                        DeleteRoot(root);
-                    }
-                    else
-                    {
-                        await host.DisposeAsync();
-                    }
+                    await host.DisposeAsync();
                 }
                 catch (Exception cleanupFailure)
                 {
@@ -121,14 +127,14 @@ namespace DlnaServer.UiTests
             {
                 if (_isStarted)
                 {
-                    await StopAsync(CancellationToken.None);
+                    await StopAsync(cancellationToken: CancellationToken.None);
                 }
             }
             finally
             {
                 _process.Dispose();
                 Http.Dispose();
-                DeleteRoot(_root);
+                DeleteRoot(root: _root);
             }
         }
 
@@ -199,11 +205,26 @@ namespace DlnaServer.UiTests
             return startInfo;
         }
 
+        /// <remarks>
+        /// The web host also reads <c>ASPNETCORE_</c>- and <c>DOTNET_</c>-prefixed variables with the prefix removed,
+        /// so <c>ASPNETCORE_Dlna__Library__SourceFolders__1</c> would add a second source folder.
+        /// </remarks>
         private static bool IsInheritedHostSetting(string key)
         {
-            return key.Replace("__", ":", StringComparison.Ordinal).StartsWith("Dlna:", StringComparison.OrdinalIgnoreCase)
-                || key.Equals("ASPNETCORE_URLS", StringComparison.OrdinalIgnoreCase)
-                || key.Equals("DOTNET_URLS", StringComparison.OrdinalIgnoreCase);
+            var name = WithoutHostPrefix(key: key, prefix: "ASPNETCORE_")
+                ?? WithoutHostPrefix(key: key, prefix: "DOTNET_");
+
+            return (name ?? key).Replace("__", ":", StringComparison.Ordinal).StartsWith("Dlna:", StringComparison.OrdinalIgnoreCase)
+                || (name is not null && name.Equals("URLS", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string? WithoutHostPrefix(
+            string key,
+            string prefix)
+        {
+            return key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                ? key[prefix.Length..]
+                : null;
         }
 
         // Both listeners are held until both ports are read, so the two differ - the Host refuses equal ports.
@@ -263,7 +284,7 @@ namespace DlnaServer.UiTests
 
             try
             {
-                while (!await IsReadyAsync(timeout.Token))
+                while (!await IsReadyAsync(cancellationToken: timeout.Token))
                 {
                     if (_process.HasExited)
                     {
@@ -280,7 +301,7 @@ namespace DlnaServer.UiTests
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 throw new TimeoutException(
-                    $"The Host was not ready within {_startupTimeout}.{Environment.NewLine}{BufferedOutput()}");
+                    $"The Host was not ready within {_startupTimeout}: {_unmetReadiness}.{Environment.NewLine}{BufferedOutput()}");
             }
         }
 
@@ -292,6 +313,8 @@ namespace DlnaServer.UiTests
                 using var ready = await Http.GetAsync(new Uri(MediaUri, "/health/ready"), cancellationToken);
                 if (!live.IsSuccessStatusCode || !ready.IsSuccessStatusCode)
                 {
+                    _unmetReadiness = $"/admin/health answered {(int)live.StatusCode}, /health/ready {(int)ready.StatusCode}";
+
                     return false;
                 }
 
@@ -299,12 +322,15 @@ namespace DlnaServer.UiTests
                 var indexed = page.GetProperty("files").EnumerateArray()
                     .Select(static f => Path.GetFileName(f.GetProperty("fullPath").GetString()))
                     .ToHashSet(StringComparer.Ordinal);
+                _unmetReadiness = $"the scan had indexed [{string.Join(", ", indexed)}], not the three test pictures";
 
                 return indexed.SetEquals([SmallPicture, LargePicture, HolidayPicture]);
             }
-            catch (HttpRequestException)
+            catch (HttpRequestException exception)
             {
                 // Not listening yet.
+                _unmetReadiness = $"not answering ({exception.Message})";
+
                 return false;
             }
         }
@@ -313,7 +339,7 @@ namespace DlnaServer.UiTests
         {
             if (!_process.HasExited)
             {
-                await StopGracefullyAsync(cancellationToken);
+                await StopGracefullyAsync(cancellationToken: cancellationToken);
             }
 
             // Killing a process that exited after the check is a no-op, not an exception.
