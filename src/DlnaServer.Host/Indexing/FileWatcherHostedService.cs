@@ -1,6 +1,7 @@
 using DlnaServer.Core.Configuration;
 using DlnaServer.Core.Contracts;
 using DlnaServer.Core.Contracts.Watching;
+using DlnaServer.Core.Dlna;
 using DlnaServer.Core.Hosting;
 using DlnaServer.Media.Watching;
 using Microsoft.Extensions.Options;
@@ -384,9 +385,17 @@ namespace DlnaServer.Host.Indexing
         /// </summary>
         internal void Drain(CancellationToken cancellationToken)
         {
+            var library = _options.CurrentValue.Library;
+
             while (_watcher.Events.TryRead(out var raised))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                if (!CanChangeTheLibrary(raised, library))
+                {
+                    LogIgnoredChange(raised.Kind, raised.FullPath);
+                    continue;
+                }
 
                 // Last writer wins: the newest event carries the newest timestamp, which restarts the
                 // settle window. That is what makes a long file copy resolve to a single index update.
@@ -403,6 +412,42 @@ namespace DlnaServer.Host.Indexing
                     };
                 }
             }
+        }
+
+        /// <summary>
+        /// Whether an event can change what the library holds, and so is worth a scan.
+        /// </summary>
+        /// <remarks>
+        /// Every settled event ends in a full pass, and the database's <c>-wal</c>/<c>-shm</c>, the logs and
+        /// <c>config.json</c> sit inside the library when the application folder is served - so their own
+        /// writes kept scheduling scans. A file the scanner would not index cannot change the index. The
+        /// types are the scanner's own: the configured map, the built-in catalog, the subtitle types.
+        /// <para>
+        /// A delete is always kept, because a folder can no longer be told from a file once it is gone, and
+        /// folder names carry dots (<c>Mr. Robot</c>). A rename is kept when either end is a type the library
+        /// indexes, so a file renamed away from <c>.mkv</c> still leaves the index.
+        /// </para>
+        /// </remarks>
+        private static bool CanChangeTheLibrary(FileChangeEvent raised, LibraryOptions library)
+        {
+            if (raised.Kind == FileChangeKind.Deleted)
+            {
+                return true;
+            }
+
+            return IsIndexedType(raised.FullPath, library)
+                || (raised.OldFullPath is not null && IsIndexedType(raised.OldFullPath, library))
+                || Directory.Exists(raised.FullPath);
+        }
+
+        private static bool IsIndexedType(string path, LibraryOptions library)
+        {
+            var extension = Path.GetExtension(path);
+
+            return extension.Length > 0
+                && (library.MediaFileExtensions.ContainsKey(extension)
+                    || library.SubtitleFileExtensions.ContainsKey(extension)
+                    || DlnaMimeCatalog.TryGetByFileExtension(extension, out _));
         }
 
         /// <summary>

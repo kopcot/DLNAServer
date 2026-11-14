@@ -333,6 +333,88 @@ namespace DlnaServer.IntegrationTests
                 $"because {consecutiveFaultRestarts} rebuild(s) in a row wait {expectedMinutes} minute(s) before the next");
         }
 
+        /// <summary>
+        /// With the application folder as the library, the database, its write-ahead log, the logs and
+        /// config.json are all inside the watch - and every write to them scheduled a full pass.
+        /// </summary>
+        [TestCase("/share/Media/dlna.sqlite-wal")]
+        [TestCase("/share/Media/dlna.sqlite-shm")]
+        [TestCase("/share/Media/dlna.sqlite")]
+        [TestCase("/share/Media/config.json")]
+        [TestCase("/share/Media/logs/app20261114.log")]
+        public async Task ScanIfDueAsync_AfterAChangeToAFileTheLibraryDoesNotIndex_DoesNotScan(string path)
+        {
+            // Arrange
+            Raise(path);
+
+            // Act
+            _service.Drain(CancellationToken.None);
+            _time.Advance(TimeSpan.FromSeconds(31));
+            _service.CollectSettled();
+            _time.Advance(TimeSpan.FromSeconds(11));
+            var scanned = await _service.ScanIfDueAsync(cancellationToken: CancellationToken.None);
+
+            // Assert
+            scanned.Should().BeFalse(
+                "because a file of a type the scanner skips cannot change the index, so it is no reason to scan");
+            _indexer.Passes.Should().Be(0,
+                "because the server's own files would otherwise keep the library rescanning itself");
+        }
+
+        [TestCase("/share/Media/song.flac", FileChangeKind.CreatedOrChanged, null)]
+        [TestCase("/share/Media/film.en.srt", FileChangeKind.CreatedOrChanged, null)]
+        [TestCase("/share/Media/Mr. Robot", FileChangeKind.Deleted, null)]
+        [TestCase("/share/Media/film.mkv.bak", FileChangeKind.Renamed, "/share/Media/film.mkv")]
+        public async Task ScanIfDueAsync_AfterAChangeThatCanReachTheIndex_Scans(string path, FileChangeKind kind, string? oldPath)
+        {
+            // Arrange
+            _watcher.Raise(new FileChangeEvent(path, oldPath, kind, _time.GetTimestamp()));
+
+            // Act
+            _service.Drain(CancellationToken.None);
+            _time.Advance(TimeSpan.FromSeconds(31));
+            _service.CollectSettled();
+            _time.Advance(TimeSpan.FromSeconds(11));
+            var scanned = await _service.ScanIfDueAsync(cancellationToken: CancellationToken.None);
+
+            // Assert
+            scanned.Should().BeTrue(
+                "because media, subtitles, a deleted path that may have been a folder, and a rename away from "
+                + "a media type can all change what the library holds");
+        }
+
+        /// <summary>
+        /// A folder name with a dot reads as an extension, so a folder that still exists is kept by asking
+        /// the filesystem rather than by its name.
+        /// </summary>
+        [Test]
+        public async Task ScanIfDueAsync_AfterAFolderWithADotInItsNameAppears_Scans()
+        {
+            // Arrange
+            var folder = Directory.CreateTempSubdirectory("dlna-watch-").FullName;
+            var dotted = Directory.CreateDirectory(Path.Combine(folder, "Vol. 2")).FullName;
+
+            try
+            {
+                Raise(dotted);
+
+                // Act
+                _service.Drain(CancellationToken.None);
+                _time.Advance(TimeSpan.FromSeconds(31));
+                _service.CollectSettled();
+                _time.Advance(TimeSpan.FromSeconds(11));
+                var scanned = await _service.ScanIfDueAsync(cancellationToken: CancellationToken.None);
+
+                // Assert
+                scanned.Should().BeTrue(
+                    "because a new folder may hold media, and '. 2' is part of its name, not a file type");
+            }
+            finally
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+
         private sealed class RecordingIndexer : ILibraryIndexer
         {
             public int Passes { get; private set; }

@@ -1,3 +1,5 @@
+using DlnaServer.Core.Contracts.Watching;
+
 namespace DlnaServer.Host.Indexing
 {
     internal sealed partial class FileWatcherHostedService
@@ -43,5 +45,16 @@ namespace DlnaServer.Host.Indexing
                 + "an exhausted inotify limit - raise fs.inotify.max_user_watches (and "
                 + "fs.inotify.max_user_instances) on the host.")]
         private partial void LogWatchKeepsFaulting(int firstDelayMinutes, int maxDelayMinutes);
+
+        /// <remarks>
+        /// Trace, not Debug: the database's write-ahead log raises one of these for every write while a
+        /// scan runs, so anything louder would bury the log it is meant to help read.
+        /// </remarks>
+        [LoggerMessage(
+            EventId = 7,
+            Level = LogLevel.Trace,
+            Message = "Ignored a {Kind} change to '{Path}': the library does not index that file type, so it "
+                + "cannot change what the library holds")]
+        private partial void LogIgnoredChange(FileChangeKind kind, string path);
     }
 }
