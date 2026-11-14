@@ -21,10 +21,11 @@ docker compose logs -f
 ```
 
 The build context is `https://github.com/kopcot/DLNAServer.git#main`, so the image is built from what is on
-GitHub, not from the checkout this file sits in. To update, rebuild:
+GitHub, not from the checkout this file sits in. To update, rebuild - the compose file's `pull: true` already
+fetches the current base images, so no separate `--pull` is needed:
 
 ```bash
-docker compose build --pull && docker compose up -d
+docker compose up --build -d
 ```
 
 To run a released image instead, replace the `build:` block with `image: ghcr.io/kopcot/dlnaserver:latest`
@@ -33,7 +34,8 @@ and use `docker compose pull && docker compose up -d`.
 ## Before changing anything
 
 [`Docker.usage.md`](../../../Docker.usage.md) explains the four things that bite: host networking, why the
-media mount is read-write, where `config.json` lives, and the periodic rescan this file turns on. The ports
-and memory settings come from the `environment:` block, and those values win over the Settings page.
+media mount is read-write, where `config.json` lives, and the periodic rescan this file turns on. The ports,
+the source folder `/media` and the memory settings come from the `environment:` block, and those values win
+over the Settings page.
 
 To put only the admin pages on the internet, see [`2-admin-remote`](../2-admin-remote/README.md).

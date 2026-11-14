@@ -24,14 +24,17 @@
 # "Never publish the media port" is what this used to say next, and it described a control that does not
 # exist. The dlna service mandates network_mode: host because SSDP needs multicast, and Program.cs binds
 # both ports with ListenAnyIP - so the media port is already on every interface and there is nothing to
-# publish or withhold. The HOST FIREWALL is the only thing confining it.
+# publish or withhold. The HOST FIREWALL confines it, and since ADR 0036 an address check in the server
+# as well.
 #
 # That mattered because ADMIN_HOSTNAME below widens AllowedHosts for the whole PROCESS, not just the admin
 # port - HostFilteringOptions has no per-port form - so setting it also let internet-origin requests past
 # the one in-process check that had been refusing them on the media port. The hostname is not a secret
 # either: the Let's Encrypt certificate for it is published in the Certificate Transparency logs.
 # RejectRemoteManagementEndpointFilter now refuses /manage from any non-private remote address, which is
-# the actual control. Keep the firewall anyway - the filter protects /manage, not the media itself.
+# the actual control. Keep the firewall anyway: since ADR 0036 the media port as a whole - Browse,
+# streaming, eventing, description.xml - answers only the local network too, but that is an address check,
+# not authentication, and this server has none by design.
 # ---------------------------------------------------------------------------------------------------
 
 services:
@@ -63,13 +66,19 @@ services:
       Dlna__Server__Port: ${MEDIA_PORT:-26852}
       # The same variable Caddy proxies to below, so the two cannot disagree.
       Dlna__Server__AdminPort: ${ADMIN_PORT:-26853}
-      # Index 0 replaces the folder the shipped config.json names rather than adding to it.
+      # Without it a new dlna-data volume starts with a config.json written from defaults, which names no
+      # source folder, so the server would serve its own /app. This entry wins over the Settings page.
       Dlna__Library__SourceFolders__0: /media
       # A bind mount usually delivers no inotify events for writes made outside the container.
       Dlna__Library__UsePeriodicRescan: "true"
       Dlna__Library__RescanIntervalMinutes: "5"
       # ffmpeg is in the image; on would download and execute an unverified binary.
       Dlna__Thumbnails__DownloadFFmpeg: "false"
+      # Memory, pinned to the values folder 1 and the repository's src/DlnaServer.Host/config.json use, so
+      # the footprint does not hang on code defaults. The page cache is charged per pooled connection - see
+      # "Memory" in Docker.usage.md.
+      Dlna__Database__MemoryMapLimitInMegabytes: "0"
+      Dlna__Database__CacheSizeInMegabytes: "2"
       TZ: ${TZ:-Europe/Prague}
 
       # WITHOUT THIS YOU GET A 400 AND NOTHING ELSE. AllowedHostsDefaults replaces the shipped wildcard
@@ -94,6 +103,9 @@ services:
 
   caddy:
     image: caddy:2-alpine
+    # A tag, not a digest, so without this `up -d` keeps whichever 2.x was pulled first and never takes a
+    # Caddy security fix. Same reasoning as the dlna service's `pull: true` - see docs/ADR/0037.
+    pull_policy: always
     container_name: dlna-admin-proxy
     restart: unless-stopped
 

@@ -35,5 +35,19 @@ whole of the protection. Read the warning at the top of `docker-compose.yml` bef
 
 `ADMIN_PORT` drives both the server's admin port and Caddy's upstream, so change it in one place only.
 
+The `dlna` service pins the two settings that decide its memory footprint, `Dlna__Database__MemoryMapLimitInMegabytes`
+and `Dlna__Database__CacheSizeInMegabytes`, to the values folder 1 uses; `MEM_LIMIT` in `.env` caps the
+container. *Memory* in `Docker.usage.md` explains both.
+
+## Update
+
+```bash
+docker compose up --build -d
+```
+
+The `dlna` image is rebuilt from GitHub's `main` on current base images (`pull: true`), and `caddy` is
+pulled again every time (`pull_policy: always`), so both take their security fixes. The database, the logs,
+`config.json` and Caddy's certificates live on named volumes and survive it.
+
 [`Docker.usage.md`](../../../Docker.usage.md) has the full background under *Exposing only the admin pages
 to the internet*, including the two failures you hit by improvising this.

@@ -53,11 +53,10 @@ services:
       Dlna__Server__Port: 25002
       Dlna__Server__AdminPort: 25003
       Dlna__Server__FriendlyName: "ZEN DLNA Server (docker)"
-      # Where the media is, INSIDE the container. Index 0 overwrites the /share/Media the shipped
-      # config.json carries rather than appending to it, which is what you want - but note that
-      # ConfigurationBinder ADDS to a non-empty list, so a second source folder is __1, not a repeat
-      # of __0.
-      #Dlna__Library__SourceFolders__0: /media
+      # Where the media is, INSIDE the container. Without it a new dlna-data volume starts with a
+      # config.json written from defaults, which names no source folder, so the server serves its own /app
+      # instead of /media. This entry wins over the Settings page; a second folder is __1 beside it.
+      Dlna__Library__SourceFolders__0: /media
 
       # THE REASON THIS FEATURE EXISTS. A bind mount or an overlay filesystem usually delivers no inotify
       # events for writes made outside the container, so FileSystemWatcher stays silent and the library
@@ -73,9 +72,10 @@ services:
       # unverified third-party binary, and there is nothing here for it to fix.
       Dlna__Thumbnails__DownloadFFmpeg: "false"
 
-      # Memory. These match what the tree ships and are repeated here because they are the settings that
-      # actually decide this server's footprint - the page cache is charged PER POOLED CONNECTION, so 32
-      # here is not 32 MB, it is 32 MB times however many connections the pool has grown to.
+      # Memory - the settings that actually decide this server's footprint. The database values and the two
+      # size limits match the repository's src/DlnaServer.Host/config.json; the two FileCache switches are
+      # OFF here, where that file has them on. The page cache is charged PER POOLED CONNECTION, so 32 here
+      # is not 32 MB, it is 32 MB times however many connections the pool has grown to.
       Dlna__Database__MemoryMapLimitInMegabytes: "0"
       Dlna__Database__CacheSizeInMegabytes: "2"
       Dlna__FileCache__Enabled: "false"
