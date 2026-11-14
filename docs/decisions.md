@@ -1730,11 +1730,12 @@ This file is written to be the only context needed. Work through it in order.
 0 warnings, and the work has shifted from writing milestones to fixing what real devices
 and real memory readings reveal.
 
-**2.0 (2026-11-10) restyled the admin UI** from the server's own icon (ADR 0039, history section 6za), and its fixes are section 6zb - among them, *Television traffic* now lives on Temporary settings rather than Maintenance. **2.0.1114 (2026-11-14)** is the deployment audit, history section 6zc: the image's health check is readiness (`/health/ready`), so a container reports *unhealthy* while its settings are refused and while television traffic is blocked; the QNAP compose names `/media` again, and the application-folder fallback excludes `logs`. Its fixes, section 6zd: the image writes `/media` into a new volume's first `config.json` only, so the QNAP compose names no source folder and the Settings page owns it; `/health*` is exempt from the television block, so a block no longer makes the container *unhealthy*; the fallback's exclusions are full paths; and the watcher ignores changes to file types the library does not index.
+**2.0 (2026-11-10) restyled the admin UI** from the server's own icon (ADR 0039, history section 6za), and its fixes are section 6zb - among them, *Television traffic* now lives on Temporary settings rather than Maintenance. **2.0.1114 (2026-11-14)** is the deployment audit, history section 6zc: the image's health check is readiness (`/health/ready`), so a container reports *unhealthy* while its settings are refused and while television traffic is blocked; the QNAP compose names `/media` again, and the application-folder fallback excludes `logs`. Its fixes, section 6zd: the image writes `/media` into a new volume's first `config.json` only, so the QNAP compose names no source folder and the Settings page owns it; `/health*` is exempt from the television block, so a block no longer makes the container *unhealthy*; the fallback's exclusions are full paths; and the watcher ignores changes to file types the library does not index. Section 6ze finishes that filter: every event on the database, `config.json` and their backups is dropped, deletes included; a VobSub `.idx` is let through; and a folder's own content change is dropped.
 
-**The NAS runs the current product version.** Checked 2026-09-27 against
-`http://192.168.1.200:26853/admin/about`, served from `T:\apps\Dlna-server`: the page answers and reports
-**version `1.1.0926`**, the `DlnaServer.Host` version of the 2026-09-26 batch (section 6u). Earlier
+**The NAS was last seen on `1.1.0926`.** Checked 2026-09-27 against
+`http://192.168.1.200:26853/admin/about`, served from `T:\apps\Dlna-server`: the page answered and reported
+**version `1.1.0926`**, the `DlnaServer.Host` version of the 2026-09-26 batch (section 6u). No redeploy or
+re-check has been recorded since, so it is behind the current product version. Earlier
 readings, below and in `history.md`, reached it at `192.168.1.100`. That one request is
 the cheapest way to ask the question again later.
 
