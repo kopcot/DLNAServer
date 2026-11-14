@@ -26,6 +26,8 @@ A VobSub subtitle's `.idx` file added beside its `.sub` is noticed as soon as it
 
 **A share that mounts late is picked up by itself.** When a media folder was missing at start-up - or was the empty mount point of a share that had not mounted yet - the server watched it again once it appeared, but did not look at the files already in it, so they stayed out of the library until the next scan or a restart. It now checks such a folder every minute and scans the library as soon as it is there with something in it.
 
+**A whole drive works as a media folder.** A media folder that is the root of a drive or disc - `D:\` on Windows, or `/` - covered nothing beneath it, so every scan removed all its folders and their files from the library and found them again as new, and *include every subfolder* on the Library page matched nothing. Such a folder now covers everything on it.
+
 If a page still shows the old look after the upgrade, reload it - the browser may be holding on to the previous version's styles.
 
 ## 1.3

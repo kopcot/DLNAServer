@@ -39,5 +39,28 @@ namespace DlnaServer.UnitTests.Files
                 "because a stored path carries the separator of whichever machine indexed it, and only a "
                 + "path with none at all leaves nothing to disagree with");
         }
+
+        [TestCase("/share/Media", "/share/Media", true)]
+        [TestCase("/share/Media/film.mkv", "/share/Media", true)]
+        [TestCase("/share/Media/film.mkv", "/share/Media/", true)]
+        [TestCase("/share/MediaOld/film.mkv", "/share/Media", false)]
+        [TestCase("/share/path1L/film.mkv", "/share/path1", false)]
+        [TestCase("/share/Media/film.mkv", "/", true)]
+        [TestCase("D:\\Films\\film.mkv", "D:\\", true)]
+        [TestCase("D:\\Films\\film.mkv", "D:\\Films", true)]
+        [TestCase("D:\\Filmsy\\film.mkv", "D:\\Films", false)]
+        [TestCase("E:\\Films\\film.mkv", "D:\\", false)]
+        [TestCase("D:\\Films/film.mkv", "D:\\Films", true)]
+        [TestCase("/share/media/film.mkv", "/share/Media", false)]
+        public void IsUnder_MatchesTheFolderAndItsSubtreeOnSegmentBoundaries(string fullPath, string folder, bool expected)
+        {
+            // Act
+            var isUnder = StoredPath.IsUnder(fullPath, folder);
+
+            // Assert
+            isUnder.Should().Be(expected,
+                "because a folder covers itself and what lies under it, a root such as '/' or 'D:\\' covers "
+                + "everything on it, and a sibling sharing a prefix or differing in case is a different folder");
+        }
     }
 }

@@ -42,5 +42,25 @@ namespace DlnaServer.Core.Files
         {
             return value is '/' or '\\';
         }
+
+        /// <summary>
+        /// Whether a path is a folder itself or lies anywhere beneath it, compared ordinally.
+        /// </summary>
+        /// <remarks>
+        /// A boundary check rather than <c>StartsWith(folder + separator)</c>, which misses everything under
+        /// a root such as <c>/</c> or <c>D:\</c>: those keep their trailing separator through
+        /// <see cref="System.IO.Path.TrimEndingDirectorySeparator(string)"/>, so the appended one doubled it.
+        /// Either separator ends a segment, for the reason on this class.
+        /// </remarks>
+        public static bool IsUnder(string fullPath, string folder)
+        {
+            ArgumentNullException.ThrowIfNull(fullPath);
+            ArgumentNullException.ThrowIfNull(folder);
+
+            return fullPath.StartsWith(folder, StringComparison.Ordinal)
+                && (fullPath.Length == folder.Length
+                    || (folder.Length > 0 && IsSeparator(folder[^1]))
+                    || IsSeparator(fullPath[folder.Length]));
+        }
     }
 }

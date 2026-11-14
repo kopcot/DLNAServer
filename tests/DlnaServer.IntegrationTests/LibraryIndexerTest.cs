@@ -2064,6 +2064,24 @@ namespace DlnaServer.IntegrationTests
             return previewPath;
         }
 
+        /// <summary>
+        /// A drive or filesystem root keeps its separator, so appending one to test for nesting found nothing.
+        /// </summary>
+        [Test]
+        public void NormaliseSourceFolders_WithARootAndAFolderOnIt_KeepsOnlyTheRoot()
+        {
+            // Arrange
+            var root = Path.GetPathRoot(Path.GetFullPath(Path.GetTempPath()))!;
+
+            // Act
+            var normalised = LibraryIndexer.NormaliseSourceFolders([root, Path.Combine(root, "Films")]);
+
+            // Assert
+            normalised.Should().Equal([root],
+                "because a folder on the root is already covered by it, and indexing it twice as two roots "
+                + "would reconcile each against the other");
+        }
+
         private string CreateFile(string relativePath, int sizeInBytes)
         {
             var fullPath = Path.Combine(_mediaRoot, relativePath);

@@ -184,7 +184,7 @@ namespace DlnaServer.Core.Uploads
             // Belt and braces after the dot-segment check: the resolved path is compared against the root
             // it must sit under, so anything that escaped by another route is caught by where it landed
             // rather than by how it was spelled.
-            if (!resolved.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            if (!StoredPath.IsUnder(resolved, root))
             {
                 problem = "That folder is outside the destination folder.";
 

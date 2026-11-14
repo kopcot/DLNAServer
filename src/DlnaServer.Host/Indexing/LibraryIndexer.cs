@@ -276,12 +276,7 @@ namespace DlnaServer.Host.Indexing
             {
                 var root = firstFillRoots[index];
 
-                if (!fullPath.StartsWith(root, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (fullPath.Length == root.Length || StoredPath.IsSeparator(fullPath[root.Length]))
+                if (StoredPath.IsUnder(fullPath, root))
                 {
                     return true;
                 }
@@ -1263,8 +1258,7 @@ namespace DlnaServer.Host.Indexing
 
             foreach (var candidate in normalised)
             {
-                var nested = roots.Any(root =>
-                    candidate.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+                var nested = roots.Any(root => StoredPath.IsUnder(candidate, root));
 
                 if (!nested)
                 {
@@ -1284,13 +1278,10 @@ namespace DlnaServer.Host.Indexing
         {
             foreach (var folder in sourceFolders)
             {
-                // Ordinal for the same reason as NormaliseSourceFolders, and the separator is read from
-                // the stored path rather than taken from the host: these paths come out of the database
-                // and may have been written by the other operating system.
-                var separator = StoredPath.SeparatorOf(fullPath);
-
-                if (string.Equals(fullPath, folder, StringComparison.Ordinal)
-                    || fullPath.StartsWith(folder + separator, StringComparison.Ordinal))
+                // Ordinal for the same reason as NormaliseSourceFolders, and either separator ends a
+                // segment rather than the host's: these paths come out of the database and may have been
+                // written by the other operating system.
+                if (StoredPath.IsUnder(fullPath, folder))
                 {
                     return true;
                 }

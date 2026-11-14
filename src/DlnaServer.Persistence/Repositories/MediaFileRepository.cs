@@ -1964,9 +1964,12 @@ namespace DlnaServer.Persistence.Repositories
             // design and no case_sensitive_like pragma is set, so it could not, and every recursive
             // "include every subfolder" action from the Library page scanned the table instead of seeking
             // the unique index on it.
+            // Trimmed first, as AnyUnderPathAsync does: a root such as "/" or "D:\" keeps its separator, and
+            // appending another made a range nothing falls in.
             var separator = SeparatorOf(directoryPath);
-            var subtreeStart = directoryPath + separator;
-            var subtreeEnd = directoryPath + (char)(separator + 1);
+            var trimmed = directoryPath.TrimEnd(separator);
+            var subtreeStart = trimmed + separator;
+            var subtreeEnd = trimmed + (char)(separator + 1);
 
             return _dbContext.Files.Where(f =>
                 f.Directory != null
