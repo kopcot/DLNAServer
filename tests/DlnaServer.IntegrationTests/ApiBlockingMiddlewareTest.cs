@@ -24,7 +24,7 @@ namespace DlnaServer.IntegrationTests
         public void SetUp()
         {
             _time = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
-            _blocker = new ApiBlocker(_time);
+            _blocker = new ApiBlocker(timeProvider: _time);
             _isNextCalled = false;
             _middleware = new ApiBlockingMiddleware(
                 next: _ =>
@@ -43,7 +43,7 @@ namespace DlnaServer.IntegrationTests
         public async Task InvokeAsync_WhileBlocked_PassesTheHealthEndpoints(string path)
         {
             // Arrange
-            _blocker.Block(TimeSpan.FromHours(1), reason: "maintenance");
+            _blocker.Block(duration: TimeSpan.FromHours(1), reason: "maintenance");
             var context = new DefaultHttpContext();
             context.Request.Path = path;
 
@@ -63,7 +63,7 @@ namespace DlnaServer.IntegrationTests
         public async Task InvokeAsync_WhileBlocked_RefusesTelevisionPaths(string path)
         {
             // Arrange
-            _blocker.Block(TimeSpan.FromHours(1), reason: "maintenance");
+            _blocker.Block(duration: TimeSpan.FromHours(1), reason: "maintenance");
             var context = new DefaultHttpContext();
             context.Request.Path = path;
 

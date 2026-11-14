@@ -102,9 +102,10 @@ namespace DlnaServer.Host
             + "frame-ancestors 'none'";
 
         /// <summary>
-        /// Size cap for one <c>app.log</c> / <c>error.log</c> segment, matching <c>slowQuery.log</c>.
+        /// Size cap for one segment of every log file - <c>app.log</c>, <c>error.log</c>, <c>slowQuery.log</c> and
+        /// <c>uploadSecurity.log</c>.
         /// </summary>
-        private const long AppLogSizeLimitBytes = 32L * 1024 * 1024;
+        private const long LogFileSizeLimitBytes = 32L * 1024 * 1024;
 
         /// <summary>
         /// Folder, relative to the binaries, that every log file is written into.
@@ -497,7 +498,7 @@ namespace DlnaServer.Host
                         path: Path.Combine(LogFolderName, "slowQuery.log"),
                         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] {Message:lj}{NewLine}",
                         rollingInterval: RollingInterval.Month,
-                        fileSizeLimitBytes: 32L * 1024 * 1024,
+                        fileSizeLimitBytes: LogFileSizeLimitBytes,
 
                         // The reference omitted this, so once its monthly file hit the size cap Serilog
                         // silently stopped writing for the rest of the month.
@@ -513,7 +514,7 @@ namespace DlnaServer.Host
                         path: Path.Combine(LogFolderName, "uploadSecurity.log"),
                         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] {Message:lj}{NewLine}",
                         rollingInterval: RollingInterval.Month,
-                        fileSizeLimitBytes: 32L * 1024 * 1024,
+                        fileSizeLimitBytes: LogFileSizeLimitBytes,
                         rollOnFileSizeLimit: true,
                         retainedFileCountLimit: 12))
 
@@ -532,7 +533,7 @@ namespace DlnaServer.Host
                         // worth of this file reached 32 MB once already, and it lands in the publish
                         // folder on an SMB share, so an unbounded one is both a disc-space and a
                         // disclosure problem.
-                        fileSizeLimitBytes: AppLogSizeLimitBytes,
+                        fileSizeLimitBytes: LogFileSizeLimitBytes,
                         rollOnFileSizeLimit: true,
                         retainedFileCountLimit: AppLogRetainedFileCountLimit,
                         retainedFileTimeLimit: TimeSpan.FromDays(7)))
@@ -542,7 +543,7 @@ namespace DlnaServer.Host
                     outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] [{SourceContext}]{NewLine}"
                         + "{Message:lj}{NewLine}TraceId: {TraceId}{NewLine}SpanId: {SpanId}{NewLine}{Exception}{NewLine}",
                     rollingInterval: RollingInterval.Day,
-                    fileSizeLimitBytes: AppLogSizeLimitBytes,
+                    fileSizeLimitBytes: LogFileSizeLimitBytes,
                     rollOnFileSizeLimit: true,
                     retainedFileCountLimit: AppLogRetainedFileCountLimit,
                     retainedFileTimeLimit: TimeSpan.FromDays(7))
@@ -856,8 +857,8 @@ namespace DlnaServer.Host
                 .AddEndpointFilter(new RequirePortEndpointFilter(serverOptions.AdminPort));
 
             // Readiness, as distinct from the liveness above: the process answering says nothing about
-            // whether it can serve anything. Reading CurrentValue is what re-runs validation, so the
-            // answer describes the file as it is now rather than whenever something last read a setting.
+            // whether it can serve anything. Reading CurrentValue first is what sets IsCurrentValid from the
+            // options as they are now - validated once per change of the file, the outcome cached until the next.
             _ = app.MapGet(
                 "/health/ready",
                 static (IDatabaseReadySignal database, LastGoodDlnaOptionsMonitor options) =>

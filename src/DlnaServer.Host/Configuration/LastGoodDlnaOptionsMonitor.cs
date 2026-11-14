@@ -54,9 +54,10 @@ namespace DlnaServer.Host.Configuration
         /// </summary>
         /// <remarks>
         /// Says nothing on its own: it reports the outcome of the last <see cref="Get"/>, so a caller that
-        /// needs the state NOW - the readiness probe - reads <see cref="CurrentValue"/> first, which is
-        /// what re-runs validation. Starts true because <c>ValidateOnStart</c> has already passed by the
-        /// time anything can ask.
+        /// needs the state NOW - the readiness probe - reads <see cref="CurrentValue"/> first. That does not
+        /// validate again: the options cache validates once per change of the file and hands back that
+        /// outcome, a cached failure included, until the next one. Starts true because <c>ValidateOnStart</c>
+        /// has already passed by the time anything can ask.
         /// </remarks>
         public bool IsCurrentValid => _isCurrentValid;
 

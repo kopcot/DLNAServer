@@ -30,9 +30,10 @@ namespace DlnaServer.Host.Configuration
         /// The exclusions a NAS deployment always wants, used when configuration names none of its own.
         /// </summary>
         /// <remarks>
-        /// The thumbnail sub-folder has to be here or <c>DlnaOptionsValidator</c> refuses to boot, since
-        /// thumbnails are written beside the media; <c>@Recycle</c> is QNAP's trash and holds deleted
-        /// copies of the very files that are still in the library.
+        /// <c>.@__thumb</c> is the shipped thumbnail sub-folder, which <see cref="ApplyExcludeFolderDefaults"/>
+        /// adds whatever is configured, since thumbnails are written beside the media - it is listed here so
+        /// the seeded list reads as the shipped one. <c>@Recycle</c> is QNAP's trash and holds deleted copies
+        /// of the very files that are still in the library.
         /// </remarks>
         private static readonly string[] _defaultExclusions = [".@__thumb", "@Recycle"];
 
@@ -146,8 +147,9 @@ namespace DlnaServer.Host.Configuration
         /// </para>
         /// <para>
         /// All three are excluded by FULL path under the application folder, not by name. The Settings page
-        /// writes the exclusions back into <c>config.json</c> on every save, so a bare <c>logs</c> or
-        /// <c>Resources</c> outlived the fallback and then hid every folder of that name in the real library.
+        /// writes the exclusions back into <c>config.json</c> on every save, so a bare <c>thumbnails</c>,
+        /// <c>Resources</c> or <c>logs</c> outlived the fallback and then hid every folder of that name in the
+        /// real library.
         /// </para>
         /// </remarks>
         private static void ApplySourceFolderFallback(DlnaOptions options)
@@ -209,17 +211,17 @@ namespace DlnaServer.Host.Configuration
         }
 
         /// <summary>
-        /// Adds a folder name to the exclusions once. Reloads re-run this, so appending blindly would
-        /// grow the list on every configuration change.
+        /// Adds an entry - a folder name or a full path - to the exclusions once. Reloads re-run this, so
+        /// appending blindly would grow the list on every configuration change.
         /// </summary>
-        private static void Exclude(LibraryOptions library, string folderName)
+        private static void Exclude(LibraryOptions library, string entry)
         {
-            if (string.IsNullOrWhiteSpace(folderName))
+            if (string.IsNullOrWhiteSpace(entry))
             {
                 return;
             }
 
-            var canonical = Canonicalise(folderName);
+            var canonical = Canonicalise(entry);
 
             for (var index = 0; index < library.ExcludeFolders.Count; index++)
             {
@@ -232,7 +234,7 @@ namespace DlnaServer.Host.Configuration
                 }
             }
 
-            library.ExcludeFolders.Add(folderName);
+            library.ExcludeFolders.Add(entry);
         }
 
         /// <summary>

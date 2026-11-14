@@ -256,16 +256,18 @@ namespace DlnaServer.IntegrationTests
             var excluded = saved.Library.ExcludeFolders.ToArray();
 
             // Assert
-            PathExclusion.IsExcluded("/share/Media/Concerts/logs/live.mkv", excluded).Should().BeFalse(
+            PathExclusion.IsExcluded(fullPath: "/share/Media/Concerts/logs/live.mkv", excludedEntries: excluded).Should().BeFalse(
                 "because a library folder called logs is media, not the server's own log folder");
-            PathExclusion.IsExcluded("/share/Media/Resources/icon.jpg", excluded).Should().BeFalse(
+            PathExclusion.IsExcluded(fullPath: "/share/Media/Resources/icon.jpg", excludedEntries: excluded).Should().BeFalse(
                 "because only the application's own asset folder is excluded, not every folder of that name");
-            PathExclusion.IsExcluded(Path.Combine(AppContext.BaseDirectory, "logs", "app.log"), excluded).Should().BeTrue(
+            PathExclusion.IsExcluded(
+                fullPath: Path.Combine(AppContext.BaseDirectory, "logs", "app.log"),
+                excludedEntries: excluded).Should().BeTrue(
                 "because the saved entries still exclude the application's own log folder they were made for");
         }
 
         [Test]
-        public void Apply_WithANestedCacheDirectory_ExcludesItsOwnFolderName()
+        public void Apply_WithANestedCacheDirectory_ExcludesItsFullPath()
         {
             // Arrange
             var options = new DlnaOptions
