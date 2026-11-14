@@ -27,9 +27,11 @@ the container image uses to put it on its data volume - binds to `DlnaOptions` (
 `IConfiguration` pipeline, and is consumed via `IOptionsMonitor` so most edits apply without a restart.
 
 With **no source folder configured the application's own folder is served**, so a fresh deployment starts
-rather than refusing to boot. The thumbnail cache and `Resources` are excluded from that fallback library,
-because otherwise the generated thumbnails and the device icons would be indexed as media. A warning names
-the folder it fell back to.
+rather than refusing to boot. The thumbnail cache, `Resources` and `logs` are excluded from that fallback
+library, because otherwise the generated thumbnails and the device icons would be indexed as media, and every
+line written to the logs would be watched as a change to the library. A warning names the folder it fell
+back to. The container image names no source folder either, which is why every deployment under
+`deploy/docker-compose/` sets `Dlna__Library__SourceFolders__0`.
 
 `DlnaOptionsValidator` then refuses to start the server on: a source folder that does not exist, equal media
 and admin ports, a per-file cache limit above the total cache budget, a blank `Thumbnails.SubFolderName`, a

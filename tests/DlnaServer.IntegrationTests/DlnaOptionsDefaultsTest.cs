@@ -194,6 +194,44 @@ namespace DlnaServer.IntegrationTests
                 "because the device icons are protocol assets, not somebody's photographs");
         }
 
+        /// <summary>
+        /// The log folder sits inside the application folder, so a fallback library that watched it reported
+        /// every log line as a change, and every change asked for another scan.
+        /// </summary>
+        [Test]
+        public void Apply_WithNoSourceFolders_ExcludesTheApplicationsOwnLogs()
+        {
+            // Arrange
+            var options = new DlnaOptions();
+
+            // Act
+            DlnaOptionsDefaults.Apply(options);
+
+            // Assert
+            options.Library.ExcludeFolders.Should().Contain("logs",
+                "because the server's own log files are not media, and watching them turns each log line into a rescan");
+        }
+
+        [Test]
+        public void Apply_WithASourceFolder_DoesNotExcludeAFolderNamedLogs()
+        {
+            // Arrange
+            var options = new DlnaOptions
+            {
+                Library = new LibraryOptions
+                {
+                    SourceFolders = ["/share/Media"],
+                },
+            };
+
+            // Act
+            DlnaOptionsDefaults.Apply(options);
+
+            // Assert
+            options.Library.ExcludeFolders.Should().NotContain("logs",
+                "because only the fallback serves the server's own folder - a library may have a folder of that name");
+        }
+
         [Test]
         public void Apply_WithANestedCacheDirectory_ExcludesItsOwnFolderName()
         {
@@ -234,7 +272,7 @@ namespace DlnaServer.IntegrationTests
             DlnaOptionsDefaults.Apply(options);
 
             // Assert
-            options.Library.ExcludeFolders.Should().Equal(["thumbnails", ".@__thumb", "Resources"],
+            options.Library.ExcludeFolders.Should().Equal(["thumbnails", ".@__thumb", "Resources", "logs"],
                 "because configuration reloads re-run this, and each one would otherwise append again - "
                 + "the thumbnail sub-folder is added unconditionally and belongs in the expected list");
         }

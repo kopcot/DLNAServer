@@ -40,7 +40,7 @@ namespace DlnaServer.Host.Configuration
         {
             ArgumentNullException.ThrowIfNull(options);
 
-            // Exclusions first: the source-folder fallback adds its own two names through Exclude, which
+            // Exclusions first: the source-folder fallback adds its own names through Exclude, which
             // already de-duplicates, and seeding afterwards would see a non-empty list and skip.
             ApplyExcludeFolderDefaults(options);
 
@@ -139,6 +139,11 @@ namespace DlnaServer.Host.Configuration
         /// folder name is added to the exclusions instead, which is how the reference kept its thumbnails
         /// out of its media tree.
         /// </para>
+        /// <para>
+        /// The log folder is excluded for the same kind of reason. It sits inside the application folder - beside
+        /// the binaries on the NAS, as the <c>/app/logs</c> volume in the image - so the watch covered it and
+        /// each log line written there was reported as a change to the library.
+        /// </para>
         /// </remarks>
         private static void ApplySourceFolderFallback(DlnaOptions options)
         {
@@ -151,6 +156,9 @@ namespace DlnaServer.Host.Configuration
 
             Exclude(options.Library, ResolveCacheFolderName(options.Thumbnails.CacheDirectory));
             Exclude(options.Library, ResourcesExclusion);
+
+            // The logs are written into the folder being watched, so every line was a change and a reason to scan again.
+            Exclude(options.Library, Program.LogFolderName);
         }
 
         /// <summary>

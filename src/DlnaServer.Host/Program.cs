@@ -96,6 +96,16 @@ namespace DlnaServer.Host
         private const long AppLogSizeLimitBytes = 32L * 1024 * 1024;
 
         /// <summary>
+        /// Folder, relative to the binaries, that every log file is written into.
+        /// </summary>
+        /// <remarks>
+        /// Shared with <c>DlnaOptionsDefaults</c>, which excludes it when the application folder is served as
+        /// the library: a watched log folder turns every log line into a file change, and each change into
+        /// another scan.
+        /// </remarks>
+        internal const string LogFolderName = "logs";
+
+        /// <summary>
         /// Segments kept once the size cap starts rolling within a single day.
         /// </summary>
         /// <remarks>
@@ -463,7 +473,7 @@ namespace DlnaServer.Host
                 .WriteTo.Logger(static sub => sub
                     .Filter.ByIncludingOnly(Matching.FromSource(PersistenceServiceCollectionExtensions.SlowQueryLogCategory))
                     .WriteTo.File(
-                        path: Path.Combine("logs", "slowQuery.log"),
+                        path: Path.Combine(LogFolderName, "slowQuery.log"),
                         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] {Message:lj}{NewLine}",
                         rollingInterval: RollingInterval.Month,
                         fileSizeLimitBytes: 32L * 1024 * 1024,
@@ -479,7 +489,7 @@ namespace DlnaServer.Host
                 .WriteTo.Logger(static sub => sub
                     .Filter.ByIncludingOnly(Matching.FromSource(UploadSecurityLog.Category))
                     .WriteTo.File(
-                        path: Path.Combine("logs", "uploadSecurity.log"),
+                        path: Path.Combine(LogFolderName, "uploadSecurity.log"),
                         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] {Message:lj}{NewLine}",
                         rollingInterval: RollingInterval.Month,
                         fileSizeLimitBytes: 32L * 1024 * 1024,
@@ -493,7 +503,7 @@ namespace DlnaServer.Host
                     .Filter.ByExcluding(Matching.FromSource(PersistenceServiceCollectionExtensions.SlowQueryLogCategory))
                     .Filter.ByExcluding(Matching.FromSource(UploadSecurityLog.Category))
                     .WriteTo.File(
-                        path: Path.Combine("logs", "app.log"),
+                        path: Path.Combine(LogFolderName, "app.log"),
                         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}",
                         rollingInterval: RollingInterval.Day,
 
@@ -506,7 +516,7 @@ namespace DlnaServer.Host
                         retainedFileCountLimit: AppLogRetainedFileCountLimit,
                         retainedFileTimeLimit: TimeSpan.FromDays(7)))
                 .WriteTo.File(
-                    path: Path.Combine("logs", "error.log"),
+                    path: Path.Combine(LogFolderName, "error.log"),
                     restrictedToMinimumLevel: LogEventLevel.Error,
                     outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff} {Level:u3}] [{SourceContext}]{NewLine}"
                         + "{Message:lj}{NewLine}TraceId: {TraceId}{NewLine}SpanId: {SpanId}{NewLine}{Exception}{NewLine}",
