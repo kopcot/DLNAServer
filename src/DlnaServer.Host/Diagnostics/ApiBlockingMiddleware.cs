@@ -12,6 +12,11 @@ namespace DlnaServer.Host.Diagnostics
     /// Unblock button down with everything else - the page 503'd on the next reload and recovery meant a
     /// shell on the NAS. 503 rather than an error is what tells a renderer to come back rather than to
     /// treat the server as gone, and <c>Retry-After</c> says when.
+    /// <para>
+    /// <c>/health</c> and <c>/health/ready</c> are exempt too. The container health check asks
+    /// <c>/health/ready</c>, so a block reported the container unhealthy for the whole 1-72 hours - and a
+    /// tool that restarts unhealthy containers would have lifted the block, which lives only in memory.
+    /// </para>
     /// </remarks>
     internal sealed partial class ApiBlockingMiddleware
     {
@@ -23,6 +28,7 @@ namespace DlnaServer.Host.Diagnostics
         private static readonly string[] _exemptPrefixes =
         [
             "/manage",
+            "/health",
             "/admin",
             "/_blazor",
             "/_framework",
