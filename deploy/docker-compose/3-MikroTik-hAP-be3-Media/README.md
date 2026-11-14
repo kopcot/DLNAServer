@@ -57,7 +57,7 @@ large library takes a while on this CPU.
 | Setting | Why |
 | --- | --- |
 | veth on the LAN bridge, own address | SSDP is multicast. A container on a separate subnet behind NAT would be invisible to every television. On the LAN bridge, the server is a LAN host like any other |
-| `registry-url=https://ghcr.io` | The published image lives on GHCR, not Docker Hub |
+| `remote-image=ghcr.io/kopcot/dlnaserver:latest`, no `registry-url` | The published image lives on GHCR, not Docker Hub. Naming the registry in the image keeps the router-wide `registry-url` free for any other container |
 | `tmpdir` and `root-dir` on USB | The image does not fit in 512 MB of NAND |
 | `memory-high` 768 MiB | Leaves the router its own memory; below ~512 MiB, thumbnailing a large photo fails |
 | `user=0:0` | A disk RouterOS formats is root-owned and RouterOS has no chown, and previews are written beside the media |

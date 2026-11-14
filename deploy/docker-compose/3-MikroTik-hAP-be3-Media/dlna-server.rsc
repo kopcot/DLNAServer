@@ -14,17 +14,19 @@
 /interface/veth/add name=veth-dlna address=192.168.88.2/24 gateway=192.168.88.1
 /interface/bridge/port/add bridge=bridge interface=veth-dlna
 
-# Pull from GHCR, and extract on the USB disk - the 512 MB internal NAND cannot hold the image.
+# Extract on the USB disk - the 512 MB internal NAND cannot hold the image. No registry-url: that is router-wide,
+# and the image below names its registry, ghcr.io, itself.
 # memory-high caps containers at 768 MiB of the router's 2 GB; below ~512 MiB thumbnailing a large
 # photo fails rather than being slow.
-/container/config/set registry-url=https://ghcr.io tmpdir=usb1/tmp memory-high=805306368
+/container/config/set tmpdir=usb1/tmp memory-high=805306368
 
 # Media read-write: previews are written beside the media, in .@__thumb folders.
 /container/mounts/add list=dlna src=usb1/media dst=/media
 /container/mounts/add list=dlna src=usb1/dlna/data dst=/data
 /container/mounts/add list=dlna src=usb1/dlna/logs dst=/app/logs
 
-# Index 0 replaces the folder the shipped config.json names rather than adding to it.
+# Without it a new usb1/dlna/data starts with a config.json written from defaults, which names no source
+# folder, so the server would serve its own /app. This entry wins over the Settings page.
 /container/envs/add list=dlna key=Dlna__Library__SourceFolders__0 value=/media
 /container/envs/add list=dlna key=Dlna__Server__FriendlyName value="ZEN DLNA Server (MikroTik)"
 # Files copied onto the disk over SMB or by unplugging it are not reliably seen by the file watcher.
@@ -40,6 +42,6 @@
 
 # user=0:0 because a disk RouterOS formats is owned by root and RouterOS has no chown, so the image's own
 # non-root user could not write previews into usb1/media or the database into usb1/dlna/data.
-/container/add name=dlna-server hostname=dlna-server remote-image=kopcot/dlnaserver:latest \
+/container/add name=dlna-server hostname=dlna-server remote-image=ghcr.io/kopcot/dlnaserver:latest \
     interface=veth-dlna root-dir=usb1/containers/dlna mountlists=dlna envlist=dlna \
     user=0:0 start-on-boot=yes logging=yes

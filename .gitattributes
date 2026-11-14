@@ -77,6 +77,7 @@ Dockerfile      text eol=lf
 Caddyfile       text eol=lf
 .env.example    text eol=lf
 .dockerignore   text eol=lf
+*.rsc           text eol=lf
 
 # Source and project files are LF everywhere, so a checkout always matches `.editorconfig`.
 *.cs            text eol=lf
