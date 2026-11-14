@@ -37,5 +37,15 @@ namespace DlnaServer.Media.Watching
             Message = "'{SourceFolder}' is not there, so no watch was attached to it and changes under it "
                 + "will not be noticed. It is retried while it stays missing.")]
         private partial void LogFolderNotAttached(string sourceFolder);
+
+        /// <remarks>
+        /// Trace: on Windows every file written into a folder raises one of these for the folder too.
+        /// </remarks>
+        [LoggerMessage(
+            EventId = 6,
+            Level = LogLevel.Trace,
+            Message = "Ignored a content change reported for the folder '{Path}': the entry inside it that changed "
+                + "reports itself")]
+        private partial void LogFolderChangeIgnored(string path);
     }
 }

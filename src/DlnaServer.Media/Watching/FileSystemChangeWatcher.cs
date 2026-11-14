@@ -114,7 +114,7 @@ namespace DlnaServer.Media.Watching
                 };
 
                 watcher.Created += (_, args) => Publish(args.FullPath, null, FileChangeKind.CreatedOrChanged, excludedFolderNames);
-                watcher.Changed += (_, args) => Publish(args.FullPath, null, FileChangeKind.CreatedOrChanged, excludedFolderNames);
+                watcher.Changed += (_, args) => PublishChanged(args.FullPath, excludedFolderNames);
                 watcher.Deleted += (_, args) => Publish(args.FullPath, null, FileChangeKind.Deleted, excludedFolderNames);
                 watcher.Renamed += (_, args) => Publish(args.FullPath, args.OldFullPath, FileChangeKind.Renamed, excludedFolderNames);
                 watcher.Error += (_, args) => OnWatcherError(folder, args.GetException());
@@ -192,6 +192,29 @@ namespace DlnaServer.Media.Watching
             // monotonic reading rather than the wall clock, because an NTP step must not decide whether
             // a file has finished copying - see FileChangeEvent.
             Write(new FileChangeEvent(fullPath, oldFullPath, kind, _timeProvider.GetTimestamp()));
+        }
+
+        /// <summary>
+        /// Publishes a content change, unless the path is a folder.
+        /// </summary>
+        /// <remarks>
+        /// Windows raises <c>Changed</c> on a folder whenever an entry inside it is created, renamed or deleted,
+        /// and that entry raises its own event - so the folder's own event carries nothing new, and a junk file
+        /// dropped into a media folder still cost a full pass through it. A folder's <c>Created</c>,
+        /// <c>Renamed</c> and <c>Deleted</c> still go through: a folder moved in brings files that raise nothing
+        /// of their own. <c>internal</c> for the same reason as <see cref="Publish"/>.
+        /// </remarks>
+        internal void PublishChanged(
+            string fullPath,
+            IReadOnlyList<string> excludedFolderNames)
+        {
+            if (Directory.Exists(fullPath))
+            {
+                LogFolderChangeIgnored(fullPath);
+                return;
+            }
+
+            Publish(fullPath, oldFullPath: null, FileChangeKind.CreatedOrChanged, excludedFolderNames);
         }
 
         private void Write(FileChangeEvent raised)

@@ -101,6 +101,57 @@ namespace DlnaServer.UnitTests.Media
                 + "the point of excluding the folder");
         }
 
+        /// <summary>
+        /// Windows raises a content change on a folder for every entry created inside it, beside the entry's
+        /// own event - so every junk file dropped into a media folder was a second reason to scan.
+        /// </summary>
+        [Test]
+        public void PublishChanged_ForAFolder_AnnouncesNothing()
+        {
+            // Arrange
+            using var watcher = new FileSystemChangeWatcher(
+                timeProvider: TimeProvider.System,
+                logger: NullLogger<FileSystemChangeWatcher>.Instance);
+
+            var folder = Directory.CreateTempSubdirectory("dlna-watch-").FullName;
+
+            try
+            {
+                // Act
+                watcher.PublishChanged(
+                    fullPath: folder,
+                    excludedFolderNames: []);
+
+                // Assert
+                watcher.Events.TryRead(out _).Should().BeFalse(
+                    "because the entry that changed inside the folder reports itself, so the folder's event adds nothing");
+            }
+            finally
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+
+        [Test]
+        public void PublishChanged_ForAFile_AnnouncesTheChange()
+        {
+            // Arrange
+            using var watcher = new FileSystemChangeWatcher(
+                timeProvider: TimeProvider.System,
+                logger: NullLogger<FileSystemChangeWatcher>.Instance);
+
+            // Act - a path that is not a folder on disc, which is what a file being written looks like here.
+            watcher.PublishChanged(
+                fullPath: "/media/movies/film.mkv",
+                excludedFolderNames: []);
+
+            // Assert
+            watcher.Events.TryRead(out var raised).Should().BeTrue(
+                "because a file's own content change is what lets the settle window see a copy still growing");
+            raised!.Kind.Should().Be(FileChangeKind.CreatedOrChanged,
+                "because a content change is reported the same way as an arrival");
+        }
+
         [Test]
         public void Start_ReturnsOnlyTheFoldersItAttachedTo()
         {
