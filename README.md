@@ -13,7 +13,7 @@ today keep working. The internals are new.
 > are a dated snapshot.
 >
 > **Deployed and measured.** This build runs on the NAS, its working set fell from 563.4 MB to
-> **177.7 MB** under the memory pass, and a television plays from it. 1,204 tests at 0 warnings, no
+> **177.7 MB** under the memory pass, and a television plays from it. 1,225 tests at 0 warnings, no
 > vulnerable packages, no open Majors. What is still owed is a *steady-state* memory reading — the
 > 177.7 MB was taken 255 s after a restart — and confirmation on a real television of the four DIDL
 > fields added on 2026-09-06.

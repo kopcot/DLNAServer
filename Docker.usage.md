@@ -84,9 +84,10 @@ tree**. Set `PUID`/`PGID` in `.env` to the owner of your media (`id -u`, `id -g`
 
 The image sets `DLNA_CONFIG_FILE=/data/config.json`, so the file the Settings page writes back to sits on
 the `dlna-data` volume beside the database: it survives a recreate, and a missing one is written with
-defaults on the first start. Those defaults name no source folder, which is why every deployment sets
-`Dlna__Library__SourceFolders__0` to its media mount - without it the server serves its own `/app`. It
-cannot live beside the binaries - `/app` belongs to root, the container
+defaults on the first start. The image also sets `DLNA_INITIAL_SOURCE_FOLDER=/media`, which is written as
+the source folder into that first file only - so a new volume serves the media mount rather than its own
+`/app`, and from then on the folder is changed on the Settings page. An existing `config.json` is never
+rewritten. It cannot live beside the binaries - `/app` belongs to root, the container
 runs as `PUID`, and a save goes through a temporary file next to the target, so every *Save* failed there.
 
 Do not bind-mount the file itself either (`./config.json:/app/config.json`): a save replaces the file by
@@ -100,7 +101,11 @@ docker compose cp ./config.json dlna:/data/config.json
 
 The `Dlna__` environment variables in the compose file **win over the file**. A setting saved on the
 Settings page is written to `config.json`, but if the compose file also sets it, the environment value is
-the one that applies. Remove a variable from the compose file once you want the Settings page to own it.
+the one that applies, and the page keeps showing it after every *Save*. To hand a setting to the Settings
+page, press *Save* there once while the variable is still set - that writes its current value into
+`config.json` - and then remove the variable from the compose file. Skipping the *Save* for
+`Dlna__Library__SourceFolders__0` on a volume whose file was written before `DLNA_INITIAL_SOURCE_FOLDER`
+existed leaves that file naming no folder, and the server falls back to serving `/app`.
 
 ### 4. Turn the periodic rescan off if you do not need it
 
@@ -277,14 +282,14 @@ publishing the admin port does not publish the management API.
 | Symptom | Cause |
 |---|---|
 | No television lists the server | Bridge networking. SSDP is multicast; use `network_mode: host` |
-| Library is empty | `Dlna__Library__SourceFolders__0` does not point at the mount, or nothing under it matches `Library.MediaFileExtensions` |
+| Library is empty | The source folder on Settings (`/media` on a new volume) does not point at the mount, or nothing under it matches `Library.MediaFileExtensions` |
 | No previews, no errors | The container user cannot write `.@__thumb` into the media tree — check `PUID`/`PGID` |
 | No durations, resolutions or language filters | ffmpeg missing. `docker compose exec dlna /app/ffmpeg/ffprobe -version` |
 | New files never appear | The watcher gets no inotify events. Set `UsePeriodicRescan=true` |
 | A saved setting does not take effect | The same setting is also a `Dlna__` variable in the compose file, which wins |
 | Admin page returns 400 remotely | `AllowedHosts` does not include the external name |
 | A renderer on the LAN gets 400 with `2-admin-remote` up | `LAN_HOSTS` is unset - `ADMIN_HOSTNAME` alone disables the automatic LAN-address detection for the whole process |
-| Container shows `unhealthy` | The health check asks `/health/ready` on the media port, which answers 503 until the database has migrated, while `config.json` fails validation, and while television traffic is blocked on *Temporary* settings. `docker compose exec dlna curl -si localhost:<media port>/health/ready` says which: the body names the database or the configuration, and an empty 503 with `Retry-After` is the block |
+| Container shows `unhealthy` | The health check asks `/health/ready` on the media port, which answers 503 until the database has migrated and while `config.json` fails validation; a television-traffic block on *Temporary* settings does not affect it. `docker compose exec dlna curl -si localhost:<media port>/health/ready` says which: the body names the database or the configuration. Nothing restarts an unhealthy container - `restart: unless-stopped` ignores health - and a restart-on-unhealthy tool such as autoheal is not supported: it would turn refused settings into a restart loop, and a restart also lifts a television block, which lives only in memory |
 | Working set climbs and stays | Press *Empty the memory* on `/admin/cache`; check `CacheSizeInMegabytes` is 2, not 32 |
 
 Useful:

@@ -89,8 +89,9 @@ valid semver, and a semver pattern would silently produce no tag.
 
 [`../scripts/smoke-test.sh`](../scripts/smoke-test.sh) is shared by `docker.yml`, `docker-publish.yml` and
 `release.yml`. Each starts the server its own way - the image it just built, the image it just pushed, or
-the archive downloaded from the release - with no media configured, so the server falls back to serving
-its own folder. The script then checks:
+the archive downloaded from the release - with no media. The archive falls back to serving its own folder;
+the image writes `/media` into its first `config.json` (`DLNA_INITIAL_SOURCE_FOLDER`), and with nothing
+mounted there that library is simply empty. The script then checks:
 
 - `/health/ready` on the media port - the database migrated and the configuration validated;
 - `/` on the media port returns `description.xml` advertising a `MediaServer`, the first thing a television fetches;

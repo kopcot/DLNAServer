@@ -46,17 +46,15 @@ services:
 
       # config.json is on dlna-data too (DLNA_CONFIG_FILE in the Dockerfile), which is what lets the
       # Settings page save it. Do not bind-mount the file itself: a save renames over it, and a rename onto a
-      # single-file mount fails. The Dlna__ variables below WIN over the file - remove one from here once
-      # you want the Settings page to own that setting.
+      # single-file mount fails. The Dlna__ variables below WIN over the file: the Settings page shows their
+      # value again after every Save. To hand one to the page, Save there once, then remove it from here.
 
     environment:
       Dlna__Server__Port: 25002
       Dlna__Server__AdminPort: 25003
       Dlna__Server__FriendlyName: "ZEN DLNA Server (docker)"
-      # Where the media is, INSIDE the container. Without it a new dlna-data volume starts with a
-      # config.json written from defaults, which names no source folder, so the server serves its own /app
-      # instead of /media. This entry wins over the Settings page; a second folder is __1 beside it.
-      Dlna__Library__SourceFolders__0: /media
+      # No source folder here, so the Settings page owns it: the image writes /media, the mount above, into
+      # the first config.json a new dlna-data volume gets (DLNA_INITIAL_SOURCE_FOLDER), and never again.
 
       # THE REASON THIS FEATURE EXISTS. A bind mount or an overlay filesystem usually delivers no inotify
       # events for writes made outside the container, so FileSystemWatcher stays silent and the library
@@ -72,10 +70,10 @@ services:
       # unverified third-party binary, and there is nothing here for it to fix.
       Dlna__Thumbnails__DownloadFFmpeg: "false"
 
-      # Memory - the settings that actually decide this server's footprint. The database values and the two
-      # size limits match the repository's src/DlnaServer.Host/config.json; the two FileCache switches are
-      # OFF here, where that file has them on. The page cache is charged PER POOLED CONNECTION, so 32 here
-      # is not 32 MB, it is 32 MB times however many connections the pool has grown to.
+      # Memory - the settings that actually decide this server's footprint, pinned here because the first
+      # /data/config.json is written with their code defaults, and these win over it. Both FileCache
+      # switches are OFF, where the code default is on. The page cache is charged PER POOLED CONNECTION,
+      # so 32 here is not 32 MB, it is 32 MB times however many connections the pool has grown to.
       Dlna__Database__MemoryMapLimitInMegabytes: "0"
       Dlna__Database__CacheSizeInMegabytes: "2"
       Dlna__FileCache__Enabled: "false"

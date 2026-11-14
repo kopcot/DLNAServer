@@ -23,9 +23,9 @@
 		# X-Forwarded-Proto is read: UseForwardedHeaders in Program.cs turns it into the request's
 		# scheme, which is what puts the Secure flag on cookies behind this proxy and what stops
 		# uploadSecurity.log recording every device as 127.0.0.1. Caddy adds X-Forwarded-For itself.
-		# No confinement control depends on any of them - those key on the connection's local port and
-		# its socket peer, not on a header - so a forged one cannot reach the media port or the admin
-		# surface.
+		# None of them can widen confinement: the admin surface and the local-network check key on the
+		# local port and the socket peer recorded before UseForwardedHeaders runs, and the /manage filter
+		# reads the forwarded address, which only a loopback peer - this proxy - is trusted to set.
 		header_up X-Forwarded-Proto {scheme}
 		header_up X-Real-IP {remote_host}
 	}

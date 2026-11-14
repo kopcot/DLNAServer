@@ -25,8 +25,8 @@
 /container/mounts/add list=dlna src=usb1/dlna/data dst=/data
 /container/mounts/add list=dlna src=usb1/dlna/logs dst=/app/logs
 
-# Without it a new usb1/dlna/data starts with a config.json written from defaults, which names no source
-# folder, so the server would serve its own /app. This entry wins over the Settings page.
+# The media mount. While this entry exists the Settings page shows /media again after every Save; to manage
+# the folder there, Save once and remove the entry - a new usb1/dlna/data gets /media in its first config.json.
 /container/envs/add list=dlna key=Dlna__Library__SourceFolders__0 value=/media
 /container/envs/add list=dlna key=Dlna__Server__FriendlyName value="ZEN DLNA Server (MikroTik)"
 # Files copied onto the disk over SMB or by unplugging it are not reliably seen by the file watcher.

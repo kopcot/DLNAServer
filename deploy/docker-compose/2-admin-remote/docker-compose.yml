@@ -21,20 +21,17 @@
 # running server - /manage/database answers 200 on 26852 and 404 on 26853. So publishing the admin port
 # does not publish /manage/stop.
 #
-# "Never publish the media port" is what this used to say next, and it described a control that does not
-# exist. The dlna service mandates network_mode: host because SSDP needs multicast, and Program.cs binds
-# both ports with ListenAnyIP - so the media port is already on every interface and there is nothing to
-# publish or withhold. The HOST FIREWALL confines it, and since ADR 0036 an address check in the server
-# as well.
+# The MEDIA PORT cannot be withheld: the dlna service needs network_mode: host for SSDP multicast, and
+# Program.cs binds both ports with ListenAnyIP, so it is on every interface. Three things confine it, in
+# the order a request meets them:
+#   1. the HOST FIREWALL - keep the media port closed there;
+#   2. the server's local-network check (ADR 0036) - the whole media port answers only the local network;
+#   3. RejectRemoteManagementEndpointFilter - /manage refuses any non-private remote address.
+# 2 and 3 are address checks, not authentication; this server has none by design.
 #
-# That mattered because ADMIN_HOSTNAME below widens AllowedHosts for the whole PROCESS, not just the admin
-# port - HostFilteringOptions has no per-port form - so setting it also let internet-origin requests past
-# the one in-process check that had been refusing them on the media port. The hostname is not a secret
-# either: the Let's Encrypt certificate for it is published in the Certificate Transparency logs.
-# RejectRemoteManagementEndpointFilter now refuses /manage from any non-private remote address, which is
-# the actual control. Keep the firewall anyway: since ADR 0036 the media port as a whole - Browse,
-# streaming, eventing, description.xml - answers only the local network too, but that is an address check,
-# not authentication, and this server has none by design.
+# ADMIN_HOSTNAME below widens AllowedHosts for the whole PROCESS, not just the admin port -
+# HostFilteringOptions has no per-port form - so it does not help confine the media port, and the hostname
+# is not a secret: its Let's Encrypt certificate is published in the Certificate Transparency logs.
 # ---------------------------------------------------------------------------------------------------
 
 services:
@@ -66,17 +63,17 @@ services:
       Dlna__Server__Port: ${MEDIA_PORT:-26852}
       # The same variable Caddy proxies to below, so the two cannot disagree.
       Dlna__Server__AdminPort: ${ADMIN_PORT:-26853}
-      # Without it a new dlna-data volume starts with a config.json written from defaults, which names no
-      # source folder, so the server would serve its own /app. This entry wins over the Settings page.
+      # The media mount. While this line is here the Settings page shows /media again after every Save; to
+      # manage the folder there, Save once and remove the line - a new volume's first config.json names /media.
       Dlna__Library__SourceFolders__0: /media
       # A bind mount usually delivers no inotify events for writes made outside the container.
       Dlna__Library__UsePeriodicRescan: "true"
       Dlna__Library__RescanIntervalMinutes: "5"
       # ffmpeg is in the image; on would download and execute an unverified binary.
       Dlna__Thumbnails__DownloadFFmpeg: "false"
-      # Memory, pinned to the values folder 1 and the repository's src/DlnaServer.Host/config.json use, so
-      # the footprint does not hang on code defaults. The page cache is charged per pooled connection - see
-      # "Memory" in Docker.usage.md.
+      # Memory: the two database values folder 1 pins, because the first /data/config.json is written
+      # with their code defaults, and these win over it. The FileCache switches are not pinned and stay
+      # on. The page cache is charged per pooled connection - see "Memory" in Docker.usage.md.
       Dlna__Database__MemoryMapLimitInMegabytes: "0"
       Dlna__Database__CacheSizeInMegabytes: "2"
       TZ: ${TZ:-Europe/Prague}

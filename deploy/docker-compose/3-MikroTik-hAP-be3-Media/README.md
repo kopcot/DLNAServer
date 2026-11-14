@@ -65,14 +65,35 @@ large library takes a while on this CPU.
 
 ## Updating
 
-Stop and remove the container, then re-run the `/container/add` line from the script. The new pull gets
-whatever `latest` is now. Mounts and env lists are kept, and so are the database and previews, which live
-on the USB disk.
+Stop the container, wait until `/container/print` shows `stopped`, remove it, then re-run the
+`/container/add` line from the script and start it once it is `stopped` again. The new pull gets whatever
+`latest` is now. Mounts and env lists are kept, and so are the database and previews, which live on the USB
+disk.
 
 ```
 /container/stop dlna-server
 /container/remove dlna-server
 ```
+
+## Upgrading from the earlier script
+
+The script before 2.0.1114 set the router-wide `registry-url` to GHCR and named the image without its registry. Importing the new script on such a router is not enough: the old container keeps its old image name, and `registry-url` stays set for every container. Once, in this order:
+
+```
+/container/config/set registry-url=""
+/container/stop dlna-server
+/container/print
+```
+
+Wait until `/container/print` shows `stopped` - the stop can return before the container has stopped - then remove it and add it again with the image's full name:
+
+```
+/container/remove dlna-server
+/container/add name=dlna-server hostname=dlna-server remote-image=ghcr.io/kopcot/dlnaserver:latest interface=veth-dlna root-dir=usb1/containers/dlna mountlists=dlna envlist=dlna user=0:0 start-on-boot=yes logging=yes
+/container/print
+```
+
+Wait until it is `stopped` again (pulled and extracted), then `/container/start dlna-server`. Mounts, env lists, the database and the previews are kept. `registry-url=""` is RouterOS's usual way to clear a value, but like the rest of this folder it has not been run on the device.
 
 ## If televisions do not see it
 

@@ -34,8 +34,9 @@ and use `docker compose pull && docker compose up -d`.
 ## Before changing anything
 
 [`Docker.usage.md`](../../../Docker.usage.md) explains the four things that bite: host networking, why the
-media mount is read-write, where `config.json` lives, and the periodic rescan this file turns on. The ports,
-the source folder `/media` and the memory settings come from the `environment:` block, and those values win
-over the Settings page.
+media mount is read-write, where `config.json` lives, and the periodic rescan this file turns on. The ports
+and the memory settings come from the `environment:` block, and those values win over the Settings page. The
+source folder does not: a new volume's first `config.json` names `/media`, and from then on it is changed on
+the Settings page.
 
 To put only the admin pages on the internet, see [`2-admin-remote`](../2-admin-remote/README.md).

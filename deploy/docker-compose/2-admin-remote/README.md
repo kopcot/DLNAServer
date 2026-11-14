@@ -36,8 +36,14 @@ whole of the protection. Read the warning at the top of `docker-compose.yml` bef
 `ADMIN_PORT` drives both the server's admin port and Caddy's upstream, so change it in one place only.
 
 The `dlna` service pins the two settings that decide its memory footprint, `Dlna__Database__MemoryMapLimitInMegabytes`
-and `Dlna__Database__CacheSizeInMegabytes`, to the values folder 1 uses; `MEM_LIMIT` in `.env` caps the
-container. *Memory* in `Docker.usage.md` explains both.
+and `Dlna__Database__CacheSizeInMegabytes`, to the values folder 1 uses. It does not pin folder 1's two
+`FileCache` switches, so the in-memory byte cache stays on at its code default (256 MB at most);
+`MEM_LIMIT` in `.env` caps the container. *Memory* in `Docker.usage.md` explains both.
+
+The media folder is `/media`. The compose file sets `Dlna__Library__SourceFolders__0: /media`, and while
+that line is there it wins: the Settings page shows `/media` again after every *Save*. To manage the folder
+on Settings instead, press *Save* there once, then remove the line - a new volume's first `config.json`
+names `/media` on its own.
 
 ## Update
 
@@ -46,7 +52,9 @@ docker compose up --build -d
 ```
 
 The `dlna` image is rebuilt from GitHub's `main` on current base images (`pull: true`), and `caddy` is
-pulled again every time (`pull_policy: always`), so both take their security fixes. The database, the logs,
+pulled again on every `docker compose up` (`pull_policy: always`), so both take their security fixes - a
+restart after a reboot pulls nothing. While Docker Hub is unreachable or refuses the pull, that same `up`
+fails; `docker compose up --pull missing --build -d` starts on the Caddy image already there. The database, the logs,
 `config.json` and Caddy's certificates live on named volumes and survive it.
 
 [`Docker.usage.md`](../../../Docker.usage.md) has the full background under *Exposing only the admin pages

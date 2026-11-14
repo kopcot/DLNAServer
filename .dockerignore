@@ -21,7 +21,7 @@ config.json
 **/config.json.saved-*
 
 # Secrets for the admin-remote compose stack - an admin password hash and whatever else operators put
-# there. COPY . . (Dockerfile:40) would otherwise put it straight into the build context and image layers.
+# there. The Dockerfile's `COPY . .` would otherwise put it straight into the build context and image layers.
 # Every .env* is excluded, then .env.example is re-included below - later lines win, so order matters.
 **/.env
 **/.env.*

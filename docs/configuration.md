@@ -29,9 +29,13 @@ the container image uses to put it on its data volume - binds to `DlnaOptions` (
 With **no source folder configured the application's own folder is served**, so a fresh deployment starts
 rather than refusing to boot. The thumbnail cache, `Resources` and `logs` are excluded from that fallback
 library, because otherwise the generated thumbnails and the device icons would be indexed as media, and every
-line written to the logs would be watched as a change to the library. A warning names the folder it fell
-back to. The container image names no source folder either, which is why every deployment under
-`deploy/docker-compose/` sets `Dlna__Library__SourceFolders__0`.
+line written to the logs would be watched as a change to the library. They are excluded by their full path
+under the application folder: the Settings page writes the list back on every save, and a bare name would
+then hide every folder of that name in the library named next. A warning names the folder it fell back to.
+The container image avoids the fallback: `DLNA_INITIAL_SOURCE_FOLDER=/media` is written as the source folder
+into a `config.json` created because none existed - only then, so the Settings page owns the folder
+afterwards. The QNAP compose relies on that; the remote-admin compose and the MikroTik script still set
+`Dlna__Library__SourceFolders__0`, which wins over the Settings page while it is there.
 
 `DlnaOptionsValidator` then refuses to start the server on: a source folder that does not exist, equal media
 and admin ports, a per-file cache limit above the total cache budget, a blank `Thumbnails.SubFolderName`, a
