@@ -26,7 +26,7 @@ question needs settling, and write nothing into it.
 > milestone status and checklists, the conventions and tooling traps that have cost time, and how to
 > resume. Read it before doing any work here, and update it as work completes.
 >
-> **Version `2.0.1110`.** Every change bumps the assembly version - the rule, and who may bump which part,
+> **Version `2.0.1114`.** Every change bumps the assembly version - the rule, and who may bump which part,
 > is in `docs/decisions.md` section 7 under "Assembly version". Each project carries its **own** `<Version>` -
 > under `src/` since 2026-09-23, the test projects too since 2026-09-26 - so bump only the projects the change
 > touched; `DlnaServer.Host` is the product version, and no other project tracks it. **`release-notes.md` is updated
@@ -40,7 +40,7 @@ question needs settling, and write nothing into it.
 > them and is gone. On 2026-10-26 the standing decisions moved again, one file each, into `docs/ADR/` - numbered as they were, so standing decision *N* is ADR *N*, padded to four digits, - and section 7b keeps the open work and the traps.
 >
 > **State.** Running on the NAS, working set 563.4 MB → **177.7 MB** after the memory pass, a television
-> plays from it, **1,189 tests at 0 warnings**, no vulnerable packages. **The NAS runs the current product
+> plays from it, **1,204 tests at 0 warnings**, no vulnerable packages. **The NAS runs the current product
 > version**: `http://192.168.1.200:26853/admin/about` reported `1.1.0926` on 2026-09-27, started from
 > `T:\apps\Dlna-server`. See "Where things stand" in docs/decisions.md section 8. Three `/review-all --full`
 > passes and a deduplication pass have run and everything they raised is closed except the items listed

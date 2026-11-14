@@ -153,10 +153,12 @@ CONFIGURATION
     An existing thumbnail is reused rather than regenerated, which means a library
     the old server already previewed needs no thumbnail work at all.
 
-    Startup fails if that folder name is not in Dlna.Library.ExcludeFolders, or if
-    Dlna.Thumbnails.CacheDirectory resolves inside a source folder without an
-    exclusion covering it - generated thumbnails would otherwise be re-indexed as
-    media on the next scan, and then previewed in turn.
+    That folder name is always excluded from scanning, whether or not
+    Dlna.Library.ExcludeFolders lists it - the server adds it at startup, because
+    generated thumbnails would otherwise be re-indexed as media on the next scan,
+    and then previewed in turn. Startup still fails if SubFolderName is blank or
+    is a path rather than one folder name, or if Dlna.Thumbnails.CacheDirectory
+    resolves inside a source folder without an exclusion covering it.
 
     FFMPEG - INSTALL IT BY HAND, THIS IS THE SUPPORTED PATH
     ffmpeg and ffprobe are optional. Without them the server still indexes, browses

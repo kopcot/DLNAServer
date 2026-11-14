@@ -1730,7 +1730,7 @@ This file is written to be the only context needed. Work through it in order.
 0 warnings, and the work has shifted from writing milestones to fixing what real devices
 and real memory readings reveal.
 
-**2.0 (2026-11-10) restyled the admin UI** from the server's own icon (ADR 0039, history section 6za), and its fixes are section 6zb - among them, *Television traffic* now lives on Temporary settings rather than Maintenance.
+**2.0 (2026-11-10) restyled the admin UI** from the server's own icon (ADR 0039, history section 6za), and its fixes are section 6zb - among them, *Television traffic* now lives on Temporary settings rather than Maintenance. **2.0.1114 (2026-11-14)** is the deployment audit, history section 6zc: the image's health check is readiness (`/health/ready`), so a container reports *unhealthy* while its settings are refused and while television traffic is blocked; the QNAP compose names `/media` again, and the application-folder fallback excludes `logs`.
 
 **The NAS runs the current product version.** Checked 2026-09-27 against
 `http://192.168.1.200:26853/admin/about`, served from `T:\apps\Dlna-server`: the page answers and reports

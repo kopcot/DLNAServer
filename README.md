@@ -13,12 +13,12 @@ today keep working. The internals are new.
 > are a dated snapshot.
 >
 > **Deployed and measured.** This build runs on the NAS, its working set fell from 563.4 MB to
-> **177.7 MB** under the memory pass, and a television plays from it. 1,189 tests at 0 warnings, no
+> **177.7 MB** under the memory pass, and a television plays from it. 1,204 tests at 0 warnings, no
 > vulnerable packages, no open Majors. What is still owed is a *steady-state* memory reading — the
 > 177.7 MB was taken 255 s after a restart — and confirmation on a real television of the four DIDL
 > fields added on 2026-09-06.
 >
-> **Version `2.0.1110`.** It is `Major.Minor.MonthDate`, and each project carries its own, so a number
+> **Version `2.0.1114`.** It is `Major.Minor.MonthDate`, and each project carries its own, so a number
 > says which assembly changed. The one on the About page is the host's, which is the product version;
 > the assembly table on that page lists the rest. `release-notes.md` says what changed for whoever runs the server,
 > one entry per `Major.Minor`; `docs/` holds everything internal. `release-notes.md` and `LICENSE` are

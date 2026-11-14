@@ -20,8 +20,8 @@ docker compose up --build -d
 docker compose logs -f
 ```
 
-Admin pages: `http://<host>:26853` - the admin port's root redirects to `/admin`. Televisions find the
-server on their own.
+Admin pages: `http://<host>:25003` for this folder, which sets `Dlna__Server__AdminPort: 25003`; the other
+deployments use `26853`. The admin port's root redirects to `/admin`. Televisions find the server on their own.
 
 **To run a released image instead of building one**, point the `dlna` service at the published image and
 drop its `build:` block - every release is pushed as `ghcr.io/kopcot/dlnaserver:v<version>` and `:latest`:
@@ -84,7 +84,9 @@ tree**. Set `PUID`/`PGID` in `.env` to the owner of your media (`id -u`, `id -g`
 
 The image sets `DLNA_CONFIG_FILE=/data/config.json`, so the file the Settings page writes back to sits on
 the `dlna-data` volume beside the database: it survives a recreate, and a missing one is written with
-defaults on the first start. It cannot live beside the binaries - `/app` belongs to root, the container
+defaults on the first start. Those defaults name no source folder, which is why every deployment sets
+`Dlna__Library__SourceFolders__0` to its media mount - without it the server serves its own `/app`. It
+cannot live beside the binaries - `/app` belongs to root, the container
 runs as `PUID`, and a save goes through a temporary file next to the target, so every *Save* failed there.
 
 Do not bind-mount the file itself either (`./config.json:/app/config.json`): a save replaces the file by
@@ -160,7 +162,10 @@ cross-compiling it to ARM from an x64 builder is the awkward case. It only short
 The ffmpeg difference is a real improvement, not just packaging. `Thumbnails.DownloadFFmpeg` fetches an
 archive from whatever URL a third-party API names, verifies no hash or signature, and executes the result
 as the server user — so a compromise of that host, its CDN or its DNS is code execution on your box.
-Debian's package is signed, and `docker build --pull` updates it.
+Debian's package is signed. It is installed, with a full `apt-get upgrade`, in a layer built on the runtime
+base image, so a rebuild on a newer base image - what the compose files' `pull: true` fetches - installs
+Debian's current ffmpeg; a rebuild that reuses the cached layer keeps the old one until
+`docker compose build --no-cache`.
 
 ## Memory
 
@@ -249,7 +254,7 @@ publishing the admin port does not publish the management API.
    ```
    ADMIN_HOSTNAME=dlna.example.com
    ADMIN_USER=admin
-   ADMIN_PASSWORD_HASH=$$2a$$14$$....
+   ADMIN_PASSWORD_HASH=$$2a$$12$$....
    ```
 4. Also set `LAN_HOSTS` to this box's LAN IP and/or hostname, semicolon-separated, unless nothing on the
    LAN ever reaches it by address — see the callout above for why `ADMIN_HOSTNAME` alone breaks that.
@@ -279,6 +284,7 @@ publishing the admin port does not publish the management API.
 | A saved setting does not take effect | The same setting is also a `Dlna__` variable in the compose file, which wins |
 | Admin page returns 400 remotely | `AllowedHosts` does not include the external name |
 | A renderer on the LAN gets 400 with `2-admin-remote` up | `LAN_HOSTS` is unset - `ADMIN_HOSTNAME` alone disables the automatic LAN-address detection for the whole process |
+| Container shows `unhealthy` | The health check asks `/health/ready` on the media port, which answers 503 until the database has migrated, while `config.json` fails validation, and while television traffic is blocked on *Temporary* settings. `docker compose exec dlna curl -si localhost:<media port>/health/ready` says which: the body names the database or the configuration, and an empty 503 with `Retry-After` is the block |
 | Working set climbs and stays | Press *Empty the memory* on `/admin/cache`; check `CacheSizeInMegabytes` is 2, not 32 |
 
 Useful:
@@ -298,8 +304,8 @@ Built and run on 2026-09-06, Docker 28.3.3. Image is 1.25 GB. Since 2026-10-06 t
 | | Result |
 |---|---|
 | `docker build` | succeeds |
-| `docker compose config`, both files and the overlay merged | valid; `AllowedHosts` reaches the server |
-| Container health | `Up (healthy)` — the `HEALTHCHECK` works |
+| `docker compose config`, the QNAP file and the remote-admin stack (then an add-on file merged over it) | valid; `AllowedHosts` reaches the server |
+| Container health | `Up (healthy)` — the `HEALTHCHECK` works. It asked `/manage/database` then; since 2.0.1114 it asks `/health/ready`, re-verified 2026-11-14 |
 | Migrations on an empty volume | all six applied, database created |
 | Indexing | 2 files, 2 directories from the mount |
 | **Thumbnail generation** | 480×360, 4045 bytes, written to `/media/Films/.@__thumb/big.jpg.jpg` **as uid 1000**, visible on the host — so the non-root write into the media tree works |
@@ -332,5 +338,5 @@ against a running instance. Back it up like the database, but do not hand it out
 - **`network_mode: host` on Docker Desktop for Windows or Mac.** It is a Linux feature; on Desktop the
   "host" is the Linux VM, not your workstation, so the compose file as written is for a Linux host — the
   NAS, or a Linux box. On Windows, test with published ports and accept that discovery will not work.
-- **The remote-admin overlay end to end.** Caddy's config is valid and the merge is correct, but no
+- **The remote-admin stack end to end.** Caddy's config is valid and the stack resolves, but no
   certificate was issued and no external request was made, because that needs a public DNS name.
