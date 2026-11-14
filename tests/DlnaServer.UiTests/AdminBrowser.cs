@@ -197,8 +197,8 @@ namespace DlnaServer.UiTests
         }
 
         /// <summary>
-        /// Run from every fixture's tear-down: fails a passing test whose page logged an error, and attaches a
-        /// screenshot to a failed test so a red CI run shows what the page looked like.
+        /// Run from a fixture's tear-down: attaches a screenshot to a failed test so a red CI run shows what the
+        /// page looked like, and fails a passing test whose page logged an error.
         /// </summary>
         /// <remarks>
         /// A tear-down that drives the browser itself calls the two halves instead, around its own work, so the
@@ -228,7 +228,8 @@ namespace DlnaServer.UiTests
 
         /// <summary>
         /// The second half of <see cref="CheckAfterTest"/>: fails a passing test on any console error since it
-        /// started, and forgets them so none is charged to the next test.
+        /// started, writes them to the test's output instead when it has already failed, and forgets them so none
+        /// is charged to the next test.
         /// </summary>
         public void AssertAfterTest()
         {

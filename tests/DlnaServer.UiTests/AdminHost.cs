@@ -182,8 +182,8 @@ namespace DlnaServer.UiTests
             };
             startInfo.ArgumentList.Add(hostAssembly);
 
-            // The child inherits this environment, so an operator's own Dlna__ settings or URLs would reach the
-            // test Host - another source folder indexed, uploads switched on, other ports.
+            // The child inherits this environment, so an operator's own Dlna__ settings, URLs or Kestrel endpoints
+            // would reach the test Host - another source folder indexed, uploads switched on, other ports.
             foreach (var key in startInfo.Environment.Keys.Where(IsInheritedHostSetting).ToList())
             {
                 _ = startInfo.Environment.Remove(key);
@@ -207,14 +207,17 @@ namespace DlnaServer.UiTests
 
         /// <remarks>
         /// The web host also reads <c>ASPNETCORE_</c>- and <c>DOTNET_</c>-prefixed variables with the prefix removed,
-        /// so <c>ASPNETCORE_Dlna__Library__SourceFolders__1</c> would add a second source folder.
+        /// so <c>ASPNETCORE_Dlna__Library__SourceFolders__1</c> would add a second source folder. A
+        /// <c>Kestrel__Endpoints__*</c> entry, prefixed or not, would add a listener beside the two the Host opens.
         /// </remarks>
         private static bool IsInheritedHostSetting(string key)
         {
             var name = WithoutHostPrefix(key: key, prefix: "ASPNETCORE_")
                 ?? WithoutHostPrefix(key: key, prefix: "DOTNET_");
+            var setting = (name ?? key).Replace("__", ":", StringComparison.Ordinal);
 
-            return (name ?? key).Replace("__", ":", StringComparison.Ordinal).StartsWith("Dlna:", StringComparison.OrdinalIgnoreCase)
+            return setting.StartsWith("Dlna:", StringComparison.OrdinalIgnoreCase)
+                || setting.StartsWith("Kestrel:", StringComparison.OrdinalIgnoreCase)
                 || (name is not null && name.Equals("URLS", StringComparison.OrdinalIgnoreCase));
         }
 
@@ -307,6 +310,9 @@ namespace DlnaServer.UiTests
 
         private async Task<bool> IsReadyAsync(CancellationToken cancellationToken)
         {
+            // Reset first, so a check that hangs or is cancelled is not reported as the previous check's finding.
+            _unmetReadiness = "no answer yet to the readiness checks";
+
             try
             {
                 using var live = await Http.GetAsync(new Uri(AdminUri, "/admin/health"), cancellationToken);

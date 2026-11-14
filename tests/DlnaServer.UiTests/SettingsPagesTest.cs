@@ -22,29 +22,47 @@ namespace DlnaServer.UiTests
         /// the test did - a failure half way through would otherwise leave every later listing showing the
         /// hidden folders, or the shared Host refusing televisions for an hour. The screenshot is taken before
         /// the restore navigates away and the console is checked after it, so an error the restore causes is
-        /// charged to this test rather than the next.
+        /// charged to this test rather than the next. A failed screenshot does not skip the restore, a failed
+        /// restore does not skip the console check, and when both fail both are reported.
         /// </remarks>
         [TearDown]
         public void TearDown()
         {
-            Browser.CaptureAfterTest();
-
             try
             {
-                // Each restore in its own finally, so a failure putting one back cannot leave the other set.
                 try
                 {
-                    Restore(button: _hideHidden, because: "the hidden folders are hidden again for the tests that follow");
+                    Browser.CaptureAfterTest();
                 }
                 finally
                 {
-                    Restore(button: _unblock, because: "televisions are answered again for the tests that follow");
+                    // Each restore in its own finally, so a failure putting one back cannot leave the other set.
+                    try
+                    {
+                        Restore(button: _hideHidden, because: "the hidden folders are hidden again for the tests that follow");
+                    }
+                    finally
+                    {
+                        Restore(button: _unblock, because: "televisions are answered again for the tests that follow");
+                    }
                 }
             }
-            finally
+            catch (Exception tearDownFailure)
             {
-                Browser.AssertAfterTest();
+                // The check still runs, so the console is cleared for the next test; a failing check must not hide this one.
+                try
+                {
+                    Browser.AssertAfterTest();
+                }
+                catch (Exception assertFailure)
+                {
+                    throw new AggregateException(tearDownFailure, assertFailure);
+                }
+
+                throw;
             }
+
+            Browser.AssertAfterTest();
         }
 
         /// <remarks>
