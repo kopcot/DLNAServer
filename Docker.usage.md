@@ -87,7 +87,9 @@ the `dlna-data` volume beside the database: it survives a recreate, and a missin
 defaults on the first start. The image also sets `DLNA_INITIAL_SOURCE_FOLDER=/media`, which is written as
 the source folder into that first file only - so a new volume serves the media mount rather than its own
 `/app`, and from then on the folder is changed on the Settings page. An existing `config.json` is never
-rewritten. It cannot live beside the binaries - `/app` belongs to root, the container
+rewritten. One the server cannot read is moved to `/data/backup/` and replaced with defaults **without**
+that seed, so the server serves `/app` until you restore your folders from the backup - on the Settings
+page, or with the commands below; the startup log names the backup. It cannot live beside the binaries - `/app` belongs to root, the container
 runs as `PUID`, and a save goes through a temporary file next to the target, so every *Save* failed there.
 
 Do not bind-mount the file itself either (`./config.json:/app/config.json`): a save replaces the file by

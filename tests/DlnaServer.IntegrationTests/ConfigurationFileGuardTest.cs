@@ -265,11 +265,7 @@ namespace DlnaServer.IntegrationTests
                 filePath: _configPath,
                 timeProvider: TimeProvider.System,
                 initialSourceFolder: null);
-            var bound = new ConfigurationBuilder()
-                .AddJsonFile(_configPath, optional: false, reloadOnChange: false)
-                .Build()
-                .GetSection(DlnaOptions.SectionName)
-                .Get<DlnaOptions>()!;
+            var bound = ReadBound()!;
             DlnaOptionsDefaults.Apply(bound);
 
             // Assert
@@ -281,13 +277,19 @@ namespace DlnaServer.IntegrationTests
 
         private string[] ReadSourceFolders()
         {
-            var bound = new ConfigurationBuilder()
+            var bound = ReadBound();
+
+            return bound is null ? [] : [.. bound.Library.SourceFolders];
+        }
+
+        // Bound the way the server binds it, without the defaults applied.
+        private DlnaOptions? ReadBound()
+        {
+            return new ConfigurationBuilder()
                 .AddJsonFile(_configPath, optional: false, reloadOnChange: false)
                 .Build()
                 .GetSection(DlnaOptions.SectionName)
                 .Get<DlnaOptions>();
-
-            return bound is null ? [] : [.. bound.Library.SourceFolders];
         }
 
         private JsonElement? ReadSection()

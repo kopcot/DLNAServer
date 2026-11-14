@@ -623,12 +623,17 @@ namespace DlnaServer.Host
                         result.FilePath);
                     break;
 
+                // The seed is named because the image always sets it, and an operator who knows it seeds a new
+                // file would otherwise expect the replacement to serve it too.
                 case ConfigurationFileStatus.Replaced:
                     logger.Warning(
                         "Configuration file {FilePath} was unusable ({Reason}) and has been replaced with "
-                        + "defaults. The original was kept at {BackupPath} - recover your settings from it.",
+                        + "defaults. {Variable} was not applied to the replacement, so it names no source folder. "
+                        + "The original was kept at {BackupPath} - restore your folders and settings from it by "
+                        + "hand, on the Settings page or in the file.",
                         result.FilePath,
                         result.Reason,
+                        InitialSourceFolderVariable,
                         result.BackupPath);
                     break;
             }

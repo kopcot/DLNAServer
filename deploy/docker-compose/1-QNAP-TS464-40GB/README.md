@@ -37,6 +37,8 @@ and use `docker compose pull && docker compose up -d`.
 media mount is read-write, where `config.json` lives, and the periodic rescan this file turns on. The ports
 and the memory settings come from the `environment:` block, and those values win over the Settings page. The
 source folder does not: a new volume's first `config.json` names `/media`, and from then on it is changed on
-the Settings page.
+the Settings page. A volume whose `config.json` names no folder, and a `config.json` the server had to replace
+because it could not read it, get no `/media` and serve `/app` instead - section 3 of `Docker.usage.md` says
+how to set the folder in either case.
 
 To put only the admin pages on the internet, see [`2-admin-remote`](../2-admin-remote/README.md).

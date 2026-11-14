@@ -32,8 +32,9 @@ namespace DlnaServer.Host.Configuration
         /// <param name="timeProvider">Dates the backup of a file that had to be replaced.</param>
         /// <param name="initialSourceFolder">
         /// The source folder written into a file created because none existed, or null for none. Only that
-        /// first file gets it: an existing file is the operator's, and a replaced one is recovered from its
-        /// backup, so after the first start the Settings page owns the folder.
+        /// first file gets it: an existing file is the operator's, and a replaced one is left without it on
+        /// purpose - its folders are in the backup, for the operator to restore by hand, and seeding one
+        /// could share more than they had chosen to. After the first start the Settings page owns the folder.
         /// </param>
         public static ConfigurationFileResult EnsureUsable(
             string filePath,
