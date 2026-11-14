@@ -68,5 +68,12 @@ namespace DlnaServer.Media.Processing
             Message = "The thumbnail '{TargetPath}' or its folder is a link, so no thumbnail is read or "
                 + "written through it; remove the link to have one made")]
         private partial void LogLinkedThumbnailRefused(string targetPath);
+
+        [LoggerMessage(
+            EventId = 11,
+            Level = LogLevel.Debug,
+            Message = "'{FilePath}' is a playlist, so ffmpeg is not run on it: it would open every address the "
+                + "playlist names")]
+        private partial void LogPlaylistNotProbed(string filePath);
     }
 }

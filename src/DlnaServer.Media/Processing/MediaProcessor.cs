@@ -26,6 +26,10 @@ namespace DlnaServer.Media.Processing
         /// </remarks>
         private static readonly TimeSpan _ffmpegTimeout = TimeSpan.FromMinutes(3);
 
+        // ffmpeg follows the URLs a playlist or a crafted container names - http, tcp, even another local
+        // file through concat - so every input we hand it may be read through the file protocol only.
+        private const string ProtocolWhitelist = "-protocol_whitelist file";
+
         private readonly IFFmpegProvisioner _ffmpeg;
         private readonly ImageThumbnailGenerator _imageThumbnails;
         private readonly ILogger<MediaProcessor> _logger;
@@ -77,6 +81,15 @@ namespace DlnaServer.Media.Processing
                         ? ImageTagReader.Read(filePath)
                         : [],
                 };
+            }
+
+            // A playlist is a list of addresses, not media: ffprobe would open every one it names, and
+            // Xabe's probe arguments cannot carry the protocol whitelist. Empty, like an image, so the
+            // attempt is recorded and the file is not probed again.
+            if (mime == DlnaMime.AudioXMpequrl)
+            {
+                LogPlaylistNotProbed(filePath);
+                return MediaMetadataResult.Empty;
             }
 
             if (IsUnsafeForFFmpeg(filePath))
@@ -152,6 +165,12 @@ namespace DlnaServer.Media.Processing
             if (ImageThumbnailGenerator.IsLinked(targetPath))
             {
                 LogLinkedThumbnailRefused(targetPath);
+                return null;
+            }
+
+            if (mime == DlnaMime.AudioXMpequrl)
+            {
+                LogPlaylistNotProbed(filePath);
                 return null;
             }
 
@@ -244,6 +263,7 @@ namespace DlnaServer.Media.Processing
                     var captureAt = VideoCaptureTime.For(knownDuration ?? videoStream.Duration);
 
                     var conversion = FFmpeg.Conversions.New()
+                        .AddParameter(ProtocolWhitelist, ParameterPosition.PreInput)
                         .AddStream(videoStream.SetOutputFramesCount(1).SetSeek(captureAt))
                         .SetOutput(framePath);
 
@@ -304,9 +324,7 @@ namespace DlnaServer.Media.Processing
                 // -v quiet keeps ffprobe's banner out of the JSON; the stream entries are asked for by
                 // name so the reply carries the tag blocks and the index to attribute them to, and not a
                 // full description of every stream.
-                var json = await Probe.New().Start(
-                    $"-v quiet -show_entries format_tags:stream=index:stream_tags -of json \"{filePath}\"",
-                    timeout.Token);
+                var json = await Probe.New().Start(ContainerTagArguments(filePath), timeout.Token);
 
                 return ContainerTagReader.Parse(json);
             }
@@ -324,6 +342,11 @@ namespace DlnaServer.Media.Processing
                 LogContainerTagsFailed(filePath, FFmpegFailureReason.Summarise(exception.Message));
                 return [];
             }
+        }
+
+        internal static string ContainerTagArguments(string filePath)
+        {
+            return $"-v quiet {ProtocolWhitelist} -show_entries format_tags:stream=index:stream_tags -of json \"{filePath}\"";
         }
 
         /// <summary>
@@ -362,6 +385,7 @@ namespace DlnaServer.Media.Processing
                     }
 
                     return FFmpeg.Conversions.New()
+                        .AddParameter(ProtocolWhitelist, ParameterPosition.PreInput)
                         .AddStream(artwork)
                         .SetOutput(framePath);
                 },

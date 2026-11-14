@@ -1,3 +1,4 @@
+using DlnaServer.Core.Contracts.Processing;
 using DlnaServer.Core.Dlna;
 using DlnaServer.Media.Processing;
 using DlnaServer.Media.Processing.Provisioning;
@@ -102,6 +103,89 @@ namespace DlnaServer.UnitTests.Media
             metadata.Should().BeNull(
                 "because a timed-out probe read nothing, and only null makes the caller record a failure "
                 + "instead of saving an empty result over the file's streams");
+        }
+
+        [Test]
+        public async Task ExtractMetadataAsync_ForAPlaylist_NeverProbesIt()
+        {
+            // Arrange
+            var probes = new List<string>();
+            var processor = ProcessorRecordingProbes(probes);
+
+            // Act
+            var metadata = await processor.ExtractMetadataAsync(
+                filePath: Path.Combine(Path.GetTempPath(), "list.m3u"),
+                mime: DlnaMime.AudioXMpequrl,
+                settings: Settings(),
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            metadata.Should().Be(MediaMetadataResult.Empty,
+                "because an empty result records the attempt, so the file is not offered again");
+            probes.Should().BeEmpty("because ffprobe would open every address the playlist names");
+        }
+
+        [Test]
+        public async Task GenerateThumbnailAsync_ForAPlaylist_NeverProbesIt()
+        {
+            // Arrange
+            var probes = new List<string>();
+            var processor = ProcessorRecordingProbes(probes);
+
+            // Act
+            var thumbnail = await processor.GenerateThumbnailAsync(
+                filePath: Path.Combine(Path.GetTempPath(), "list.m3u"),
+                mime: DlnaMime.AudioXMpequrl,
+                targetPath: Path.Combine(Path.GetTempPath(), $"dlna-{Guid.NewGuid():N}", "list.m3u.jpg"),
+                settings: Settings(),
+                allowAdoption: false,
+                notOlderThanUtc: null,
+                knownDuration: null,
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            thumbnail.Should().BeNull("because a playlist has no picture");
+            probes.Should().BeEmpty("because ffprobe would open every address the playlist names");
+        }
+
+        [Test]
+        public void ContainerTagArguments_LimitsFFprobeToLocalFiles()
+        {
+            // Act
+            var arguments = MediaProcessor.ContainerTagArguments("/media/film.mkv");
+
+            // Assert
+            arguments.Should().Contain("-protocol_whitelist file",
+                "because a crafted container can name network addresses ffprobe would otherwise open");
+            arguments.IndexOf("-protocol_whitelist", StringComparison.Ordinal).Should().BeLessThan(
+                arguments.IndexOf("/media/film.mkv", StringComparison.Ordinal),
+                "because ffprobe applies an input option only when it comes before the input");
+        }
+
+        private static MediaProcessor ProcessorRecordingProbes(List<string> probes)
+        {
+            return new MediaProcessor(
+                new AvailableFFmpeg(),
+                new ImageThumbnailGenerator(NullLogger<ImageThumbnailGenerator>.Instance),
+                NullLogger<MediaProcessor>.Instance,
+                getMediaInfo: (path, _) =>
+                {
+                    probes.Add(path);
+
+                    throw new InvalidOperationException("No probe is expected");
+                });
+        }
+
+        private static MediaProcessingSettings Settings()
+        {
+            return new MediaProcessingSettings(
+                MaxWidth: 160,
+                MaxHeight: 160,
+                Quality: 80,
+                ThumbnailMime: DlnaMime.ImageJpeg,
+                StoreThumbnailContent: false,
+                AllowFFmpegDownload: false,
+                ReadContainerTags: true);
         }
 
         private sealed class AvailableFFmpeg : IFFmpegProvisioner
