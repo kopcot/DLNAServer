@@ -1633,6 +1633,30 @@ namespace DlnaServer.UnitTests.Persistence
                 "because including subdirectories must reach the files below as well as those alongside");
         }
 
+        /// <summary>
+        /// The subtree range bounds a folder exactly - a root such as <c>/</c> or <c>D:\</c> included,
+        /// which keeps its separator - and leaves a sibling sharing its prefix outside.
+        /// </summary>
+        [TestCase("/", "/film.mkv", true)]
+        [TestCase(@"D:\", @"D:\Films\film.mkv", true)]
+        [TestCase("/media", "/media/Films/film.mkv", true)]
+        [TestCase("/media", "/media2/film.mkv", false)]
+        public async Task AnyUnderPathAsync_FindsAFileOnlyInsideTheFolder(string folder, string file, bool expected)
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var repository = CreateRepository(context);
+
+            _ = await repository.AddRangeAsync(files: [CreateFile(file)], cancellationToken: CancellationToken.None);
+
+            // Act
+            var found = await repository.AnyUnderPathAsync(folderPath: folder, cancellationToken: CancellationToken.None);
+
+            // Assert
+            found.Should().Be(expected,
+                "because only a file inside the folder's own subtree counts, on a root as anywhere else");
+        }
+
         [Test]
         public async Task ClearThumbnailsAsync_ForOneFile_DeletesTheRowAndStopsItBeingMadeAgain()
         {

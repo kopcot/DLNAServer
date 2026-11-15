@@ -609,6 +609,44 @@ namespace DlnaServer.UnitTests.Persistence
                 "because a backslash-separated path is a real stored shape, not only a test artefact");
         }
 
+        /// <summary>
+        /// A root keeps its separator when stored, and the visible-media range appended another to it,
+        /// so a whole drive used as a source folder vanished from every listing.
+        /// </summary>
+        [TestCase("/")]
+        [TestCase(@"D:\")]
+        public async Task GetSourceRootsAsync_WithARootSourceFolder_ListsItAndItsChildren(string root)
+        {
+            // Arrange
+            await using var context = _database.CreateContext();
+            var repository = CreateRepository(context);
+            var films = $"{root}Films";
+            var roots = await repository.AddRangeAsync(
+                directories: [CreateDirectory(root, root, depth: 1, isSourceRoot: true)],
+                cancellationToken: CancellationToken.None);
+            _ = await repository.AddRangeAsync(
+                directories: [CreateDirectory(films, "Films", depth: 2, isSourceRoot: false, parent: roots[0].PublicId)],
+                cancellationToken: CancellationToken.None);
+
+            await AddMediaAsync(context, root, films);
+
+            // Act
+            var sourceRoots = await repository.GetSourceRootsAsync(CancellationToken.None);
+            var children = await repository.GetChildrenPageAsync(
+                parentPublicId: roots[0].PublicId,
+                skip: 0,
+                take: int.MaxValue,
+                sortByDate: false,
+                descending: false,
+                cancellationToken: CancellationToken.None);
+
+            // Assert
+            sourceRoots.Should().ContainSingle(d => d.FullPath == root,
+                "because a root holding a visible file is a source folder like any other");
+            children.Should().ContainSingle(d => d.Name == "Films",
+                "because the folder on the root holds a visible file as well");
+        }
+
         /// <remarks>
         /// Paths only: the subtree test reads the file's stored path rather than its foreign key, so a
         /// file needs no directory row to make the folder above it visible.
@@ -621,7 +659,7 @@ namespace DlnaServer.UnitTests.Persistence
             {
                 var separator = directoryPaths[index].Contains('\\', StringComparison.Ordinal) ? '\\' : '/';
 
-                files[index] = CreateFile($"{directoryPaths[index]}{separator}film{index}.mkv");
+                files[index] = CreateFile($"{directoryPaths[index].TrimEnd(separator)}{separator}film{index}.mkv");
             }
 
             var options = new DlnaOptions();

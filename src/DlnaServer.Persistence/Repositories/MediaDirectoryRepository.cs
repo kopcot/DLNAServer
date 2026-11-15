@@ -20,21 +20,6 @@ namespace DlnaServer.Persistence.Repositories
         // there and the ones built here must escape identically.
         private const string LikeEscape = HiddenPathQuery.LikeEscape;
 
-        /// <summary>
-        /// Path separators, each with the character that follows it in code-point order.
-        /// </summary>
-        /// <remarks>
-        /// Appending the pair to a folder's path gives the half-open range holding exactly its subtree:
-        /// <c>/media/Films/</c> to <c>/media/Films0</c> contains every path under <c>/media/Films</c> and
-        /// no other, because <c>0</c> is <c>/</c> plus one and <c>]</c> is <c>\</c> plus one. A sibling
-        /// named <c>Films2</c> sorts above the upper bound and is therefore excluded, which a prefix
-        /// match written as <c>StartsWith</c> would have to be told separately.
-        /// </remarks>
-        private const string PosixSeparator = "/";
-        private const string PosixSeparatorSuccessor = "0";
-        private const string WindowsSeparator = "\\";
-        private const string WindowsSeparatorSuccessor = "]";
-
         private readonly DlnaDbContext _dbContext;
         private readonly IOptionsMonitor<DlnaOptions> _options;
         private readonly ITemporaryFolderVisibility _visibility;
@@ -411,11 +396,7 @@ namespace DlnaServer.Persistence.Repositories
         {
             var visibleFiles = HiddenPathQuery.ExcludeHiddenFiles(_dbContext.Files.AsNoTracking(), hiddenFolders);
 
-            return query.Where(d => visibleFiles.Any(f =>
-                (string.Compare(f.FullPath, d.FullPath + PosixSeparator) > 0
-                    && string.Compare(f.FullPath, d.FullPath + PosixSeparatorSuccessor) < 0)
-                || (string.Compare(f.FullPath, d.FullPath + WindowsSeparator) > 0
-                    && string.Compare(f.FullPath, d.FullPath + WindowsSeparatorSuccessor) < 0)));
+            return SubtreeRange.WithAnyFileBeneath(query, visibleFiles);
         }
 
         private IQueryable<MediaDirectoryDto> ProjectDirectories(

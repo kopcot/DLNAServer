@@ -106,6 +106,94 @@ namespace DlnaServer.IntegrationTests
                 + "creates it");
         }
 
+        /// <summary>
+        /// A root such as <c>/</c> or <c>C:\</c> keeps its separator, and the walk used to skip one
+        /// character past it - so the first folder was probed misspelled, never found, and never checked.
+        /// </summary>
+        /// <remarks>
+        /// Uses a link the operating system already ships on its root, because a test cannot create one
+        /// there: <c>C:\Documents and Settings</c> on Windows, and the merged-<c>/usr</c> links on Linux.
+        /// </remarks>
+        [Test]
+        public void TryResolve_UnderARootWhoseFirstFolderIsALink_IsRefused()
+        {
+            // Arrange
+            var root = FileSystemRoot();
+            var link = ExistingLinkOnTheRootOrIgnore(root);
+            var options = RootOptions(root);
+
+            // Act
+            var resolved = UploadDestination.TryResolve(options, root, $"{link}/Uploads", out _, out var problem);
+
+            // Assert
+            resolved.Should().BeFalse(
+                "because the first folder under a root is a link, and a root source folder must "
+                + "not be the one place the link check is skipped");
+            problem.Should().NotBeEmpty("because the page has to be able to say why the upload was refused");
+        }
+
+        [Test]
+        public void TryResolve_UnderARootThroughOrdinaryFolders_IsAllowed()
+        {
+            // Arrange
+            var root = FileSystemRoot();
+            var folder = OperatingSystem.IsWindows()
+                ? "Windows"
+                : "etc";
+            var options = RootOptions(root);
+
+            // Act
+            var resolved = UploadDestination.TryResolve(
+                options,
+                root,
+                $"{folder}/dlna-not-there-{Guid.NewGuid():N}",
+                out _,
+                out var problem);
+
+            // Assert
+            resolved.Should().BeTrue(
+                "because refusing links under a root must not also refuse the real folders on it; problem: {0}",
+                problem);
+        }
+
+        private static string FileSystemRoot()
+        {
+            return OperatingSystem.IsWindows()
+                ? Path.GetPathRoot(Environment.SystemDirectory)!
+                : "/";
+        }
+
+        private static string ExistingLinkOnTheRootOrIgnore(string root)
+        {
+            string[] candidates = OperatingSystem.IsWindows()
+                ? ["Documents and Settings"]
+                : ["bin", "sbin", "lib", "lib64"];
+
+            foreach (var candidate in candidates)
+            {
+                var folder = new DirectoryInfo(Path.Combine(root, candidate));
+
+                if (folder.Exists && folder.Attributes.HasFlag(FileAttributes.ReparsePoint))
+                {
+                    return candidate;
+                }
+            }
+
+            Assert.Ignore($"No link to test with was found on '{root}'.");
+
+            return string.Empty;
+        }
+
+        private static DlnaOptions RootOptions(string root)
+        {
+            var options = new DlnaOptions();
+
+            options.Library.SourceFolders = [root];
+            options.Library.ExcludeFolders = [];
+
+            return options;
+        }
+
         private static void CreateLinkOrIgnore(string path, string target)
         {
             try

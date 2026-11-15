@@ -334,6 +334,28 @@ namespace DlnaServer.IntegrationTests
                 result.FailureMessage);
         }
 
+        /// <summary>
+        /// A root such as <c>/</c> or <c>C:\</c> keeps its separator, so appending one to it matched
+        /// nothing and the server refused to start over a destination the upload page itself accepts.
+        /// </summary>
+        [Test]
+        public void Validate_WithAnUploadFolderUnderARootSourceFolder_Succeeds()
+        {
+            // Arrange
+            var options = CreateValidOptions();
+            options.Library.SourceFolders = [Path.GetPathRoot(_sourceFolder)!];
+            options.Upload.DestinationFolder = Path.Combine(_sourceFolder, "Incoming");
+
+            // Act
+            var result = _validator.Validate(name: null, options: options);
+
+            // Assert
+            result.Succeeded.Should().BeTrue(
+                "because a folder anywhere on a drive used as a source folder is inside the library; "
+                + "failures: {0}",
+                result.FailureMessage);
+        }
+
         [Test]
         public void Validate_WithAnUploadFolderOutsideEverySourceFolder_Fails()
         {

@@ -1104,10 +1104,7 @@ namespace DlnaServer.Persistence.Repositories
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(folderPath);
 
-            var separator = StoredPath.SeparatorOf(folderPath);
-            var trimmed = folderPath.TrimEnd(separator);
-            var lower = trimmed + separator;
-            var upper = trimmed + (char)(separator + 1);
+            var (lower, upper) = SubtreeRange.Of(folderPath);
 
             return _dbContext.Files
                 .AsNoTracking()
@@ -1964,33 +1961,13 @@ namespace DlnaServer.Persistence.Repositories
             // design and no case_sensitive_like pragma is set, so it could not, and every recursive
             // "include every subfolder" action from the Library page scanned the table instead of seeking
             // the unique index on it.
-            // Trimmed first, as AnyUnderPathAsync does: a root such as "/" or "D:\" keeps its separator, and
-            // appending another made a range nothing falls in.
-            var separator = SeparatorOf(directoryPath);
-            var trimmed = directoryPath.TrimEnd(separator);
-            var subtreeStart = trimmed + separator;
-            var subtreeEnd = trimmed + (char)(separator + 1);
+            var (subtreeStart, subtreeEnd) = SubtreeRange.Of(directoryPath);
 
             return _dbContext.Files.Where(f =>
                 f.Directory != null
                 && (f.Directory.PublicId == directoryPublicId
                     || (string.Compare(f.Directory.FullPath, subtreeStart) >= 0
                         && string.Compare(f.Directory.FullPath, subtreeEnd) < 0)));
-        }
-
-        /// <summary>
-        /// The separator a stored path is actually built from.
-        /// </summary>
-        /// <remarks>
-        /// Read from the path rather than taken from <see cref="Path.DirectorySeparatorChar"/>, which is
-        /// the host's and not necessarily the one in the row: a database indexed on the NAS and opened on
-        /// a Windows development machine holds forward slashes either way, and a prefix built with a
-        /// backslash then matches nothing at all - silently, since a descendant search that finds nothing
-        /// looks exactly like a directory with no subdirectories.
-        /// </remarks>
-        private static char SeparatorOf(string fullPath)
-        {
-            return StoredPath.SeparatorOf(fullPath);
         }
 
     }

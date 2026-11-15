@@ -224,7 +224,9 @@ namespace DlnaServer.Core.Uploads
 
             var current = root;
 
-            foreach (var segment in resolved[(root.Length + 1)..].Split(Path.DirectorySeparatorChar))
+            // Relative to the root rather than sliced past it: a root such as "/" or "D:\" already ends in
+            // its separator, and skipping one more character misspelled the first folder, so it went unchecked.
+            foreach (var segment in Path.GetRelativePath(root, resolved).Split(Path.DirectorySeparatorChar))
             {
                 current = Path.Combine(current, segment);
 

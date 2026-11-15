@@ -271,8 +271,7 @@ namespace DlnaServer.Host.Configuration
                     continue;
                 }
 
-                if (string.Equals(resolved, sourceRoot, StringComparison.Ordinal)
-                    || resolved.StartsWith(sourceRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                if (StoredPath.IsUnder(resolved, sourceRoot))
                 {
                     yield break;
                 }
@@ -523,9 +522,11 @@ namespace DlnaServer.Host.Configuration
 
                 // Ordinal, not OrdinalIgnoreCase. The target is Linux, where two paths differing only in
                 // case are two different directories - and MediaDirectoryEntityConfiguration makes
-                // FullPath case-sensitive for that reason. LibraryIndexer.IsInsideAnySourceFolder does
-                // the identical containment check ordinally; this was the outlier, and folding case here
-                // could refuse to boot over a directory that merely shares a prefix.
+                // FullPath case-sensitive for that reason. LibraryIndexer.IsInsideAnySourceFolder compares
+                // ordinally too; this was the outlier, and folding case here could refuse to boot over a
+                // directory that merely shares a prefix. Unlike StoredPath.IsUnder, which that method now
+                // calls, this misses a cache under a root source folder - harmless while the cache folder
+                // is unused, because Thumbnails.SubFolderName is required.
                 if (!TryResolveFullPath(folder, out var sourceRoot))
                 {
                     // A source folder that is not a usable path is ValidateSourceFolders' finding to
