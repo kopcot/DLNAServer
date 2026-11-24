@@ -4,9 +4,9 @@
     "net8.0": {
       "coverlet.collector": {
         "type": "Direct",
-        "requested": "[10.1.0, )",
-        "resolved": "10.1.0",
-        "contentHash": "SlYCIHnBYxINSUpR75SiM5JEmnx11pqT+Ac/C/fUqTTA0dLPl9eYzmFXKKuxmQhL3ZdTQl4PBD3YdAxAauaKLQ=="
+        "requested": "[10.1.1, )",
+        "resolved": "10.1.1",
+        "contentHash": "iRWGpNzKG6/pA0VzAt+WDzFAPMHvs/E4ZxeSYiEaAa7MzFhAcWcIWd7RDNLhCBenpSNdJCwm42UcQP4nGUbwJQ=="
       },
       "FluentAssertions": {
         "type": "Direct",
@@ -339,7 +339,7 @@
       "dlnaserver.media": {
         "type": "Project",
         "dependencies": {
-          "DlnaServer.Core": "[1.1.1110, )",
+          "DlnaServer.Core": "[1.1.1115, )",
           "MetadataExtractor": "[2.9.3, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.14, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.14, )",
@@ -352,7 +352,7 @@
       "dlnaserver.persistence": {
         "type": "Project",
         "dependencies": {
-          "DlnaServer.Core": "[1.1.1110, )",
+          "DlnaServer.Core": "[1.1.1115, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[9.0.22, )",
           "SQLitePCLRaw.lib.e_sqlite3": "[3.53.3, )"
         }
@@ -360,7 +360,7 @@
       "dlnaserver.upnp": {
         "type": "Project",
         "dependencies": {
-          "DlnaServer.Core": "[1.1.1110, )",
+          "DlnaServer.Core": "[1.1.1115, )",
           "SoapCore": "[1.2.1.18, )"
         }
       },

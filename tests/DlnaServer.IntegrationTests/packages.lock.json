@@ -4,9 +4,9 @@
     "net8.0": {
       "coverlet.collector": {
         "type": "Direct",
-        "requested": "[10.1.0, )",
-        "resolved": "10.1.0",
-        "contentHash": "SlYCIHnBYxINSUpR75SiM5JEmnx11pqT+Ac/C/fUqTTA0dLPl9eYzmFXKKuxmQhL3ZdTQl4PBD3YdAxAauaKLQ=="
+        "requested": "[10.1.1, )",
+        "resolved": "10.1.1",
+        "contentHash": "iRWGpNzKG6/pA0VzAt+WDzFAPMHvs/E4ZxeSYiEaAa7MzFhAcWcIWd7RDNLhCBenpSNdJCwm42UcQP4nGUbwJQ=="
       },
       "FluentAssertions": {
         "type": "Direct",
@@ -444,8 +444,8 @@
       "dlnaserver.admin": {
         "type": "Project",
         "dependencies": {
-          "DlnaServer.Core": "[1.1.1110, )",
-          "DlnaServer.Persistence": "[1.1.1110, )"
+          "DlnaServer.Core": "[1.1.1115, )",
+          "DlnaServer.Persistence": "[1.1.1115, )"
         }
       },
       "dlnaserver.core": {
@@ -456,9 +456,9 @@
         "dependencies": {
           "CommunityToolkit.HighPerformance": "[8.4.2, )",
           "DlnaServer.Admin": "[2.0.1110, )",
-          "DlnaServer.Core": "[1.1.1110, )",
-          "DlnaServer.Media": "[1.1.926, )",
-          "DlnaServer.Persistence": "[1.1.1110, )",
+          "DlnaServer.Core": "[1.1.1115, )",
+          "DlnaServer.Media": "[1.1.1114, )",
+          "DlnaServer.Persistence": "[1.1.1115, )",
           "DlnaServer.Upnp": "[1.1.1017, )",
           "Microsoft.Extensions.Caching.Memory": "[10.0.14, )",
           "Serilog.AspNetCore": "[10.0.0, )",
@@ -469,7 +469,7 @@
       "dlnaserver.media": {
         "type": "Project",
         "dependencies": {
-          "DlnaServer.Core": "[1.1.1110, )",
+          "DlnaServer.Core": "[1.1.1115, )",
           "MetadataExtractor": "[2.9.3, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.14, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.14, )",
@@ -482,7 +482,7 @@
       "dlnaserver.persistence": {
         "type": "Project",
         "dependencies": {
-          "DlnaServer.Core": "[1.1.1110, )",
+          "DlnaServer.Core": "[1.1.1115, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[9.0.22, )",
           "SQLitePCLRaw.lib.e_sqlite3": "[3.53.3, )"
         }
@@ -490,7 +490,7 @@
       "dlnaserver.upnp": {
         "type": "Project",
         "dependencies": {
-          "DlnaServer.Core": "[1.1.1110, )",
+          "DlnaServer.Core": "[1.1.1115, )",
           "SoapCore": "[1.2.1.18, )"
         }
       },
